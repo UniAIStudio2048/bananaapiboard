@@ -10,6 +10,8 @@ import { useTeamStore } from '@/stores/team'
 import { sanitizeWorkflowForSave } from '@/utils/workflowSaveSanitizer'
 import { isStaleTaskResultForInFlightNode, TASK_RESULT_FIELDS } from '@/utils/canvasTaskResultGuard'
 import { syncPastedNodeSelection } from '@/utils/canvasPasteSelection'
+import { buildDragConnectionEdge } from '@/utils/canvasLeftAddDrag'
+import { withDefaultNodeSize } from '@/utils/canvasNodeDefaultSize'
 import { sanitizeNodesForHistoryRestore } from './historyRestore'
 import { createOpHistory } from './opHistory'
 import { getGlobalNodeDataCache } from './nodeDataCache'
@@ -126,6 +128,7 @@ export const useCanvasStore = defineStore('canvas', () => {
   const isDraggingConnection = ref(false)  // 是否正在拖拽连线
   const dragConnectionSource = ref(null)   // 拖拽连线的源节点 { nodeId, handleId }
   const dragConnectionSourceIds = ref(null) // 多选批量连线：本次拖拽涉及的全部源节点ID（仅多选时为数组）
+  const dragConnectionDirection = ref('forward') // 'forward' 从右侧输出拖出；'reverse' 从左侧输入拖出（连接对方输出）
   const pendingMultiConnectSourceIds = ref(null) // 多选批量连线：拖到空白处后，等待选择器创建下游节点时补连的源节点ID
   const dragConnectionStartPosition = ref({ x: 0, y: 0 }) // 拖拽连线的起始位置（画布坐标，+号按钮位置）
   const dragConnectionPosition = ref({ x: 0, y: 0 }) // 拖拽连线的当前位置（画布坐标，鼠标位置）
@@ -262,7 +265,8 @@ export const useCanvasStore = defineStore('canvas', () => {
     
     const baseNodeData = {
       title: node.title || getDefaultTitle(node.type),
-      ...node.data,
+      // 新建的文本/图片/视频/音频节点未指定尺寸时统一为 4:3
+      ...withDefaultNodeSize(node.type, node.data),
       status: node.data?.status || 'idle',
       estimatedCost: node.data?.estimatedCost || 0
     }
@@ -1576,11 +1580,13 @@ export const useCanvasStore = defineStore('canvas', () => {
    * @param {String} handleId - 源端口ID（默认 'output'）
    * @param {Object} startPosition - 起始位置（画布坐标）
    * @param {Array<String>|null} extraSourceIds - 多选批量连线时的全部源节点ID（仅多选时传入）
+   * @param {'forward'|'reverse'} direction - reverse 表示从节点左侧输入拖出，松开时连接对方的输出
    */
-  function startDragConnection(nodeId, handleId = 'output', startPosition, extraSourceIds = null) {
+  function startDragConnection(nodeId, handleId = 'output', startPosition, extraSourceIds = null, direction = 'forward') {
     // 重要：先设置位置和源节点信息，再设置 isDraggingConnection
     // 因为 CanvasBoard 的 watch 会在 isDraggingConnection 变化时读取 dragConnectionStartPosition
     dragConnectionSource.value = { nodeId, handleId }
+    dragConnectionDirection.value = direction === 'reverse' ? 'reverse' : 'forward'
     dragConnectionSourceIds.value = Array.isArray(extraSourceIds) && extraSourceIds.length > 1 ? extraSourceIds : null
     pendingMultiConnectSourceIds.value = null // 新的拖拽取代旧的待补连状态
     dragConnectionStartPosition.value = startPosition  // 保存起始位置（+号按钮位置）
@@ -1616,6 +1622,10 @@ export const useCanvasStore = defineStore('canvas', () => {
     
     const sourceNodeId = dragConnectionSource.value.nodeId
     const sourceHandleId = dragConnectionSource.value.handleId
+
+    if (dragConnectionDirection.value === 'reverse') {
+      return endReverseDragConnection(sourceNodeId, sourceHandleId, targetNode, endPosition, screenPosition)
+    }
     
     if (targetNode && targetNode.id !== sourceNodeId) {
       // 成功连接到另一个节点
@@ -1709,12 +1719,54 @@ export const useCanvasStore = defineStore('canvas', () => {
   }
 
   /**
+   * 结束从左侧输入拖出的反向连线：落在其他节点上则由对方输出连入当前节点，
+   * 落在空白处则打开左侧推荐节点选择器（新节点作为上游）
+   */
+  function endReverseDragConnection(draggingNodeId, draggingHandleId, targetNode, endPosition, screenPosition) {
+    const startPosition = dragConnectionStartPosition.value
+    let connected = false
+
+    if (targetNode && targetNode.id !== draggingNodeId) {
+      addEdge(buildDragConnectionEdge({
+        direction: 'reverse',
+        draggingNodeId,
+        draggingHandleId,
+        otherNodeId: targetNode.id
+      }))
+      console.log('[Store] 反向拖拽连线成功', targetNode.id, '->', draggingNodeId)
+      connected = true
+    } else {
+      preventSelectorClose.value = true
+      // 虚拟连线从落点（新上游节点的输出）指向当前节点左侧 + 号
+      openNodeSelector(screenPosition, 'node-left-drag', draggingNodeId, endPosition, {
+        sourceNodeId: draggingNodeId,
+        sourceHandleId: draggingHandleId,
+        sourcePosition: endPosition,
+        targetPosition: startPosition,
+        direction: 'reverse'
+      })
+      setTimeout(() => {
+        preventSelectorClose.value = false
+      }, 300)
+    }
+
+    isDraggingConnection.value = false
+    dragConnectionSource.value = null
+    dragConnectionSourceIds.value = null
+    dragConnectionDirection.value = 'forward'
+    dragConnectionStartPosition.value = { x: 0, y: 0 }
+    dragConnectionPosition.value = { x: 0, y: 0 }
+    return connected
+  }
+
+  /**
    * 取消拖拽连线
    */
   function cancelDragConnection() {
     isDraggingConnection.value = false
     dragConnectionSource.value = null
     dragConnectionSourceIds.value = null
+    dragConnectionDirection.value = 'forward'
     pendingMultiConnectSourceIds.value = null
     dragConnectionStartPosition.value = { x: 0, y: 0 }
     dragConnectionPosition.value = { x: 0, y: 0 }
@@ -3380,6 +3432,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     dragConnectionSource,
     dragConnectionPosition,
     dragConnectionStartPosition,
+    dragConnectionDirection,
     preventSelectorClose,
     startDragConnection,
     updateDragConnectionPosition,

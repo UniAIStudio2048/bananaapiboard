@@ -70,6 +70,8 @@ import { getMovedGroupChildPositions, getNodeDropGroupId } from '@/utils/canvasG
 import { getDraggedNodeFinalPositions, getDraggedNodeDropPosition } from '@/utils/canvasDragPositions'
 import { projectCanvasRenderState } from '@/utils/canvasRenderProjection.js'
 import { getMiniMapPointerPosition } from '@/utils/canvasMiniMapPointer.js'
+import { getAddButtonFollowOffset } from '@/utils/addButtonMagnet.js'
+import { CONNECT_TILT_CARD_SELECTOR, getConnectionHoverTilt } from '@/utils/connectionHoverTilt.js'
 
 // 导入自定义节点组件
 import { canConnect } from '@/config/canvas/nodeTypes'
@@ -495,6 +497,65 @@ function handleMiniMapClick({ position }) {
 
 let miniMapHoverFrame = null
 let miniMapHoverPosition = null
+
+// 节点两侧 + 号磁吸跟随：鼠标进入 + 号的感应圆后跟随鼠标，离开后回弹复位（参考 libtv）
+let magnetAddButton = null
+let addButtonMagnetEvent = null
+let addButtonMagnetFrame = null
+
+function releaseAddButtonMagnet() {
+  const button = magnetAddButton
+  if (!button) return
+  magnetAddButton = null
+  button.classList.remove('is-add-btn-following')
+  button.classList.add('is-add-btn-returning')
+  button.style.setProperty('--add-btn-follow-x', '0px')
+  button.style.setProperty('--add-btn-follow-y', '0px')
+}
+
+function applyAddButtonMagnet(event) {
+  const button = event.target?.closest?.('.vue-flow__node .node-add-btn')
+  if (button !== magnetAddButton) releaseAddButtonMagnet()
+  if (!button) return
+
+  const zoom = getViewport().zoom || 1
+  const style = getComputedStyle(button)
+  // 读取当前（可能正在过渡中的）平移量，反推 + 号未平移时的中心
+  const currentX = parseFloat(style.getPropertyValue('--add-btn-follow-x')) || 0
+  const currentY = parseFloat(style.getPropertyValue('--add-btn-follow-y')) || 0
+  const rect = button.getBoundingClientRect()
+  const offset = getAddButtonFollowOffset({
+    pointerX: event.clientX,
+    pointerY: event.clientY,
+    restCenterX: rect.left + rect.width / 2 - currentX * zoom,
+    restCenterY: rect.top + rect.height / 2 - currentY * zoom,
+    zoom,
+    side: button.classList.contains('node-add-btn-left') ? 'left' : 'right'
+  })
+
+  magnetAddButton = button
+  button.classList.remove('is-add-btn-returning')
+  button.classList.add('is-add-btn-following')
+  button.style.setProperty('--add-btn-follow-x', `${offset.x.toFixed(2)}px`)
+  button.style.setProperty('--add-btn-follow-y', `${offset.y.toFixed(2)}px`)
+}
+
+function updateAddButtonMagnet(event) {
+  // 只处理鼠标悬停；按住拖拽（连线、平移）时保持当前位置
+  if (event.pointerType !== 'mouse' || event.buttons !== 0) return
+  addButtonMagnetEvent = event
+  if (addButtonMagnetFrame !== null) return
+  addButtonMagnetFrame = requestAnimationFrame(() => {
+    addButtonMagnetFrame = null
+    if (addButtonMagnetEvent) applyAddButtonMagnet(addButtonMagnetEvent)
+    addButtonMagnetEvent = null
+  })
+}
+
+function handleCanvasPointerMove(event) {
+  handleMiniMapPointerMove(event)
+  updateAddButtonMagnet(event)
+}
 
 function handleMiniMapPointerMove(event) {
   if (event.pointerType !== 'mouse' || event.buttons !== 0 || !showCanvasMiniMap.value) return
@@ -2849,6 +2910,11 @@ const dragLineStartPosition = ref({ x: 0, y: 0 })
 const CONNECTION_SNAP_RADIUS_PX = 60
 const connectionSnapTarget = ref(null)
 
+// 从节点左侧 + 号拖出的反向连线：吸附/连接对方右侧输出
+function isReverseDragConnection() {
+  return canvasStore.dragConnectionDirection === 'reverse'
+}
+
 // 吸附用端口坐标：优先 Vue Flow 内部 handleBounds（DOM 实测，与连线渲染同源），
 // 拿不到时回退到 getHandlePosition 的尺寸近似模型
 function getSnapHandlePosition(nodeId, handleType) {
@@ -2896,6 +2962,7 @@ watch(
 
     // 拖拽结束（包括成功连接/取消）时，确保清理监听器
     connectionSnapTarget.value = null
+    clearConnectionHoverTilt()
     window.removeEventListener('mousemove', handleGlobalDragConnectionMove, listenerOptions)
     window.removeEventListener('mouseup', handleGlobalDragConnectionEnd, listenerOptions)
   },
@@ -2903,9 +2970,67 @@ watch(
   { flush: 'sync' }
 )
 
+// 拖拽连线时悬停节点的压力下沉效果（参考 flwoxpro AI 媒体流）
+// 卡片矩形在进入时量一次并缓存：倾斜后的包围盒会变，不能再拿来判断鼠标是否仍在卡片内
+let connectTiltCard = null
+let connectTiltRect = null
+let connectTiltViewportKey = ''
+
+function clearConnectionHoverTilt() {
+  if (connectTiltCard) {
+    connectTiltCard.removeAttribute('data-connect-tilt')
+    connectTiltCard.style.removeProperty('--connect-tilt-x')
+    connectTiltCard.style.removeProperty('--connect-tilt-y')
+  }
+  connectTiltCard = null
+  connectTiltRect = null
+  connectTiltViewportKey = ''
+}
+
+function applyConnectionHoverTilt(tilt) {
+  connectTiltCard.setAttribute('data-connect-tilt', 'true')
+  connectTiltCard.style.setProperty('--connect-tilt-x', `${tilt.rotateX.toFixed(2)}deg`)
+  connectTiltCard.style.setProperty('--connect-tilt-y', `${tilt.rotateY.toFixed(2)}deg`)
+}
+
+function updateConnectionHoverTilt(event) {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    clearConnectionHoverTilt()
+    return
+  }
+  const viewport = getViewport()
+  const viewportKey = `${viewport.x}|${viewport.y}|${viewport.zoom}`
+  const point = { pointX: event.clientX, pointY: event.clientY }
+
+  // 仍在当前卡片内：沿用缓存矩形跟随鼠标
+  if (connectTiltCard && connectTiltViewportKey === viewportKey) {
+    const tilt = getConnectionHoverTilt({ ...point, rect: connectTiltRect })
+    if (tilt) {
+      applyConnectionHoverTilt(tilt)
+      return
+    }
+  }
+  clearConnectionHoverTilt()
+
+  const nodeEl = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('.vue-flow__node')
+  if (!nodeEl || nodeEl.classList.contains('vue-flow__node-group')) return
+  if (nodeEl.dataset.id === canvasStore.dragConnectionSource?.nodeId) return
+  const card = nodeEl.querySelector(CONNECT_TILT_CARD_SELECTOR)
+  if (!card) return
+
+  const rect = card.getBoundingClientRect()
+  const tilt = getConnectionHoverTilt({ ...point, rect })
+  if (!tilt) return
+  connectTiltCard = card
+  connectTiltRect = { left: rect.left, top: rect.top, width: rect.width, height: rect.height }
+  connectTiltViewportKey = viewportKey
+  applyConnectionHoverTilt(tilt)
+}
+
 // 全局鼠标移动事件处理
 function handleGlobalDragConnectionMove(event) {
   if (!canvasStore.isDraggingConnection) return
+  updateConnectionHoverTilt(event)
 
   const flowPos = screenToFlowPosition({ x: event.clientX, y: event.clientY })
   // 接近下游节点左侧连接点时吸附线尾，移出吸附半径则恢复跟随鼠标。
@@ -2921,7 +3046,8 @@ function handleGlobalDragConnectionMove(event) {
     nodes: canvasStore.nodes,
     getHandlePosition: getSnapHandlePosition,
     viewport: getViewport(),
-    snapRadius: CONNECTION_SNAP_RADIUS_PX
+    snapRadius: CONNECTION_SNAP_RADIUS_PX,
+    handleType: isReverseDragConnection() ? 'output' : 'input'
   })
   connectionSnapTarget.value = snapTarget
   canvasStore.updateDragConnectionPosition(snapTarget ? snapTarget.position : flowPos)
@@ -2957,10 +3083,17 @@ function finishDragConnectionAtScreenPosition(screenPos) {
       targetNode = null
     }
 
+    // 反向连线只连接对方的右侧输出：松开在其他节点的左侧 + 号上时不建连线也不弹选择器
+    if (isReverseDragConnection() && !snapTarget && targetNode && targetNode.id !== sourceNode?.id &&
+        targetElement?.closest?.('.node-add-btn-left')) {
+      canvasStore.cancelDragConnection()
+      return
+    }
+
     // 检测是否释放在 Storyboard 的某个格子级 cell-handle 上
     // cell-handle 的 data-handleid 格式为 "input-{index}"
     let targetHandleId = null
-    if (targetNode?.type === 'storyboard' && targetElement) {
+    if (!isReverseDragConnection() && targetNode?.type === 'storyboard' && targetElement) {
       const handleEl = targetElement.closest('.vue-flow__handle[data-handleid^="input-"]')
         || targetElement.closest('.cell-handle')
       if (handleEl) {
@@ -3122,8 +3255,10 @@ function cancelVueFlowConnection() {
 const getDragLinePath = computed(() => {
   if (!canvasStore.isDraggingConnection) return ''
   
-  const startPos = dragLineStartPosition.value
-  const endPos = canvasStore.dragConnectionPosition
+  // 反向连线：线从鼠标（上游输出）画向左侧 + 号（当前节点输入）
+  const reverse = isReverseDragConnection()
+  const startPos = reverse ? canvasStore.dragConnectionPosition : dragLineStartPosition.value
+  const endPos = reverse ? dragLineStartPosition.value : canvasStore.dragConnectionPosition
   const viewport = getViewport()
 
   const startScreen = flowPositionToScreenPosition(startPos, viewport)
@@ -3160,8 +3295,29 @@ const connectionFlowLayers = computed(() => {
   })
 })
 
+// 选中节点关联连线的蝌蚪状光段（速度参考 libtv）：pathLength=300 下每条线 3 段光，
+// 各层终点对齐在头部，越靠近头部越短、越粗、越亮，头部最亮且不超过 3（原连线为 2）
+const ACTIVE_EDGE_FLOW_TAIL = 36
+const activeEdgeFlowStrokes = [
+  { length: 36, width: 1.2, opacity: 0.14, color: 'rgb(100, 180, 255)' },
+  { length: 26, width: 1.6, opacity: 0.2, color: 'rgb(100, 180, 255)' },
+  { length: 16, width: 2, opacity: 0.3, color: 'rgb(100, 180, 255)' },
+  { length: 8, width: 2.4, opacity: 0.45, color: 'rgb(130, 196, 255)' },
+  { length: 3, width: 2.8, opacity: 0.75, color: 'rgb(180, 222, 255)' },
+  { length: 0.8, width: 3, opacity: 1, color: 'rgb(235, 246, 255)' }
+].map(stroke => ({
+  ...stroke,
+  dasharray: `${stroke.length} ${100 - stroke.length}`,
+  // 负延迟等价于把该层光段往前推到与尾巴同一个终点（3s 走完 300）
+  delay: `${(-(ACTIVE_EDGE_FLOW_TAIL - stroke.length) / 100).toFixed(3)}s`
+}))
+
 const activeFlowPaths = ref([])
-const canvasEdgeFlowPaths = ref([])
+// 正在流动的连线 id：隐藏其原始描边，避免盖在流动层上
+const activeFlowEdgeIds = ref([])
+const activeFlowEdgeHideCss = computed(() => activeFlowEdgeIds.value
+  .map(id => `.vue-flow__edge[data-id="${CSS.escape(id)}"] .vue-flow__edge-path{stroke:transparent!important}`)
+  .join(''))
 let activeFlowPathsRafId = null
 let activeFlowPathsFollowupRafId = null
 
@@ -3187,43 +3343,27 @@ function readActiveEdgePaths() {
   // 🚀 minimal 模式（>500 节点）禁用选中节点的流动边动画
   if (ids.length === 0 || isEdgeHidden.value || shouldDisableEdgeAnimation.value) {
     activeFlowPaths.value = []
+    activeFlowEdgeIds.value = []
     return
   }
   const selectedSet = new Set(ids)
   const vp = getViewport()
   const el = vueFlowRef.value?.$el || vueFlowRef.value
-  if (!el) { activeFlowPaths.value = []; return }
+  if (!el) { activeFlowPaths.value = []; activeFlowEdgeIds.value = []; return }
 
   const paths = []
+  const edgeIds = []
   for (const edge of canvasStore.edges) {
     if (!selectedSet.has(edge.source) && !selectedSet.has(edge.target)) continue
     const edgeEl = el.querySelector(`g[data-id="${edge.id}"] .vue-flow__edge-path`)
     if (!edgeEl) continue
     const d = edgeEl.getAttribute('d')
-    if (d) paths.push(transformSvgPath(d, vp))
+    if (!d) continue
+    paths.push(transformSvgPath(d, vp))
+    edgeIds.push(edge.id)
   }
   activeFlowPaths.value = paths
-}
-
-function readCanvasEdgePaths() {
-  if (isEdgeHidden.value || shouldDisableEdgeAnimation.value) {
-    canvasEdgeFlowPaths.value = []
-    return
-  }
-
-  const el = vueFlowRef.value?.$el || vueFlowRef.value
-  if (!el) {
-    canvasEdgeFlowPaths.value = []
-    return
-  }
-
-  const vp = getViewport()
-  const paths = []
-  for (const edgePath of el.querySelectorAll('.vue-flow__edge-path')) {
-    const d = edgePath.getAttribute('d')
-    if (d) paths.push(transformSvgPath(d, vp))
-  }
-  canvasEdgeFlowPaths.value = paths
+  if (edgeIds.join('|') !== activeFlowEdgeIds.value.join('|')) activeFlowEdgeIds.value = edgeIds
 }
 
 function scheduleActiveEdgePathsRead() {
@@ -3232,13 +3372,11 @@ function scheduleActiveEdgePathsRead() {
   activeFlowPathsRafId = requestAnimationFrame(() => {
     activeFlowPathsRafId = null
     readActiveEdgePaths()
-    readCanvasEdgePaths()
 
     if (!activeFlowPathsFollowupRafId) {
       activeFlowPathsFollowupRafId = requestAnimationFrame(() => {
         activeFlowPathsFollowupRafId = null
         readActiveEdgePaths()
-        readCanvasEdgePaths()
       })
     }
   })
@@ -4179,6 +4317,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (miniMapHoverFrame !== null) cancelAnimationFrame(miniMapHoverFrame)
+  if (addButtonMagnetFrame !== null) cancelAnimationFrame(addButtonMagnetFrame)
   // 移除键盘事件监听
   document.removeEventListener('keydown', handleKeyDown)
   document.removeEventListener('keyup', handleKeyUp)
@@ -4269,7 +4408,8 @@ onUnmounted(() => {
     }"
     :data-zoom-level="canvasZoomLevel"
     :style="canvasPromptPanelScaleStyle"
-    @pointermove="handleMiniMapPointerMove"
+    @pointermove="handleCanvasPointerMove"
+    @pointerleave="releaseAddButtonMagnet"
     @dblclick="handleDoubleClick"
     @mousedown.middle.prevent
     @dragenter="handleFileDragEnter"
@@ -4374,34 +4514,25 @@ onUnmounted(() => {
       </template>
 
       <!-- 选中节点关联连线的流动动画 -->
+      <component :is="'style'" v-if="activeFlowEdgeHideCss">{{ activeFlowEdgeHideCss }}</component>
       <template v-if="activeFlowPaths.length > 0">
         <svg class="active-edge-flow connection-guide-line">
           <template v-for="(edgePath, ei) in activeFlowPaths" :key="ei">
-            <path
-              v-for="(layer, li) in connectionFlowLayers"
-              :key="li"
-              :d="edgePath"
-              class="connection-flow"
-              :style="{ strokeDasharray: layer.dasharray, opacity: layer.opacity, animationDelay: layer.delay }"
-            />
-          </template>
-
-          <!-- 普通连线的双层流动效果：白色底线 + 荧光蓝流动线。 -->
-          <template v-if="canvasEdgeFlowPaths.length > 0">
-            <svg class="canvas-edge-flow connection-guide-line">
+            <!-- 线宽按画布缩放换算，与随缩放变化的原连线保持一致 -->
+            <path :d="edgePath" class="active-edge-flow-base" :stroke-width="2 * vfViewport.zoom" />
+            <g class="active-edge-flow-glow">
               <path
-                v-for="(edgePath, ei) in canvasEdgeFlowPaths"
-                :key="`canvas-edge-base-${ei}`"
+                v-for="(stroke, si) in activeEdgeFlowStrokes"
+                :key="si"
                 :d="edgePath"
-                class="canvas-edge-flow-base"
+                pathLength="300"
+                :stroke="stroke.color"
+                :stroke-dasharray="stroke.dasharray"
+                :stroke-width="stroke.width * vfViewport.zoom"
+                :stroke-opacity="stroke.opacity"
+                :style="{ animationDelay: stroke.delay }"
               />
-              <path
-                v-for="(edgePath, ei) in canvasEdgeFlowPaths"
-                :key="`canvas-edge-flow-${ei}`"
-                :d="edgePath"
-                class="canvas-edge-flow-path"
-              />
-            </svg>
+            </g>
           </template>
         </svg>
       </template>
@@ -4584,6 +4715,55 @@ onUnmounted(() => {
   outline: none;
 }
 
+    /* 两侧 + 按钮磁吸跟随：平移量由 JS 写入，注册为长度类型以便过渡；
+       ::before 是固定不动的感应圆（直径 96，内侧贴节点边），反向平移抵消按钮位移。 */
+    @property --add-btn-follow-x {
+      syntax: '<length>';
+      inherits: true;
+      initial-value: 0px;
+    }
+
+    @property --add-btn-follow-y {
+      syntax: '<length>';
+      inherits: true;
+      initial-value: 0px;
+    }
+
+    .canvas-board :deep(.vue-flow__node .node-add-btn) {
+      translate: var(--add-btn-follow-x) var(--add-btn-follow-y);
+    }
+
+    .canvas-board :deep(.vue-flow__node .node-add-btn)::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      transform: translate(calc(-50% + 14px - var(--add-btn-follow-x)), calc(-50% - var(--add-btn-follow-y)));
+    }
+
+    .canvas-board :deep(.vue-flow__node .node-add-btn.node-add-btn-left)::before {
+      transform: translate(calc(-50% - 14px - var(--add-btn-follow-x)), calc(-50% - var(--add-btn-follow-y)));
+    }
+
+    .canvas-board :deep(.vue-flow__node .node-add-btn.is-add-btn-following) {
+      transition: opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease,
+        --add-btn-follow-x 80ms ease-out, --add-btn-follow-y 80ms ease-out;
+    }
+
+    .canvas-board :deep(.vue-flow__node .node-add-btn.is-add-btn-returning) {
+      transition: opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease,
+        --add-btn-follow-x 400ms cubic-bezier(0.34, 1.56, 0.64, 1), --add-btn-follow-y 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* 拖拽连线悬停节点时卡片朝鼠标一侧下沉，角度由 JS 写入 */
+    .canvas-board :deep([data-connect-tilt="true"]) {
+      transform: perspective(900px) rotateX(var(--connect-tilt-x, 0deg)) rotateY(var(--connect-tilt-y, 0deg));
+      transform-origin: center center;
+    }
+
     /* 悬停两侧 + 按钮超过 1 秒后显示连线迁移/复制提示。 */
     .canvas-board :deep(.vue-flow__node .node-add-btn)::after {
       content: "Shift + 左键拖动：迁移全部连线\A Ctrl + 左键拖动：复制全部连线";
@@ -4763,27 +4943,20 @@ onUnmounted(() => {
   z-index: 0;
 }
 
-.canvas-edge-flow {
-  z-index: 0;
+.active-edge-flow-base {
+  fill: none;
+  stroke: var(--canvas-edge-flow-base);
 }
 
-.canvas-edge-flow-base {
+.active-edge-flow-glow path {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.72);
-  stroke-width: 2.8;
   stroke-linecap: round;
-  opacity: 0.82;
+  animation: activeEdgeFlowTravel 3s linear infinite;
 }
 
-.canvas-edge-flow-path {
-  fill: none;
-  stroke: #22d3ee;
-  stroke-width: 2.2;
-  stroke-linecap: round;
-  stroke-dasharray: 18 10;
-  opacity: 0.92;
-  filter: drop-shadow(0 0 4px rgba(34, 211, 238, 0.65));
-  animation: connectionGlowFlow 2.8s linear infinite;
+@keyframes activeEdgeFlowTravel {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -300; }
 }
 
     .connection-transfer-preview {

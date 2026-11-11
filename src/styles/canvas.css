@@ -33,6 +33,7 @@
   /* 连线色 */
   --canvas-edge-default: #4a4a4a;
   --canvas-edge-active: #3b82f6;
+  --canvas-edge-flow-base: #c0c8d0;
   --canvas-edge-success: #22c55e;
 
   /* 阴影 */
@@ -85,6 +86,7 @@
   /* 连线色 - 更深的灰色以在亮色背景上显示 */
   --canvas-edge-default: #a8a29e;
   --canvas-edge-active: #3b82f6;
+  --canvas-edge-flow-base: #78716c;
   --canvas-edge-success: #22c55e;
 
   /* 阴影 - 柔和的浅色阴影 */

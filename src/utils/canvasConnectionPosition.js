@@ -116,7 +116,8 @@ export function findConnectionSnapTarget({
   nodes,
   getHandlePosition,
   viewport,
-  snapRadius = 60
+  snapRadius = 60,
+  handleType = 'input'
 }) {
   if (!isFinitePosition(screenPosition) || !Array.isArray(nodes) || typeof getHandlePosition !== 'function') {
     return null
@@ -126,7 +127,7 @@ export function findConnectionSnapTarget({
   let closestDistance = Number.POSITIVE_INFINITY
   for (const node of nodes) {
     if (!node?.id || node.id === sourceNodeId || node.type === 'group') continue
-    const handleFlowPosition = getHandlePosition(node.id, 'input')
+    const handleFlowPosition = getHandlePosition(node.id, handleType)
     if (!isFinitePosition(handleFlowPosition)) continue
     const handleScreen = flowPositionToScreenPosition(handleFlowPosition, viewport)
     const distance = Math.hypot(handleScreen.x - screenPosition.x, handleScreen.y - screenPosition.y)

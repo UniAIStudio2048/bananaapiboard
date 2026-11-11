@@ -130,11 +130,26 @@ test('enabling draft keeps higher resolution choices available', () => {
   assert.deepEqual(result, options)
 })
 
-test('resolution selection disables draft through the same persistence operation', () => {
+function getResolutionSelector({ draftEnabled }) {
   const start = source.indexOf('const selectedVideoParameterResolution = computed(')
   const end = source.indexOf('\nconst showVideoParameterDuration', start)
   const calls = []
-  const selector = new Function('computed', 'videoParameterResolutionOptions', 'supportsSeedanceDraft', 'seedanceDraftEnabled', 'setSeedanceDraftEnabled', 'genericVideoResolutionOptions', 'syncGenericVideoResolution', `${source.slice(start, end)}; return selectedVideoParameterResolution`)(value => value, { value: [{ value: '480p' }, { value: '720p' }] }, { value: true }, { value: true }, (...args) => calls.push(args), { value: [{ value: '720p' }] }, () => {})
+  const synced = []
+  const selector = new Function('computed', 'videoParameterResolutionOptions', 'supportsSeedanceDraft', 'seedanceDraftEnabled', 'setSeedanceDraftEnabled', 'genericVideoResolutionOptions', 'syncGenericVideoResolution', `${source.slice(start, end)}; return selectedVideoParameterResolution`)(value => value, { value: [{ value: '480p' }, { value: '720p' }] }, { value: true }, { value: draftEnabled }, (...args) => calls.push(args), { value: [{ value: '480p' }, { value: '720p' }] }, value => synced.push(value))
+  return { selector, calls, synced }
+}
+
+test('resolution selection disables draft through the same persistence operation', () => {
+  const { selector, calls, synced } = getResolutionSelector({ draftEnabled: true })
   selector.set('720p')
   assert.deepEqual(calls, [[false, '720p']])
+  assert.deepEqual(synced, [])
+})
+
+test('resolution selection with draft off updates locally without blocking on a server save', () => {
+  const { selector, calls, synced } = getResolutionSelector({ draftEnabled: false })
+  selector.set('720p')
+  selector.set('480p')
+  assert.deepEqual(calls, [])
+  assert.deepEqual(synced, ['720p', '480p'])
 })

@@ -870,3 +870,28 @@ export function getUpstreamOptions(targetType) {
     }))
     .filter(node => node.label)
 }
+
+// 从节点左侧 + 号拖出连线、松开在空白处时推荐的上游节点
+const LEFT_DRAG_ALL_MEDIA = [NODE_TYPES.TEXT_INPUT, NODE_TYPES.IMAGE_INPUT, NODE_TYPES.VIDEO_INPUT, NODE_TYPES.AUDIO_INPUT]
+const LEFT_DRAG_TEXT_IMAGE = [NODE_TYPES.TEXT_INPUT, NODE_TYPES.IMAGE_INPUT]
+const LEFT_DRAG_TEXT_AUDIO = [NODE_TYPES.TEXT_INPUT, NODE_TYPES.AUDIO_INPUT]
+
+export const LEFT_DRAG_UPSTREAM_RULES = {
+  [NODE_TYPES.TEXT_INPUT]: LEFT_DRAG_ALL_MEDIA,
+  text: LEFT_DRAG_ALL_MEDIA,
+  [NODE_TYPES.IMAGE_INPUT]: LEFT_DRAG_TEXT_IMAGE,
+  image: LEFT_DRAG_TEXT_IMAGE,
+  [NODE_TYPES.VIDEO_INPUT]: LEFT_DRAG_ALL_MEDIA,
+  video: LEFT_DRAG_ALL_MEDIA,
+  [NODE_TYPES.AUDIO_INPUT]: LEFT_DRAG_TEXT_AUDIO,
+  audio: LEFT_DRAG_TEXT_AUDIO
+}
+
+export function getLeftDragUpstreamOptions(targetType) {
+  return (LEFT_DRAG_UPSTREAM_RULES[targetType] || [])
+    .map(type => ({
+      type,
+      ...NODE_TYPE_CONFIG[type]
+    }))
+    .filter(node => node.label)
+}

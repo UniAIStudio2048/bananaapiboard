@@ -62,6 +62,7 @@ import {
   syncPromptMediaMentions
 } from '@/utils/promptMediaBindings'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
+import { watchLeftAddButtonDrag } from '@/utils/canvasLeftAddDrag'
 import { getBatchGridPositions } from '@/utils/canvasBatchLayout'
 import { findBatchSafetyError } from '@/utils/canvasBatchFailures'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
@@ -2599,8 +2600,9 @@ const selectedVideoParameterResolution = computed({
   },
   set(value) {
     if (!videoParameterResolutionOptions.value.some(option => option.value === value)) return
-    if (supportsSeedanceDraft.value) {
-      void setSeedanceDraftEnabled(seedanceDraftEnabled.value && value === '480p', value)
+    // 仅在样片模式开启且切离 480P 时需要同步保存（关闭样片）；样片关闭时直接本地更新，避免网络往返导致卡顿/选不中
+    if (supportsSeedanceDraft.value && seedanceDraftEnabled.value && value !== '480p') {
+      void setSeedanceDraftEnabled(false, value)
       return
     }
     if (genericVideoResolutionOptions.value.length > 0) syncGenericVideoResolution(value)
@@ -8582,11 +8584,23 @@ function handleContextMenu(event) {
 // ========== 添加按钮交互（单击/长按） ==========
 const LONG_PRESS_DURATION = 300 // 长按阈值（毫秒）
 const addRightBtnRef = ref(null)
+const addLeftBtnRef = ref(null)
 let pressTimer = null
 let isLongPress = false
 let pressStartPos = { x: 0, y: 0 }
 
 // 左侧添加按钮
+// 左侧添加按钮 - 按下后拖动：反向拖出连线（松开在空白处推荐上游节点，落在其他节点上连接其输出）
+function handleAddLeftMouseDown(event) {
+  watchLeftAddButtonDrag(event, { onDragStart: startLeftDragConnection })
+}
+
+function startLeftDragConnection() {
+  const buttonPosition = getElementCenterFlowPosition(addLeftBtnRef.value, getViewport())
+  if (!buttonPosition) return
+  canvasStore.startDragConnection(props.id, 'input', buttonPosition, null, 'reverse')
+}
+
 function handleAddLeftClick(event) {
   event.stopPropagation()
   canvasStore.openNodeSelector(
@@ -10570,7 +10584,9 @@ function toggleFullscreenPlayback() {
 
       <!-- 左侧添加按钮 -->
       <button 
-        class="node-add-btn node-add-btn-left"
+        ref="addLeftBtnRef"
+        class="node-add-btn node-add-btn-left nodrag"
+        @mousedown.stop="handleAddLeftMouseDown"
         title="添加参考图片（首帧/尾帧）"
         @click="handleAddLeftClick"
       >

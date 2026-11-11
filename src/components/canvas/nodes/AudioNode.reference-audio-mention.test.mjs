@@ -36,7 +36,7 @@ test('audio option hints are readable in both canvas themes', () => {
 test('audio input handle shares the node wrapper coordinate system with the left add button', () => {
   const wrapperStart = source.indexOf('<div class="node-wrapper">')
   const targetHandle = source.indexOf('type="target"', wrapperStart)
-  const leftAddButton = source.indexOf('class="node-add-btn node-add-btn-left"', wrapperStart)
+  const leftAddButton = source.indexOf('class="node-add-btn node-add-btn-left', wrapperStart)
 
   assert.notEqual(wrapperStart, -1)
   assert.notEqual(targetHandle, -1)

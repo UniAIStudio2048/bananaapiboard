@@ -102,6 +102,8 @@ const draftTargetRect = computed(() => {
 })
 const renderedTargetRect = computed(() => preview.targetRect ?? draftTargetRect.value)
 const handleRect = computed(() => renderedTargetRect.value ?? renderedDraftBounds.value)
+// 框选的选区在未选择"移动"时可直接拖动位置、拖四角缩放；"移动"操作拖动的是目标位置
+const canAdjustSource = computed(() => draft.value?.source.type === 'box' && draft.value.action !== 'move' && !draft.value.recognizing && !props.busy)
 const cardBounds = computed(() => renderedTargetRect.value ?? renderedDraftBounds.value)
 const previewStrokes = computed(() => preview.strokes ?? (draft.value?.source.type === 'brush' ? draft.value.source.strokes : null))
 const editingExisting = computed(() => !!draft.value && records.value.some(record => record.id === draft.value.id))
@@ -459,6 +461,13 @@ function updateGesture(point) {
     const last = gesture.points.at(-1)
     if (!last || last.x !== point.x || last.y !== point.y) gesture.points.push(point)
     preview.strokes = [...(draft.value?.source.type === 'brush' ? draft.value.source.strokes : []), [...gesture.points]]
+  } else if (gesture.kind === 'moveSource') {
+    preview.sourceRect = translateRect(gesture.rect, point.x - gesture.start.x, point.y - gesture.start.y)
+  } else if (gesture.kind === 'resizeSource') {
+    preview.sourceRect = resizeRect(gesture.rect, point, gesture.corner, {
+      width: ELEMENT_EDIT_LIMITS.minBoxPx / mediaPx.value.width,
+      height: ELEMENT_EDIT_LIMITS.minBoxPx / mediaPx.value.height
+    })
   } else if (gesture.kind === 'moveTarget') {
     preview.targetRect = translateRect(gesture.rect, point.x - gesture.start.x, point.y - gesture.start.y)
   } else if (gesture.kind === 'resizeTarget') {
@@ -506,6 +515,10 @@ function stagePointerUp(event) {
       draft.value = createDraft({ type: 'brush', brushSize: Math.min(1, Math.max(1e-4, currentBrushSize.value)), strokes })
       redoStack.value = []
     }
+  } else if (isSourceGesture(current.kind)) {
+    const rect = preview.sourceRect
+    preview.sourceRect = null
+    if (rect && draft.value?.source.type === 'box') draft.value.source.rect = clampRect(rect)
   } else {
     const rect = preview.targetRect
     preview.targetRect = null
@@ -518,6 +531,10 @@ function stagePointerCancel() {
   Object.assign(preview, { sourceRect: null, targetRect: null, strokes: null })
 }
 
+function isSourceGesture(kind) {
+  return kind === 'moveSource' || kind === 'resizeSource'
+}
+
 function startTargetGesture(event, kind, corner) {
   if (event.button !== 0 || !handleRect.value) return
   event.preventDefault()
@@ -525,7 +542,8 @@ function startTargetGesture(event, kind, corner) {
   hideMoveHint()
   stageRef.value?.setPointerCapture?.(event.pointerId)
   gesture = { kind, corner, start: toNormalized(event), rect: { ...handleRect.value } }
-  preview.targetRect = { ...handleRect.value }
+  if (isSourceGesture(kind)) preview.sourceRect = { ...handleRect.value }
+  else preview.targetRect = { ...handleRect.value }
 }
 
 function showMoveHintAt(event) {
@@ -848,30 +866,30 @@ onBeforeUnmount(() => {
         <!-- 选区角点、拖动与缩放 -->
         <template v-if="draft && handleRect && handleRect.width > 0">
           <button
-            v-if="draft.action === 'move'"
+            v-if="draft.action === 'move' || canAdjustSource"
             type="button"
             class="ee-move-area"
             aria-label="选区"
             :style="percentStyle(handleRect)"
-            @pointerdown="startTargetGesture($event, 'moveTarget')"
+            @pointerdown="startTargetGesture($event, canAdjustSource ? 'moveSource' : 'moveTarget')"
             @pointermove="showMoveHintAt"
             @pointerleave="hideMoveHint"
           >
             <span
-              v-if="!draft.target && !preview.targetRect"
+              v-if="draft.action === 'move' && !draft.target && !preview.targetRect"
               class="ee-move-hint"
               :style="{ opacity: moveHint.visible ? 1 : 0, transform: `translate3d(${moveHint.x}px, ${moveHint.y}px, 0)` }"
             >拖动对象到想要的位置</span>
           </button>
           <template v-for="[corner, x, y] in corners(handleRect)" :key="corner">
             <button
-              v-if="draft.action === 'move' && draft.target"
+              v-if="canAdjustSource || (draft.action === 'move' && draft.target)"
               type="button"
               class="ee-corner"
               :class="corner === 'nw' || corner === 'se' ? 'nwse' : 'nesw'"
               aria-label="缩放选区"
               :style="{ left: `${x * 100}%`, top: `${y * 100}%` }"
-              @pointerdown="startTargetGesture($event, 'resizeTarget', corner)"
+              @pointerdown="startTargetGesture($event, canAdjustSource ? 'resizeSource' : 'resizeTarget', corner)"
             ><i /></button>
             <span v-else class="ee-corner static" :style="{ left: `${x * 100}%`, top: `${y * 100}%` }"><i /></span>
           </template>

@@ -35,6 +35,7 @@ import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '
 import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
 import { getPromptEditorSelectionRange, hasPromptEditorOrphanTextNodes, removePromptEditorOrphanTextNodes, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
+import { watchLeftAddButtonDrag } from '@/utils/canvasLeftAddDrag'
 import MusicTagsSelector from '@/components/canvas/MusicTagsSelector.vue'
 import AudioEditorModal from '@/components/canvas/AudioEditorModal.vue'
 import apiClient from '@/api/client'
@@ -1448,6 +1449,7 @@ const dragCounter = ref(0)
 const nodeWidth = ref(props.data.width || 420)
 const nodeHeight = ref(props.data.height || 280)
 const addRightBtnRef = ref(null)
+const addLeftBtnRef = ref(null)
 
 // 是否正在调整尺寸
 const isResizing = ref(false)
@@ -2037,6 +2039,17 @@ function handleContextMenu(event) {
 }
 
 // 左侧添加按钮
+// 左侧添加按钮 - 按下后拖动：反向拖出连线（松开在空白处推荐上游节点，落在其他节点上连接其输出）
+function handleAddLeftMouseDown(event) {
+  watchLeftAddButtonDrag(event, { onDragStart: startLeftDragConnection })
+}
+
+function startLeftDragConnection() {
+  const buttonPosition = getElementCenterFlowPosition(addLeftBtnRef.value, getViewport())
+  if (!buttonPosition) return
+  canvasStore.startDragConnection(props.id, 'input', buttonPosition, null, 'reverse')
+}
+
 function handleAddLeftClick(event) {
   event.stopPropagation()
   canvasStore.openNodeSelector(
@@ -2460,7 +2473,9 @@ function handleSpeedEditorClickOutside(event) {
 
       <!-- 左侧添加按钮 -->
       <button 
-        class="node-add-btn node-add-btn-left"
+        ref="addLeftBtnRef"
+        class="node-add-btn node-add-btn-left nodrag"
+        @mousedown.stop="handleAddLeftMouseDown"
         title="添加输入节点"
         @click="handleAddLeftClick"
       >

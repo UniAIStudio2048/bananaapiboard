@@ -5,7 +5,7 @@
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { AudioLines, BrainCircuit, Clapperboard, Eraser, Expand, Eye, FileAudio, FileText, Film, History, Image, ImagePlus, Layers, LayoutGrid, Paintbrush, PanelRightClose, ScanText, Scissors, SearchX, Sparkles, Type, Upload, UserRound, UsersRound, WandSparkles } from '@lucide/vue'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
-import { NODE_TYPES, NODE_TYPE_CONFIG, NODE_CATEGORIES, getDownstreamOptions, getUpstreamOptions } from '@/config/canvas/nodeTypes'
+import { NODE_TYPES, NODE_TYPE_CONFIG, NODE_CATEGORIES, getDownstreamOptions, getUpstreamOptions, getLeftDragUpstreamOptions } from '@/config/canvas/nodeTypes'
 import { useI18n } from '@/i18n'
 import { extractVideoFrame, uploadCanvasMedia } from '@/api/canvas/workflow'
 import { getAvailableVideoModels, isSeedanceFeaturesEnabled, isDigitalHumanLibraryEnabled } from '@/config/tenant'
@@ -87,14 +87,20 @@ const triggerNode = computed(() => {
   return canvasStore.nodes.find(n => n.id === props.triggerNodeId)
 })
 
+// 是否是从左侧 + 号拖出连线后松开在空白处（推荐上游节点）
+const isLeftDragTrigger = computed(() => props.trigger === 'node-left-drag')
+
 // 是否是左侧添加（添加上游节点）
-const isLeftTrigger = computed(() => props.trigger === 'node-left')
+const isLeftTrigger = computed(() => props.trigger === 'node-left' || isLeftDragTrigger.value)
 
 // 可选节点类型列表
 const availableNodes = computed(() => {
   // 如果是从节点创建
   if (triggerNode.value) {
     // 左侧添加 = 添加上游节点
+    if (isLeftDragTrigger.value) {
+      return getLeftDragUpstreamOptions(triggerNode.value.type)
+    }
     if (isLeftTrigger.value) {
       return getUpstreamOptions(triggerNode.value.type)
     }
@@ -407,9 +413,16 @@ function selectNodeType(type) {
   if (canvasStore.nodeSelectorFlowPosition) {
     position = { ...canvasStore.nodeSelectorFlowPosition }
 
-    // 稍微偏移一点，让节点中心对准鼠标（假设节点宽240）
-    position.x -= 120
-    position.y -= 50
+    if (isLeftDragTrigger.value) {
+      // 左侧拖出：新上游节点放在落点左边，右侧输出 + 号大致落在松手处
+      const size = getDefaultNodeSize(type)
+      position.x -= size.width + 34
+      position.y -= size.height / 2
+    } else {
+      // 稍微偏移一点，让节点中心对准鼠标（假设节点宽240）
+      position.x -= 120
+      position.y -= 50
+    }
   } else if (triggerNode.value) {
     if (isLeftTrigger.value) {
       // 左侧添加：在触发节点左侧创建
