@@ -235,6 +235,13 @@ const collaborationWriter = createIncrementalWriter({
         return
       }
       if (err?.status === 409 || ['workflow_revision_conflict', 'workflow_epoch_conflict', 'version_conflict'].includes(err?.body?.code || err?.code)) {
+        // 个人工作流由编辑租约保证单一编辑方，并以整份自动保存落库：增量冲突只需交给下一次整份保存，不提示刷新
+        const tab = canvasStore.getCurrentTab()
+        if (tab?.workflowSpaceType !== 'team') {
+          if (tab) tab.hasChanges = true
+          console.warn('[CanvasCollab] 个人工作流增量写入冲突，改由整份自动保存:', err?.body?.code || err?.code)
+          return
+        }
         canvasStore.markCollaborationStale?.(err?.body?.code || err?.code || 'conflict')
         displayToast('协作版本已变化，请刷新工作流后继续编辑', 'warning', 5000)
       }
