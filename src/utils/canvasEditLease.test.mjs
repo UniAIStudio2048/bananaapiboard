@@ -162,7 +162,7 @@ test('release：非编辑状态不发请求', () => {
   assert.equal(calls.length, 0)
 })
 
-test('heartbeat：只为编辑中的工作流续期，丢失的重新获取', async () => {
+test('heartbeat：只续期编辑中的工作流，丢失后只读且不自动获取', async () => {
   let acquireCount = 0
   const { client, calls } = makeClient({
     '/lease/acquire': () => ({ ok: true, status: 200, data: { mode: 'editor', token: ++acquireCount } }),
@@ -173,5 +173,99 @@ test('heartbeat：只为编辑中的工作流续期，丢失的重新获取', as
   await client.heartbeat()
   const hb = calls.find(c => c.path === '/api/canvas/leases/heartbeat')
   assert.deepEqual(hb.body.workflowIds.sort(), ['wf-1', 'wf-2'])
-  assert.equal(calls.filter(c => c.path.endsWith('/wf-2/lease/acquire')).length, 2)
+  assert.equal(calls.filter(c => c.path.endsWith('/wf-2/lease/acquire')).length, 1)
+  assert.equal(client.getState('wf-2').mode, 'readonly')
+})
+
+const editorResponse = token => ({ ok: true, status: 200, data: { mode: 'editor', token } })
+
+test('并发 acquire 复用同一请求，避免同会话占位租约被误判为他人持有', async () => {
+  let finish
+  const { client, calls } = makeClient({ '/lease/acquire': () => new Promise(resolve => { finish = resolve }) })
+  const first = client.acquire('wf-1')
+  const second = client.acquire('wf-1')
+  assert.equal(calls.length, 1)
+  finish(editorResponse(1))
+  await Promise.all([first, second])
+  assert.equal(client.getState('wf-1').mode, 'editor')
+})
+
+test('获取期间关闭工作流：迟到的成功结果必须释放，不能留下幽灵租约', async () => {
+  let finish
+  const { client, calls } = makeClient({ '/lease/acquire': () => new Promise(resolve => { finish = resolve }) })
+  const pending = client.acquire('wf-1')
+  client.release('wf-1')
+  finish(editorResponse(7))
+  await pending
+  assert.equal(client.getState('wf-1').mode, 'released')
+  const release = calls.find(c => c.path.endsWith('/release-beacon'))
+  assert.equal(release?.body.leaseToken, 7)
+})
+
+test('关闭后立即重开：等待旧释放完成，防止迟到释放删除重入租约', async () => {
+  let finishRelease
+  const { client, calls } = makeClient({
+    '/lease/acquire': editorResponse(1),
+    '/release-beacon': () => new Promise(resolve => { finishRelease = resolve })
+  })
+  await client.acquire('wf-1')
+  client.release('wf-1')
+  const reopened = client.acquire('wf-1')
+  assert.equal(calls.filter(c => c.path.endsWith('/acquire')).length, 1)
+  finishRelease({ ok: true, data: { released: true } })
+  await reopened
+  assert.equal(client.getState('wf-1').mode, 'editor')
+  assert.equal(calls.filter(c => c.path.endsWith('/acquire')).length, 2)
+})
+
+for (const action of ['takeover', 'release', 'broadcast']) {
+  test(`迟到的心跳丢锁结果不覆盖之后的 ${action}`, async () => {
+    let finish
+    const { client, calls } = makeClient({
+      '/lease/acquire': editorResponse(1),
+      '/lease/takeover': editorResponse(2),
+      '/leases/heartbeat': () => new Promise(resolve => { finish = resolve })
+    })
+    await client.acquire('wf-1')
+    const pending = client.heartbeat()
+    if (action === 'takeover') await client.takeover('wf-1')
+    if (action === 'release') client.release('wf-1')
+    if (action === 'broadcast') client.applyLeaseChanged('wf-1', { token: 2, holder: { device: 'B' } })
+    const expected = { ...client.getState('wf-1') }
+    finish({ ok: true, data: { lost: ['wf-1'] } })
+    await pending
+    assert.deepEqual(client.getState('wf-1'), expected)
+    assert.equal(calls.filter(c => c.path.endsWith('/acquire')).length, 1)
+  })
+}
+
+test('关闭、重开后再次关闭：等待释放期间取消的申请不会再发出', async () => {
+  let finishRelease
+  const { client, calls } = makeClient({
+    '/lease/acquire': editorResponse(1),
+    '/release-beacon': () => new Promise(resolve => { finishRelease = resolve })
+  })
+  await client.acquire('wf-1')
+  client.release('wf-1')
+  const reopened = client.acquire('wf-1')
+  client.release('wf-1')
+  finishRelease({ ok: true, data: { released: true } })
+  await reopened
+  assert.equal(client.getState('wf-1').mode, 'released')
+  assert.equal(calls.filter(c => c.path.endsWith('/acquire')).length, 1)
+})
+
+test('申请未完成时关闭、重开再关闭：排队的新申请也必须取消', async () => {
+  let finish
+  const { client, calls } = makeClient({ '/lease/acquire': () => new Promise(resolve => { finish = resolve }) })
+  const first = client.acquire('wf-1')
+  client.release('wf-1')
+  const reopened = client.acquire('wf-1')
+  client.release('wf-1')
+  finish(editorResponse(7))
+  await first
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(calls.filter(c => c.path.endsWith('/acquire')).length, 1)
+  await reopened
+  assert.equal(client.getState('wf-1').mode, 'released')
 })

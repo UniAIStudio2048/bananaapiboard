@@ -269,3 +269,27 @@ test('切换工作流：不沿用上一个工作流的 epoch/revision，协作�
   }
   assert.ok(states.every(s => s.workflowId), '协作状态必须指明所属工作流')
 })
+
+
+test('切换后旧连接的租约消息仍属于原工作流，不能把新工作流变成只读', () => {
+  let workflowId = 'wf-1'
+  const sockets = []
+  const events = []
+  const sync = useCanvasRealtimeSync({
+    getWorkflowId: () => workflowId,
+    store: makeFakeStore(),
+    api: makeFakeApi({ nodeIndex: [] }),
+    socketFactory: opts => { sockets.push(opts); return { connect() {}, disconnect() {} } },
+    onLeaseChanged: id => events.push(['lease', id]),
+    onHandoverRequest: id => events.push(['handover', id]),
+    onWorkflowSaved: id => events.push(['saved', id])
+  })
+  workflowId = 'wf-2'
+  sync.connect()
+  sockets[0].onLeaseChanged({ token: 100, holder: { device: 'A' } })
+  sockets[0].onHandoverRequest({})
+  sockets[0].onWorkflowSaved({})
+  sockets[1].onLeaseChanged({ token: 2 })
+  assert.deepEqual(events, [['lease', 'wf-1'], ['handover', 'wf-1'], ['saved', 'wf-1'], ['lease', 'wf-2']])
+  sync.disconnect()
+})

@@ -9,7 +9,7 @@
  *   editor   持有编辑权（token 有效）
  *   readonly 他人持有（reason: held 他人正在编辑 / taken 被抢占 / free 持有者已离开）
  *   pending  获取或抢占进行中，期间忽略广播，以接口结果为准
- *   released 本会话已主动释放（例如切走标签页或关闭页面）
+ *   released 本会话已主动释放（例如关闭工作流标签页或页面）
  *   unknown  租约接口不可用，按旧协议保存（服务端仅在无人持有时放行）
  */
 import { reactive } from 'vue'
@@ -45,6 +45,8 @@ const workflowPath = (workflowId, action) => `/api/canvas/workflows/${encodeURIC
  */
 export function createEditLeaseClient({ request, getSessionId, getBeaconAuth = () => ({}) }) {
   const states = reactive({})
+  const pendingCalls = new Map()
+  const pendingReleases = new Map()
 
   function getState(workflowId) {
     return workflowId ? states[workflowId] || null : null
@@ -83,16 +85,36 @@ export function createEditLeaseClient({ request, getSessionId, getBeaconAuth = (
   }
 
   async function call(workflowId, action) {
+    const pending = pendingCalls.get(workflowId)
+    if (pending) {
+      // 同一次获取只发送一个请求；关闭后重开或显式抢占则排在旧请求清理之后。
+      if (pending.releaseVersion === 0 && pending.action === action) return pending.promise
+      const releaseVersion = pending.releaseVersion
+      await pending.promise
+      if (pending.releaseVersion !== releaseVersion) return getState(workflowId)
+      return call(workflowId, action)
+    }
     const previous = getState(workflowId)
     setState(workflowId, { ...(previous || {}), mode: 'pending' })
-    let response
-    try {
-      response = await request(workflowPath(workflowId, action), { headers: sessionHeaders(), body: {} })
-    } catch (err) {
-      response = { ok: false, status: 0, data: { error: err?.message || '网络错误' } }
-    }
-    const next = applyResult(workflowId, response)
-    return { ...next, becameEditor: next.mode === 'editor' && previous?.mode !== 'editor' }
+    const operation = { action, releaseVersion: 0, promise: null }
+    pendingCalls.set(workflowId, operation)
+    operation.promise = (async () => {
+      if (pendingReleases.has(workflowId)) await pendingReleases.get(workflowId)
+      if (operation.releaseVersion > 0) return getState(workflowId)
+      let response
+      try {
+        response = await request(workflowPath(workflowId, action), { headers: sessionHeaders(), body: {} })
+      } catch (err) {
+        response = { ok: false, status: 0, data: { error: err?.message || '网络错误' } }
+      }
+      if (operation.releaseVersion > 0) {
+        if (response?.ok && response.data?.mode === 'editor') await sendRelease(workflowId, response.data.token)
+        return getState(workflowId)
+      }
+      const next = applyResult(workflowId, response)
+      return { ...next, becameEditor: next.mode === 'editor' && previous?.mode !== 'editor' }
+    })().finally(() => { pendingCalls.delete(workflowId) })
+    return operation.promise
   }
 
   const acquire = workflowId => call(workflowId, 'acquire')
@@ -110,25 +132,39 @@ export function createEditLeaseClient({ request, getSessionId, getBeaconAuth = (
     }
   }
 
-  /** 主动释放（切走标签页 / 关闭页面）；keepalive 保证页面卸载时请求仍能发出 */
-  function release(workflowId) {
-    const state = getState(workflowId)
-    if (state?.mode !== 'editor') return
-    setState(workflowId, { mode: 'released' })
+  async function sendRelease(workflowId, token) {
     try {
-      Promise.resolve(request(workflowPath(workflowId, 'release-beacon'), {
+      await request(workflowPath(workflowId, 'release-beacon'), {
         keepalive: true,
         headers: sessionHeaders(),
-        body: { leaseSessionId: getSessionId(), leaseToken: state.token, _headers: getBeaconAuth() }
-      })).catch(() => {})
+        body: { leaseSessionId: getSessionId(), leaseToken: token, _headers: getBeaconAuth() }
+      })
     } catch {
-      // 释放失败由服务端 TTL 与 WebSocket 断开宽限兜底
+      // 释放失败由服务端 TTL 兜底
     }
   }
 
-  /** WebSocket 不可用时的兜底续期；已过期的重新获取 */
+  /** 关闭工作流标签页 / 页面时释放；切换画布标签不释放 */
+  function release(workflowId) {
+    const state = getState(workflowId)
+    const pending = pendingCalls.get(workflowId)
+    if (pending) {
+      pending.releaseVersion += 1
+      setState(workflowId, { mode: 'released' })
+      return pending.promise
+    }
+    if (state?.mode !== 'editor') return
+    setState(workflowId, { mode: 'released' })
+    const releasing = sendRelease(workflowId, state.token)
+      .finally(() => { pendingReleases.delete(workflowId) })
+    pendingReleases.set(workflowId, releasing)
+    return releasing
+  }
+
+  /** 为所有打开的编辑工作流续期；丢失后只读，等待用户显式拿回 */
   async function heartbeat() {
-    const workflowIds = Object.values(states).filter(s => s.mode === 'editor').map(s => s.workflowId)
+    const editors = new Map(Object.values(states).filter(s => s.mode === 'editor').map(s => [s.workflowId, s]))
+    const workflowIds = [...editors.keys()]
     if (workflowIds.length === 0) return
     let response
     try {
@@ -137,8 +173,9 @@ export function createEditLeaseClient({ request, getSessionId, getBeaconAuth = (
       return
     }
     for (const id of response?.data?.lost || []) {
-      // eslint-disable-next-line no-await-in-loop
-      await acquire(id)
+      // 心跳发出后可能已抢占成功、关闭或被其他窗口接管，旧结果不能覆盖新状态。
+      if (getState(id) !== editors.get(id)) continue
+      setState(id, { mode: 'readonly', reason: 'taken' })
     }
   }
 

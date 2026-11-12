@@ -26,6 +26,7 @@ export function useCanvasEditLease({
   const takingOver = ref(false)
   const pendingReload = new Set()
   let reloading = null
+  let disposed = false
 
   const currentState = computed(() => lease.getState(getCurrentWorkflowId()))
   const isReadonly = computed(() => currentState.value?.mode === 'readonly')
@@ -52,21 +53,22 @@ export function useCanvasEditLease({
       }
     }
     for (const id of ids) {
+      if (disposed || !getOpenWorkflowIds().includes(id)) continue
       const state = lease.getState(id)
       // eslint-disable-next-line no-await-in-loop
       if (!state || state.mode === 'released' || state.mode === 'unknown') await lease.acquire(id)
     }
   }
 
-  /** 切到某个工作流或页面重新可见时：只读/已释放的重新尝试获取 */
+  /** 切换或重新可见只恢复已释放/未知的租约；只读状态必须显式拿回编辑权 */
   async function refreshCurrent() {
     const id = getCurrentWorkflowId()
     if (!id) return
     const state = lease.getState(id)
     if (state?.mode === 'editor' || state?.mode === 'pending') return
-    if (state?.mode === 'readonly' || state?.mode === 'released' || state?.mode === 'unknown') {
-      // 只读或已释放期间其他会话可能已编辑：重新获得编辑权后同步最新内容，避免旧画布被自动保存覆盖
-      const mayBeStale = state.mode === 'readonly' || state.mode === 'released'
+    if (state?.mode === 'released' || state?.mode === 'unknown') {
+      // 已释放期间其他会话可能已编辑：恢复后同步最新内容
+      const mayBeStale = state.mode === 'released'
       const result = await lease.acquire(id)
       if (result.mode === 'editor' && mayBeStale) {
         await reload(id)
@@ -132,6 +134,7 @@ export function useCanvasEditLease({
   doc?.addEventListener?.('visibilitychange', handleVisibilityChange)
 
   function dispose() {
+    disposed = true
     stopOpenWatch()
     stopCurrentWatch()
     clearIntervalImpl(heartbeatTimer)
