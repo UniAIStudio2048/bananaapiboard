@@ -1046,6 +1046,8 @@ export const getAvailableImageModels = (mode = null) => {
         // 积分配置
         hasResolutionPricing: modelConfig.hasResolutionPricing || modelPricingConfig.hasResolutionPricing || false,
         pointsCost: modelConfig.pointsCost || modelPricingConfig.pointsCost || 1,
+        referenceImagePointsCost: modelConfig.referenceImagePointsCost,
+        seedream55: modelConfig.seedream55,
         resolutionEnabled: modelConfig.resolutionEnabled || modelPricingConfig.resolutionEnabled,
         aspectRatios: modelConfig.aspectRatios,
         qualityOptions: modelConfig.qualityOptions || modelConfig.qualities,

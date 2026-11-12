@@ -105,6 +105,8 @@ export async function generateImageFromText(params) {
     ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
   }
 
+  if (params.seedream55) body.seedream55 = { ...params.seedream55 }
+
   if (outputFormat) {
     body.output_format = outputFormat
   }
@@ -200,6 +202,8 @@ export async function generateImageFromImage(params) {
     spaceType: spaceParams.spaceType,
     ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
   }
+
+  if (params.seedream55) body.seedream55 = { ...params.seedream55 }
 
   if (outputFormat) {
     body.output_format = outputFormat

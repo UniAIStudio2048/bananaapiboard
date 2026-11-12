@@ -3208,8 +3208,8 @@ const nodeClass = computed(() => ({
   'has-output': hasOutput.value // 有输出时使用无边框设计
 }))
 
-// 是否有输出
-const hasOutput = computed(() => !isGenerationInProgress.value && !!props.data.output?.url)
+// 本次生成失败时优先显示错误，避免复制或重新生成前的旧结果遮住失败原因。
+const hasOutput = computed(() => !isGenerationInProgress.value && props.data.status !== 'error' && !!props.data.output?.url)
 const shouldRenderVideoOutput = computed(() => hasOutput.value && !readonlyPreviewVideoFailed.value)
 const readonlyPreviewVideoFailed = ref(false)
 const VIDEO_TOOL_MODAL_MODES = {

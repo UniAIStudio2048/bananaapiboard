@@ -1,4 +1,4 @@
-const RESOLUTION_ORDER = ['1k', '2k', '3k', '4k']
+const RESOLUTION_ORDER = ['1k', '1.5k', '2k', '3k', '4k']
 const LEGACY_FIXED_RESOLUTIONS = ['1k', '2k', '4k']
 
 function normalizeResolutionKey(size) {

@@ -44,6 +44,10 @@ function formatKnownSeedanceError(message) {
   const requestId = extractRequestId(message)
   const withRequestId = (text) => requestId ? `${text}。Request id: ${requestId}` : text
 
+  if (lower.includes('inputimagesensitivecontentdetected.privacyinformation') ||
+      /input image\b.*?may contain real person/i.test(message)) {
+    return withRequestId('输入图片可能包含真人，当前模型不接受真人素材，请更换不含真人的图片后重试')
+  }
   if (lower.includes('the request failed because the output video may contain sensitive information')) {
     return withRequestId('生成的视频可能包含敏感内容，已被内容安全系统拦截，请修改提示词后重试')
   }

@@ -8,6 +8,23 @@ import {
   sanitizeVideoNodeMessage
 } from './video-error-message.js'
 
+test('formats wrapped real-person image rejections for submit and asynchronous failures', () => {
+  const requestId = '021794480115269a0b324f8ecfaf9ce03201b1eca3b66d8968552'
+  const raw = 'Client error: `POST https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks` resulted in a `400 Bad Request` response:\n' + JSON.stringify({
+    error: {
+      code: 'InputImageSensitiveContentDetected.PrivacyInformation',
+      message: `The request failed because the input image 'content[4]' may contain real person. Request id: ${requestId}`,
+      param: 'content[4]',
+      type: 'BadRequest'
+    }
+  })
+  const expected = `输入图片可能包含真人，当前模型不接受真人素材，请更换不含真人的图片后重试。Request id: ${requestId}`
+  assert.equal(formatVideoNodeErrorMessage(raw), expected)
+  assert.equal(formatVideoNodeAsyncErrorMessage(raw, 'seedance-2'), expected)
+  assert.equal(formatVideoNodeAsyncErrorMessage(raw, 'ant-2'), expected)
+  assert.equal(formatVideoNodeErrorMessage('InputImageSensitiveContentDetected.PrivacyInformation'), expected.split('。Request id:')[0])
+})
+
 test('filters provider and model names from user-facing video messages', () => {
   assert.equal(
     sanitizeVideoNodeMessage('万相 3.0 首尾帧不能与参考素材同时使用（wan3.0 / seedance2.5，火山引擎）'),

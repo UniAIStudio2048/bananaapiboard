@@ -1,4 +1,5 @@
 <script setup>
+import Seedream55Parameters from '../Seedream55Parameters.vue'
 import BreakdownReferenceDetails from '../BreakdownReferenceDetails.vue'
 defineOptions({
   inheritAttrs: false
@@ -1625,6 +1626,15 @@ watch(maxGroupImages, (newVal) => {
   }
 })
 
+const isSeedream55Model = computed(() => {
+  const model = modelLookupList.value.find(m => m.value === selectedModel.value)
+  return model?.actualModel === 'seedream-v5.5' || model?.value === 'seedream5.5'
+})
+const seedream55Options = computed({
+  get: () => props.data.seedream55 || {},
+  set: value => canvasStore.updateNodeData(props.id, { seedream55: value })
+})
+
 // 获取当前模型的清晰度选项（积分与开关均来自租户后台）
 const imageSizes = computed(() => {
   const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
@@ -1638,7 +1648,7 @@ const imageSizes = computed(() => {
   const isSeedream45 = checkIsSeedream45(currentModel)
   // wan2.7 图生图模式不支持 4K，只支持 1K 和 2K
   const isWan27I2I = isWan27Model.value && hasImageInput.value
-  let supportedSizes = isSeedream50
+  let supportedSizes = isSeedream55Model.value ? ['1K', '1.5K', '2K'] : isSeedream50
     ? ['2K', '3K']
     : isSeedream45
       ? ['2K', '4K']
@@ -1797,6 +1807,13 @@ watch(selectedOutputFormat, value => {
 const basePointsCost = computed(() => {
   const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
   
+  if (isSeedream55Model.value) {
+    const options = seedream55Options.value
+    const pixels = Number(options.width || 1024) * Number(options.height || 1024)
+    const tier = options.sizeMode === 'custom' ? (pixels <= 2600000 ? '1.5k' : pixels <= 4620000 ? '2k' : '3k') : imageSize.value.toLowerCase()
+    return roundPoints(Number(currentModel?.pointsCost?.[tier] || 0) + normalizeModelImageUrls(referenceImages.value).length * Number(currentModel?.referenceImagePointsCost || 0))
+  }
+
   // 按清晰度计费的模型
   if (showResolutionOption.value) {
     return getImageResolutionCost(currentModel, imageSize.value)
@@ -5733,6 +5750,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
     ? `${basePrompt}\nPlease return an animated GIF.`
     : basePrompt
   const baseParams = {
+    ...(isSeedream55Model.value ? { seedream55: { ...seedream55Options.value } } : {}),
     prompt: requestPrompt,
     userPrompt: userPrompt || finalPrompt || '',
     model: selectedModel.value,
@@ -5747,7 +5765,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
     // MJ 模型的 botType 参数（写实/动漫）
     ...(isMJModel.value && { botType: botType.value }),
     // Seedream 组图生成参数
-    enableGroupGeneration: enableGroupGeneration.value,
+    enableGroupGeneration: isSeedream55Model.value ? false : enableGroupGeneration.value,
     maxGroupImages: maxGroupImages.value,
     imagePresetId: selectedTenantPresetId,
     // Seedream 5.0 Lite 联网搜索参数
@@ -8763,6 +8781,8 @@ async function handleDrop(event) {
             />
           </div>
           
+          <Seedream55Parameters v-if="isSeedream55Model" v-model="seedream55Options" />
+
           <!-- 预设选择器（MJ模型时隐藏） -->
           <div v-if="showPresetOption" class="preset-selector-custom" ref="presetSelectorRef" @click.stop>
             <div class="preset-selector-trigger" @click="togglePresetDropdown">

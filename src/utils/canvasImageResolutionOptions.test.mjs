@@ -58,3 +58,8 @@ test('keeps fixed pointsCost models compatible', () => {
   assert.equal(getImageResolutionCost(model, '4K'), 6)
   assert.equal(normalizeImageSelectedSize(model, '3K'), '1K')
 })
+test('supports Seedream 5.5 intermediate 1.5K with fractional points', () => {
+  const model = { pointsCost: { '1k': 1.95, '1.5k': 1.95, '2k': 3.45, '3k': 7.8 }, resolutionEnabled: { '3k': false } }
+  assert.deepEqual(getAvailableImageResolutionOptions(model).map(item => item.value), ['1K', '1.5K', '2K'])
+  assert.equal(getImageResolutionCost(model, '1.5K'), 1.95)
+})
