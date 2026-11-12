@@ -413,6 +413,8 @@
 import { ref, computed, watch, nextTick, onBeforeUnmount, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCommunityStore } from '@/stores/community'
+import { getBrand } from '@/config/tenant'
+import { setPageTitle } from '@/utils/pageTitle'
 import { getWorkDetail, getWorks, toggleLike as apiToggleLike, toggleFavorite as apiToggleFavorite, getProjectWorkflows, getCommunityUserProfile } from '@/api/community'
 const WorkflowPreviewModal = defineAsyncComponent(() => import('@/components/community/WorkflowPreviewModal.vue'))
 import FollowButton from '@/components/community/FollowButton.vue'
@@ -622,6 +624,7 @@ async function loadWork(id) {
   try {
     const res = await getWorkDetail(id)
     work.value = res.work || res.data || res
+    if (work.value?.title) setPageTitle(work.value.title, getBrand()?.siteTitle)
     await loadAuthorProfile(authorId.value)
     // 加载项目信息
     projectInfo.value = null

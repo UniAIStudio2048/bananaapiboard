@@ -13,6 +13,7 @@ import { createI18n, initI18n } from './i18n'
 import { initTheme } from './utils/theme'
 import { initLogger, logPageView } from './utils/logger'
 import { loadBrandConfig, getBrand } from './config/tenant'
+import { refreshDocumentTitle } from './utils/pageTitle'
 import { clearAuthSession } from './api/client'
 import { captureSignupSource } from './utils/signupSource'
 
@@ -95,7 +96,7 @@ async function initBrandConfig() {
     const brand = await loadBrandConfig()
 
     if (brand.siteTitle) {
-      document.title = brand.siteTitle
+      refreshDocumentTitle(brand.siteTitle)
     }
     
     console.log('[系统初始化] 品牌配置已应用:', brand.name, '主题色:', brand.primaryColor)

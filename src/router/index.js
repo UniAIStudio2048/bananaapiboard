@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { getBrand } from '@/config/tenant'
+import { setPageTitle, isIndexableRoute } from '@/utils/pageTitle'
 const Home = () => import('@/views/Home.vue')
 const User = () => import('@/views/User.vue')
 const Packages = () => import('@/views/Packages.vue')
@@ -169,10 +170,10 @@ const router = createRouter({
   ]
 })
 
-// 路由守卫 - 检查登录状态（标题始终固定为「ai绘图创作」）
+// 路由守卫 - 检查登录状态；公开可收录页面标题为「页面名 - 站点名」，其余页面固定为站点名
 router.beforeEach(async (to, from, next) => {
   const brand = getBrand()
-  document.title = brand?.siteTitle || 'ai绘图创作'
+  setPageTitle(isIndexableRoute(to) ? to.meta.title : '', brand?.siteTitle)
   
   // 检查是否需要登录
   if (to.meta.requiresAuth) {
