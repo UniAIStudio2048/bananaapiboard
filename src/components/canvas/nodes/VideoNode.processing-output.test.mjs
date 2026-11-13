@@ -48,6 +48,7 @@ test('rejected submission on a copied node exposes its Chinese error instead of 
   const declaration = ast.program.body.find(node => node.type === 'FunctionDeclaration' && node.id.name === 'executeNodeGeneration')
   const execute = runInNewContext(`(${script.slice(declaration.start, declaration.end)})`, {
     canvasStore: { updateNodeData: (_id, patch) => Object.assign(data, patch) },
+    updateVideoSubmissionNode: async (_id, patch) => Object.assign(data, patch),
     sendGenerateRequest: async () => {
       assert.equal(preview.shouldRenderVideoOutput.value, false)
       throw new Error("The request failed because the input image 'content[4]' may contain real person.")

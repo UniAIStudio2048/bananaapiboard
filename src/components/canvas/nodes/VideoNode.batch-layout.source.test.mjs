@@ -54,7 +54,7 @@ test('video preprocessing failure terminates every unsubmitted batch node', () =
   assert.match(backgroundProcess, /let submissionsStarted = false/)
   assert.match(backgroundProcess, /submissionsStarted = true/)
   assert.match(backgroundProcess, /if \(!submissionsStarted\)/)
-  assert.match(backgroundProcess, /allNodeIds\.forEach\(nodeId =>/)
+  assert.match(backgroundProcess, /for \(const nodeId of allNodeIds\)/)
 })
 
 test('video batch surfaces partial structured safety failures', () => {

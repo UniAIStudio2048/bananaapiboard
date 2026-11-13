@@ -67,3 +67,8 @@ test('backgroundTaskManager exports idempotent ensureTaskPolling that reuses sta
     'ensureTaskPolling should re-register missing tasks from canvas node data'
   )
 })
+
+test('audio generation keeps its AudioNode polling when switching or restoring workflow tabs', () => {
+  const reconcile = canvasSource.match(/function reconcileTasksForActiveTab\(\) \{[\s\S]*?\n\}/)[0]
+  assert.match(reconcile, /if \(node\.data\.taskType === 'audio-generation'\) continue/)
+})

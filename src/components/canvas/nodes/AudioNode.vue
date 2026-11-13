@@ -272,6 +272,7 @@ const currentMusicModelConfig = computed(() => {
 const isMiniMaxAudio = computed(() => currentMusicModelConfig.value?.provider === 'minimax')
 const isFishAudio = computed(() => currentMusicModelConfig.value?.provider === 'fish')
 const isRunningHubAudio = computed(() => currentMusicModelConfig.value?.apiType === 'runninghub-audio')
+const isLongCatVoiceClone = computed(() => isRunningHubAudio.value && currentMusicModelConfig.value?.actualModel === 'run/ai-app/2040629141267030018')
 const isRunningHubMusic = computed(() => isRunningHubAudio.value && (!audioCapability.value || audioCapability.value === 'music'))
 const isRunningHubSuno6 = computed(() => isRunningHubMusic.value && (currentMusicModelConfig.value?.sunoV6 || String(currentMusicModelConfig.value?.actualModel || '').includes('suno-v6')))
 const sunoV6Operation = computed(() => RUNNINGHUB_SUNO6_OPERATIONS.find(item => item.id === sunoV6Params.operation) || RUNNINGHUB_SUNO6_OPERATIONS[0])
@@ -309,6 +310,36 @@ const inheritedAudioSource = computed(() => {
   return url ? { edgeId: edge.id, sourceData, url } : null
 })
 const inheritedAudioUrl = computed(() => inheritedAudioSource.value?.url || '')
+const referenceAudioDuration = ref(null)
+const referenceAudioError = ref('')
+watch([isLongCatVoiceClone, inheritedAudioUrl], ([enabled, url], _, onCleanup) => {
+  referenceAudioDuration.value = null
+  referenceAudioError.value = ''
+  if (!enabled || !url) return
+  const audio = new Audio()
+  audio.preload = 'metadata'
+  audio.onloadedmetadata = () => {
+    referenceAudioDuration.value = Number(audio.duration)
+    if (!Number.isFinite(audio.duration) || audio.duration <= 0) referenceAudioError.value = '无法读取参考音频时长'
+  }
+  audio.onerror = () => { referenceAudioError.value = '无法读取参考音频，请重新上传' }
+  audio.src = url
+  onCleanup(() => {
+    audio.onloadedmetadata = null
+    audio.onerror = null
+    audio.removeAttribute('src')
+    audio.load()
+  })
+}, { immediate: true })
+const longCatVoiceInputError = computed(() => {
+  if (!musicPrompt.value.trim()) return '请输入合成文案'
+  if (musicPrompt.value.length > 500) return '合成文案不能超过 500 字符'
+  if (!inheritedAudioUrl.value) return '请连接参考音频（最长 45 秒）'
+  if (referenceAudioError.value) return referenceAudioError.value
+  if (referenceAudioDuration.value === null) return '正在读取参考音频时长'
+  if (referenceAudioDuration.value > 45) return '参考音频不能超过 45 秒'
+  return ''
+})
 const inheritedVoiceId = computed(() => {
   const sourceData = inheritedAudioSource.value?.sourceData
   return sourceData?.voiceId || sourceData?.voice_id || sourceData?.output?.voiceId || sourceData?.output?.voice_id || ''
@@ -349,6 +380,7 @@ const audioPromptLimit = computed(() => {
   return 4100
 })
 const canGenerateCurrentAudio = computed(() => {
+  if (isLongCatVoiceClone.value) return !longCatVoiceInputError.value
   if (isRunningHubMusic.value) return !runninghubInputError.value
   if (isRunningHubAudio.value && audioCapability.value === 'voice_design') return !!musicPrompt.value.trim() && !!voiceDesignStyle.value.trim() && musicPrompt.value.length <= audioPromptLimit.value
   if (isRunningHubAudio.value && audioCapability.value === 'voice_clone') return !!musicPrompt.value.trim() && !!inheritedAudioUrl.value
@@ -401,7 +433,9 @@ const musicPointsCost = computed(() => {
     return Math.round(priced * getUserNodeRate('audio') * 100) / 100
   }
   const base = isRunningHubAudio.value
-    ? Number(currentMusicModelConfig.value?.pointsCost) || 0
+    ? (currentMusicModelConfig.value?.pricingMode === 'per_character'
+        ? calculateAudioPointsCost(currentMusicModelConfig.value?.pointsCost, musicPrompt.value)
+        : Number(currentMusicModelConfig.value?.pointsCost) || 0)
     : (isMiniMaxAudio.value || isFishAudio.value) && audioCapability.value === 'voice_design'
     ? cost
     : (audioCapability.value
@@ -849,7 +883,8 @@ async function handleGenerateMusic() {
 
 async function handleGenerateCozeAudio() {
   if (!canGenerateCurrentAudio.value) {
-    const message = isRunningHubMusic.value ? runninghubInputError.value
+    const message = isLongCatVoiceClone.value ? longCatVoiceInputError.value
+      : isRunningHubMusic.value ? runninghubInputError.value
       : isMiniMaxAudio.value && audioCapability.value === 'voice_design'
       ? '请填写音色描述和试听文案'
       : isFishAudio.value && audioCapability.value === 'voice_design'
@@ -896,7 +931,7 @@ async function handleGenerateCozeAudio() {
       body.style = voiceDesignStyle.value
     } else if (isRunningHubAudio.value && audioCapability.value === 'voice_clone') {
       body.prompt = musicPrompt.value
-      body.style = voiceDesignStyle.value
+      if (!isLongCatVoiceClone.value) body.style = voiceDesignStyle.value
       body.reference_audio_url = inheritedAudioUrl.value
     } else if (isRunningHubAudio.value && audioCapability.value === 'tts') {
       body.text = musicPrompt.value
@@ -951,8 +986,10 @@ async function handleGenerateCozeAudio() {
 }
 
 async function pollCozeAudioStatus(nodeId, taskId) {
+  if (canvasStore.nodes.find(node => node.id === nodeId)?.data?.taskId !== taskId) return
   try {
     const response = await apiClient.get(`/api/audio/query/${taskId}`)
+    if (canvasStore.nodes.find(node => node.id === nodeId)?.data?.taskId !== taskId) return
     if (response.status === 'failed') {
       canvasStore.updateNodeData(nodeId, { status: 'error', error: response.data?.error_message || '音频生成失败' })
       return
@@ -2757,7 +2794,7 @@ function handleSpeedEditorClickOutside(event) {
       </button>
       <!-- 音乐生成配置（与视频/图像节点一致，生成后仍可继续输入和提交） -->
       <div class="music-gen-panel">
-        <div class="speech-tone-toolbar nodrag" @mousedown.prevent.stop>
+        <div v-if="!isLongCatVoiceClone" class="speech-tone-toolbar nodrag" @mousedown.prevent.stop>
           <button
             type="button"
             class="speech-tone-trigger"
@@ -2964,7 +3001,7 @@ function handleSpeedEditorClickOutside(event) {
           </div>
 
           <div
-            v-if="audioCapability === 'voice_design' || audioCapability === 'voice_clone'"
+            v-if="!isLongCatVoiceClone && (audioCapability === 'voice_design' || audioCapability === 'voice_clone')"
             ref="voiceStyleSelectorRef"
             class="voice-style-selector"
             @mousedown.stop
@@ -3042,7 +3079,7 @@ function handleSpeedEditorClickOutside(event) {
           
           <!-- 积分显示 -->
           <div class="points-badge">
-            <span class="points-value">{{ formatPoints(musicPointsCost) }}积分</span>
+            <span class="points-value">{{ formatPoints(musicPointsCost) }}{{ isLongCatVoiceClone ? '' : '积分' }}</span>
           </div>
           
           <!-- 生成按钮 -->
@@ -3113,7 +3150,8 @@ function handleSpeedEditorClickOutside(event) {
         </div>
 
         <!-- 展开/收起按钮 -->
-        <button class="collapse-trigger" @click="showAdvancedOptions = !showAdvancedOptions">
+        <div v-if="isLongCatVoiceClone" class="option-hint">{{ longCatVoiceInputError || `参考音频 ${referenceAudioDuration.toFixed(2)} 秒 · 最长 45 秒` }}</div>
+        <button v-else class="collapse-trigger" @click="showAdvancedOptions = !showAdvancedOptions">
           <span class="collapse-icon" :class="{ 'expanded': showAdvancedOptions }">∧</span>
           <span>{{ showAdvancedOptions ? '收起' : '展开' }}</span>
         </button>
@@ -3163,7 +3201,7 @@ function handleSpeedEditorClickOutside(event) {
               <input v-model="negativeTags" type="text" class="option-input" placeholder="逗号分隔" />
             </div>
           </div>
-          <div v-else-if="showAdvancedOptions && (audioCapability === 'voice_clone' || audioCapability === 'tts')" class="advanced-options">
+          <div v-else-if="!isLongCatVoiceClone && showAdvancedOptions && (audioCapability === 'voice_clone' || audioCapability === 'tts')" class="advanced-options">
             <div class="option-row vertical">
               <span class="option-label">音色来源</span>
               <span class="option-hint">{{ inheritedVoiceId ? `已连接音色 ${inheritedVoiceId}` : inheritedAudioUrl ? '已连接参考音频' : '请连接上游音频节点' }}</span>

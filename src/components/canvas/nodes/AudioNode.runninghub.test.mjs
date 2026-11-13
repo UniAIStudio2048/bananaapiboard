@@ -71,7 +71,7 @@ test('actual audio polling persists both RunningHub alternatives and the primary
     apiClient: { get: async () => ({ status: 'completed', data: { capability: 'music', audio_url: 'https://example.com/a.mp3', results: [
       { task_id: 'task-1', audio_url: 'https://example.com/a.mp3', title: '晨光' }, { task_id: 'task-2', audio_url: 'https://example.com/b.mp3', title: '晨光备选' }
     ] } }) },
-    canvasStore: { nodes: [{ id: 'audio-1', data: { audioProvider: 'runninghub', audioCapability: 'music', audioModel: 'rh-single' } }], updateNodeData: (nodeId, data) => updates.push({ nodeId, data }) },
+    canvasStore: { nodes: [{ id: 'audio-1', data: { taskId: 'task-1', audioProvider: 'runninghub', audioCapability: 'music', audioModel: 'rh-single' } }], updateNodeData: (nodeId, data) => updates.push({ nodeId, data }) },
     window: { dispatchEvent() {} }, CustomEvent: class {}, setTimeout: () => { throw new Error('unexpected polling retry') }
   }
   const handler = source.slice(source.indexOf('async function pollCozeAudioStatus('), source.indexOf('const isSavingDesignedVoice'))

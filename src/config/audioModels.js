@@ -26,7 +26,7 @@ export function normalizeAudioModels(models = [], groups = []) {
       capability: model.capability,
       apiType: model.apiType,
       provider: model.apiType === 'runninghub-audio' ? 'runninghub' : model.apiType === 'minimax-audio' ? 'minimax' : model.apiType === 'fish-audio' ? 'fish' : 'coze',
-      pricingMode: model.apiType === 'runninghub-audio' ? 'fixed' : model.pricingMode,
+      pricingMode: model.pricingMode || (model.apiType === 'runninghub-audio' ? 'fixed' : undefined),
       actualModel: model.actualModel || '',
       nodeInfoList: Array.isArray(model.nodeInfoList) ? model.nodeInfoList : [],
       runninghubAppId: model.runninghubAppId || '',

@@ -115,6 +115,8 @@ export function shouldFailCanvasVideoNodeWithoutTask(node, hasBackgroundTask, no
 
 export function shouldResumeCanvasVideoNodeWithoutTask(node, hasBackgroundTask, now = Date.now()) {
   if (!isCanvasGenerationNode(node)) return false
+  // AudioNode 自行恢复 /api/audio/query 轮询，不能当作 audio-edit 查询。
+  if (node?.data?.taskType === 'audio-generation') return false
   if (!isVideoGenerationProcessingStatus(node?.data?.status)) return false
   return !!getCanvasNodeTaskId(node) && !hasBackgroundTask
 }

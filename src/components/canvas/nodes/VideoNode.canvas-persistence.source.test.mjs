@@ -6,7 +6,8 @@ const source = readFileSync(new URL('./VideoNode.vue', import.meta.url), 'utf8')
 
 test('VideoNode persists the current canvas before it submits a video task', () => {
   assert.match(source, /async function ensureCanvasWorkflowForVideoSubmission\(nodeId\)/)
-  assert.match(source, /const \{ currentTab, workflowId \} = await ensureCanvasWorkflowForVideoSubmission\(nodeId\)/)
+  assert.match(source, /const \{ currentTab, workflowId \} = await prepareVideoSubmissionContext\(nodeId, capturedState\)/)
+  assert.match(source, /ensureCanvasWorkflowForVideoSubmission\(nodeId\),/)
   assert.match(source, /formData\.append\('canvas_workflow_id', workflowId\)/)
 })
 

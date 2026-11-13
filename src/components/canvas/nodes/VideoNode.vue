@@ -2188,6 +2188,11 @@ const RUNNINGHUB_V31_MODES = [
   { value: 'image_audio', label: '图像+音频生视频', needsImages: 1, needsAudio: true }
 ]
 const isRunningHubAiAppVideoV31Model = computed(() => currentModelConfig.value?.apiType === 'runninghub-ai-app-video-v31')
+const isLongCatModel = computed(() => currentModelConfig.value?.apiType === 'runninghub-longcat')
+const longCatDuration = ref(props.data.longCatDuration || '')
+const longCatAudioDuration = computed(() => Number(getUpstreamData().audioDuration) || 0)
+watch(longCatDuration, value => canvasStore.updateNodeData(props.id, { longCatDuration: value }))
+
 const v31Mode = ref(props.data.v31Mode || 't2v')
 const v31ModeConfig = computed(() => RUNNINGHUB_V31_MODES.find(m => m.value === v31Mode.value) || RUNNINGHUB_V31_MODES[0])
 
@@ -2622,7 +2627,7 @@ const showVideoParameterDuration = computed(() => {
 })
 
 const hasVideoParameterMenu = computed(() => {
-  return availableAspectRatios.value.length > 0 ||
+  return isLongCatModel.value || availableAspectRatios.value.length > 0 ||
     videoParameterResolutionOptions.value.length > 0 ||
     showVideoParameterDuration.value
 })
@@ -4333,6 +4338,10 @@ const waveSpeedReferenceVideoDuration = computed(() => {
 
 // 积分消耗计算（从模型配置中读取）
 const basePointsCost = computed(() => {
+  if (isLongCatModel.value) {
+    const seconds = Number(longCatDuration.value) || longCatAudioDuration.value
+    return Math.round(seconds * Number(currentModelConfig.value?.costPerSecond ?? 1) * 100) / 100
+  }
   let cost = 1
 
   if (['heizhu-video', 'wavespeed-wan3', 'siray-wan3', 'rh-h3-enhanced'].includes(currentModelConfig.value?.apiType)) {
@@ -5610,14 +5619,23 @@ async function ensureCanvasWorkflowForVideoSubmission(nodeId) {
         teamId: currentTab.workflowSpaceType === 'team' ? currentTab.workflowTeamId : null
       }
     : teamStore.getSpaceParams('current')
-  if (currentTab.workflowId && currentSpace.spaceType === 'team') {
+  if (currentTab.workflowId) {
     const flushResult = await canvasStore.flushIncrementalWriter?.()
-    if (flushResult?.ok === false || flushResult?.paused) {
+    if (flushResult?.ok === false || flushResult?.paused || flushResult?.offline) {
       throw new Error('协作版本已变化，请刷新工作流后再提交视频生成任务')
     }
-    return {
-      currentTab: canvasStore.getCurrentTab?.() || currentTab,
-      workflowId: currentTab.workflowId
+    if (canvasStore.getCurrentTab?.()?.id !== currentTab.id) {
+      throw new Error('工作流已切换，本次视频尚未提交，请返回原工作流重试')
+    }
+    // 已落库的个人节点也走增量同步，避免提交前全量快照与自动保存互相冲突。
+    if (flushResult && flushResult.reason !== 'writer_unavailable') {
+      const saved = await getWorkflowNodesBatch(currentTab.workflowId, [nodeId])
+      if (saved.nodes?.some(node => node.id === nodeId)) {
+        return { currentTab, workflowId: currentTab.workflowId }
+      }
+    }
+    if (currentSpace.spaceType === 'team') {
+      throw new Error('画布节点尚未保存，请刷新工作流后再提交视频生成任务')
     }
   }
 
@@ -5636,6 +5654,9 @@ async function ensureCanvasWorkflowForVideoSubmission(nodeId) {
     throw new Error('画布保存失败，无法提交视频生成任务')
   }
 
+  if (canvasStore.getCurrentTab?.()?.id !== currentTab.id) {
+    throw new Error('工作流已切换，本次视频尚未提交，请返回原工作流重试')
+  }
   canvasStore.markCurrentTabSaved(workflowId, workflow?.workflow_uid, {
     space_type: workflow?.space_type || currentSpace.spaceType,
     team_id: workflow?.team_id || currentSpace.teamId || null
@@ -5643,6 +5664,47 @@ async function ensureCanvasWorkflowForVideoSubmission(nodeId) {
   return {
     currentTab: canvasStore.getCurrentTab?.() || currentTab,
     workflowId
+  }
+}
+
+async function prepareVideoSubmissionContext(nodeId, capturedState) {
+  const tabId = capturedState.submissionTabId || canvasStore.getCurrentTab?.()?.id
+  if (canvasStore.getCurrentTab?.()?.id !== tabId) {
+    throw new Error('工作流已切换，本次视频尚未提交，请返回原工作流重试')
+  }
+  let timer
+  try {
+    const context = await Promise.race([
+      ensureCanvasWorkflowForVideoSubmission(nodeId),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('画布保存超时，视频尚未提交，请稍后重试')), 30000)
+      })
+    ])
+    if (canvasStore.getCurrentTab?.()?.id !== tabId) {
+      throw new Error('工作流已切换，本次视频尚未提交，请返回原工作流重试')
+    }
+    capturedState.submissionWorkflowId = context.workflowId
+    return context
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function updateVideoSubmissionNode(nodeId, data, capturedState) {
+  const tabId = capturedState.submissionTabId
+  if (!tabId || canvasStore.getCurrentTab?.()?.id === tabId) {
+    canvasStore.updateNodeData(nodeId, data)
+    return
+  }
+  canvasStore.updateNodeDataForTab(tabId, nodeId, data)
+  // 用户切换工作流后，当前增量写入器已属于其他标签，直接写回原工作流。
+  if (!capturedState.submissionWorkflowId) return
+  try {
+    const saved = await getWorkflowNodesBatch(capturedState.submissionWorkflowId, [nodeId])
+    const node = saved.nodes?.find(item => item.id === nodeId)
+    if (node) await patchWorkflowNode(capturedState.submissionWorkflowId, nodeId, { data }, node.version)
+  } catch (error) {
+    console.warn('[VideoNode] 原工作流提交状态写回失败:', error.message)
   }
 }
 
@@ -5668,7 +5730,7 @@ async function sendSeedanceDraftFinalRequest(taskId, submission) {
 
 async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedState = {}) {
   const token = localStorage.getItem('token')
-  const { currentTab, workflowId } = await ensureCanvasWorkflowForVideoSubmission(nodeId)
+  const { currentTab, workflowId } = await prepareVideoSubmissionContext(nodeId, capturedState)
   const submission = createPendingGenerationSubmission({
     type: 'video',
     nodeId,
@@ -5678,6 +5740,7 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
     model: capturedState.model || selectedModel.value,
     aspectRatio: selectedAspectRatio.value,
     duration: selectedDuration.value,
+    longCatDuration: longCatDuration.value,
     metadata: {
       source: 'canvas-video-node'
     }
@@ -5856,6 +5919,12 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   if (isVectorEngineJsonModel.value) {
     formData.append('resolution', capturedState.videoResolution || vectorengineResolution.value)
     console.log('[VideoNode] VectorEngine JSON 清晰度:', vectorengineResolution.value)
+  }
+
+  if (capturedState.apiType === 'runninghub-longcat') {
+    formData.set('prompt', finalPrompt || '')
+    formData.set('duration', capturedState.longCatDuration || 'auto')
+    formData.set('reference_audios', JSON.stringify(capturedState.referenceAudios || referenceAudios.value))
   }
 
   if (capturedState.apiType === 'runninghub-ai-app-video') {
@@ -6378,6 +6447,7 @@ function createNewOutputNode() {
       model: selectedModel.value,
       aspectRatio: selectedAspectRatio.value,
       duration: selectedDuration.value,
+      longCatDuration: longCatDuration.value,
       videoResolution: genericVideoResolutionOptions.value.length > 0 ? genericVideoResolution.value : '',
       ...(isRunningHubAiAppVideoModel.value ? { resolution: runningHubResolution.value } : {}),
       ...(isRunningHubAiAppVideoV31Model.value ? { v31Mode: v31Mode.value } : {}),
@@ -6408,11 +6478,17 @@ function createNewOutputNode() {
 
 // 单个节点执行生成任务（后台轮询，不阻塞UI）
 async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex, capturedState = {}) {
+  capturedState.submissionTabId ||= canvasStore.getCurrentTab?.()?.id
+  if (canvasStore.getCurrentTab?.()?.id === capturedState.submissionTabId) {
+    capturedState.submissionWorkflowId ||= canvasStore.getCurrentTab?.()?.workflowId
+  }
+  const updateNode = (id, data) => updateVideoSubmissionNode(id, data, capturedState)
   try {
     // 清除旧的任务 ID，避免角色创建时使用过期的 ID
-    canvasStore.updateNodeData(nodeId, { 
+    await updateNode(nodeId, {
       status: 'processing',
-      progress: '排队中...',
+      progress: '正在提交任务...',
+      clientSubmissionId: null,
       processingStartedAt: Date.now(),
       seedanceDraft: capturedState.seedanceDraft === true,
       taskId: null,
@@ -6429,7 +6505,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
       markSubmissionTaskCreated(submissionId, taskId)
 
       // 注册到后台任务管理器（即使用户离开画布也继续执行）
-      const currentTab = canvasStore.getCurrentTab()
+      const currentTab = { id: capturedState.submissionTabId }
       registerTask({
         taskId,
         type: capturedState.isHeygenMode ? 'digital-human-video' : 'video',
@@ -6447,7 +6523,9 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
       // 不写入会导致：刷新/离开画布、且 backgroundTaskManager 的 localStorage
       // 任务被清理（完成 5s 后自动清理）之后，shouldResumeCanvasVideoNodeWithoutTask
       // 找不到 taskId，节点永远停在"生成中"，直到 120 分钟超时才标失败。
-      canvasStore.updateNodeData(nodeId, {
+      await updateNode(nodeId, {
+        status: 'processing',
+        progress: '排队中...',
         taskId,
         soraTaskId: taskId,
         taskType: capturedState.isHeygenMode ? 'digital-human-video' : 'video',
@@ -6466,7 +6544,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
       return taskId
     } else if (extractVideoUrl(result)) {
       const videoUrl = extractVideoUrl(result)
-      canvasStore.updateNodeData(nodeId, {
+      await updateNode(nodeId, {
         status: 'success',
         output: {
           type: 'video',
@@ -6488,7 +6566,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
     const taskId = error?.payload?.task_id || error?.payload?.id
     if (submissionId && taskId) {
       markSubmissionTaskCreated(submissionId, taskId)
-      const currentTab = canvasStore.getCurrentTab()
+      const currentTab = { id: capturedState.submissionTabId }
       registerTask({
         taskId,
         type: capturedState.isHeygenMode ? 'digital-human-video' : 'video',
@@ -6502,7 +6580,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
           restoredFromErrorResponse: true
         }
       })
-      canvasStore.updateNodeData(nodeId, {
+      await updateNode(nodeId, {
         status: 'processing',
         progress: '生成中...',
         taskId,
@@ -6515,8 +6593,9 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
     if (isPromptSafetyBlockedError(error)) {
       if (submissionId) removeGenerationSubmission(submissionId)
       const dialog = buildPromptSafetyDialog(error)
-      canvasStore.updateNodeData(nodeId, {
+      await updateNode(nodeId, {
         status: 'error',
+        progress: null,
         error: dialog.message,
         safetyError: {
           code: error.code,
@@ -6528,7 +6607,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
       return null
     }
     if (submissionId && isTransientVideoSubmissionError(error)) {
-      canvasStore.updateNodeData(nodeId, {
+      await updateNode(nodeId, {
         status: 'processing',
         progress: '网络异常，正在确认任务状态...',
         clientSubmissionId: submissionId,
@@ -6539,8 +6618,9 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
       return submissionId
     }
     if (submissionId) removeGenerationSubmission(submissionId)
-    canvasStore.updateNodeData(nodeId, {
+    await updateNode(nodeId, {
       status: 'error',
+      progress: null,
       error: formatVideoNodeErrorMessage(error.message, { model })
     })
     return null
@@ -6695,6 +6775,10 @@ async function ensureReferenceVideoUrlsAccessible(nodeId, targetNodeId, currentR
 
 // 后台执行生成的重操作（图片压缩/上传/API提交），不阻塞UI
 async function processGenerationInBackground(targetNodeId, allNodeIds, finalPrompt, finalImages, generateCount, capturedState, submitFingerprint = '') {
+  const submissionTab = canvasStore.getCurrentTab?.()
+  capturedState.submissionTabId = submissionTab?.id
+  capturedState.submissionWorkflowId = submissionTab?.workflowId
+  const updateNode = (id, data) => updateVideoSubmissionNode(id, data, capturedState)
   let submissionsStarted = false
   try {
     // 图片压缩：仅对有严格大小要求的 API 类型（如 kling）做前端预压缩，其他类型传原图
@@ -6756,7 +6840,7 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     // 确保参考图片可访问（可能耗时：串行 fetch + upload）
     if (finalImages.length > 0) {
       console.log('[VideoNode] 后台处理参考图片 URL，确保可访问性...')
-      canvasStore.updateNodeData(targetNodeId, { progress: '正在处理参考图片...' })
+      await updateNode(targetNodeId, { progress: '正在处理参考图片...' })
       finalImages = await ensureAccessibleUrls(finalImages)
       if (finalImages.length === 0) {
         throw new Error('参考图片未能转换为可访问 URL，请重新上传后重试')
@@ -6787,7 +6871,7 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
       const hasBlobAudios = currentRefAudios.some(url => url.startsWith('blob:'))
       if (hasBlobAudios) {
         console.log('[VideoNode] 检测到参考音频含 blob URL，开始上传到云端...')
-        canvasStore.updateNodeData(targetNodeId, { progress: '正在处理参考音频...' })
+        await updateNode(targetNodeId, { progress: '正在处理参考音频...' })
         for (const [audioIndex, audioUrl] of currentRefAudios.entries()) {
           if (!audioUrl.startsWith('blob:')) continue
           try {
@@ -6808,15 +6892,15 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
               const sn = canvasStore.nodes.find(n => n.id === edge.source)
               if (!sn?.data) continue
               if (sn.data.audioUrl === audioUrl) {
-                canvasStore.updateNodeData(sn.id, { audioUrl: uploadResult.url })
+                await updateNode(sn.id, { audioUrl: uploadResult.url })
                 break
               }
               if (sn.data.audioData === audioUrl) {
-                canvasStore.updateNodeData(sn.id, { audioData: uploadResult.url })
+                await updateNode(sn.id, { audioData: uploadResult.url })
                 break
               }
               if (sn.data.output?.url === audioUrl) {
-                canvasStore.updateNodeData(sn.id, { output: { ...sn.data.output, url: uploadResult.url } })
+                await updateNode(sn.id, { output: { ...sn.data.output, url: uploadResult.url } })
                 break
               }
             }
@@ -6830,7 +6914,7 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
       capturedState.referenceAudios = currentRefAudios
     }
     
-    canvasStore.updateNodeData(targetNodeId, { progress: '正在提交任务...' })
+    await updateNode(targetNodeId, { progress: '正在提交任务...' })
     
     // 提交所有任务
     submissionsStarted = true
@@ -6840,8 +6924,10 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     
     const allResults = await Promise.all(submitPromises)
     const successResults = allResults.filter(r => r !== null)
+    const submittedNodes = canvasStore.getCurrentTab?.()?.id === capturedState.submissionTabId
+      ? canvasStore.nodes : (submissionTab?.nodes || [])
     const batchSafetyError = findBatchSafetyError(allNodeIds.map(nodeId =>
-      canvasStore.nodes.find(node => node.id === nodeId)?.data
+      submittedNodes.find(node => node.id === nodeId)?.data
     ))
     
     console.log('[VideoNode] 全部任务已提交:', successResults.length, '/', generateCount)
@@ -6853,7 +6939,7 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     }
 
     if (successResults.length === 0) {
-      const firstNodeData = canvasStore.nodes.find(n => n.id === allNodeIds[0])?.data
+      const firstNodeData = submittedNodes.find(n => n.id === allNodeIds[0])?.data
       if (batchSafetyError) {
         const safetyErr = new Error(batchSafetyError.message || firstNodeData?.error || '提示词未通过安全审核，请修改后重试')
         safetyErr.code = batchSafetyError.code
@@ -6872,13 +6958,13 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     if (!submissionsStarted) {
       const model = capturedState.model || selectedModel.value
       const batchError = formatVideoNodeErrorMessage(error.message || '生成失败', { model })
-      allNodeIds.forEach(nodeId => {
-        canvasStore.updateNodeData(nodeId, {
+      for (const nodeId of allNodeIds) {
+        await updateNode(nodeId, {
           status: 'error',
           progress: null,
           error: batchError
         })
-      })
+      }
     }
     if (error.code === 'concurrent_limit_exceeded') {
       showAlert(error.message, '并发限制')
@@ -6887,7 +6973,7 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     if (isPromptSafetyBlockedError(error)) {
       const dialog = buildPromptSafetyDialog(error)
       errorMessage.value = dialog.message
-      canvasStore.updateNodeData(targetNodeId, {
+      await updateNode(targetNodeId, {
         status: 'error',
         error: dialog.message
       })
@@ -6896,7 +6982,7 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     }
     const model = capturedState.model || selectedModel.value
     errorMessage.value = formatVideoNodeErrorMessage(error.message || '生成失败', { model })
-    canvasStore.updateNodeData(targetNodeId, {
+    await updateNode(targetNodeId, {
       status: 'error',
       error: formatVideoNodeErrorMessage(error.message, { model })
     })
@@ -7025,6 +7111,7 @@ async function handleGenerate(options = {}) {
     finalImages,
     model: selectedModel.value,
     duration: selectedDuration.value,
+    longCatDuration: longCatDuration.value,
     count: selectedCount.value,
     currentStatus: props.data.status
   })
@@ -7290,6 +7377,17 @@ async function handleGenerate(options = {}) {
     }
   }
 
+  if (!isHeygenFlow && isLongCatModel.value) {
+    if (finalImages.length !== 1 || referenceAudios.value.length !== 1) {
+      await showAlert('LongCat 需要连接 1 张图片和 1 段音频（不超过 45 秒）', '检查输入素材')
+      return
+    }
+    if (longCatAudioDuration.value > 45 || (longCatDuration.value && (Number(longCatDuration.value) <= 0 || (longCatAudioDuration.value > 0 && Number(longCatDuration.value) > longCatAudioDuration.value)))) {
+      await showAlert('音频不能超过 45 秒，输出时长不能超过输入音频；留空为智能时长', '检查时长')
+      return
+    }
+  }
+
   // RunningHub 全能视频 V3.1：六种模式输入校验
   if (!isHeygenFlow && isRunningHubAiAppVideoV31Model.value) {
     const requiredImages = v31ModeConfig.value.needsImages
@@ -7350,6 +7448,7 @@ async function handleGenerate(options = {}) {
       model: isHeygenFlow ? `heygen:${isDigitalHumanFlow ? 'avatar' : 'lipsync'}` : selectedModel.value,
       aspectRatio: selectedAspectRatio.value,
       duration: selectedDuration.value,
+      longCatDuration: longCatDuration.value,
       resolution: genericVideoResolutionOptions.value.length > 0
         ? genericVideoResolution.value
         : (isRunningHubAiAppVideoModel.value ? runningHubResolution.value : ''),
@@ -7402,6 +7501,7 @@ async function handleGenerate(options = {}) {
     model: selectedModel.value,
     referenceVideos: [...referenceVideos.value],
     referenceAudios: [...referenceAudios.value],
+    longCatDuration: longCatDuration.value,
     isHeygenMode: isHeygenFlow,
     isDigitalHumanMode: isDigitalHumanFlow,
     digitalHuman: upstreamData.digitalHumans[0] || null,
@@ -7478,6 +7578,7 @@ async function handleGenerate(options = {}) {
             model: selectedModel.value,
             aspectRatio: selectedAspectRatio.value,
             duration: selectedDuration.value,
+            longCatDuration: longCatDuration.value,
             videoResolution: genericVideoResolutionOptions.value.length > 0 ? genericVideoResolution.value : '',
             resolution: isRunningHubAiAppVideoModel.value ? runningHubResolution.value : '',
             v31Mode: isRunningHubAiAppVideoV31Model.value ? v31Mode.value : '',
@@ -7505,7 +7606,8 @@ async function handleGenerate(options = {}) {
     output: null,
     videoUrl: null,
     error: null,
-    progress: generateCount > 1 ? `并行生成 ${generateCount} 个视频...` : '排队中...',
+    progress: generateCount > 1 ? `准备提交 ${generateCount} 个视频...` : '准备提交...',
+    clientSubmissionId: null,
     processingStartedAt: Date.now(),
     taskId: null,
     soraTaskId: null,
@@ -11571,6 +11673,17 @@ function toggleFullscreenPlayback() {
               :show-duration="showVideoParameterDuration"
             >
               <template #before-duration>
+                <section v-if="isLongCatModel" class="video-parameters-section longcat-duration-field">
+                  <div class="longcat-duration-labels">
+                    <h3>视频时长（秒）</h3>
+                    <span>{{ longCatDuration ? `${formatVideoNodePoints(longCatDuration)}秒` : '智能时长' }}</span>
+                  </div>
+                  <input :value="Number(longCatDuration) || 0" @input="longCatDuration = Number($event.target.value) === 0 ? '' : $event.target.value" type="range" min="0" :max="Math.min(longCatAudioDuration || 45, 45)" step="0.01" :disabled="!longCatAudioDuration" class="nodrag nowheel" aria-label="LongCat 输出时长（秒）" :aria-valuetext="longCatDuration ? `${longCatDuration}秒` : '智能时长'" />
+                  <div class="longcat-duration-labels longcat-duration-bounds">
+                    <span>智能时长</span>
+                    <span>{{ longCatAudioDuration ? `${formatVideoNodePoints(Math.min(longCatAudioDuration, 45))}秒` : '未连接音频' }}</span>
+                  </div>
+                </section>
                 <section v-if="supportsSeedanceDraft" class="video-parameters-section seedance-draft-card">
                   <h3>样片模式</h3>
                   <div class="seedance-draft-options" role="group" aria-label="样片模式">
@@ -11618,6 +11731,9 @@ function toggleFullscreenPlayback() {
             </template>
             <template v-else-if="isWanModel && selectedWanMode === 'animate_mix'">
               {{ formatVideoNodePoints(wanAnimateCostPerSecond) }}积分/s
+            </template>
+            <template v-else-if="isLongCatModel">
+              {{ formatVideoNodePoints(pointsCost * selectedCount) }} {{ t('imageGen.points') }}
             </template>
             <template v-else-if="isRunningHubAiAppVideoV31Model">
               {{ runningHubV31CostText }}
@@ -12096,6 +12212,18 @@ function toggleFullscreenPlayback() {
 </template>
 
 <style scoped>
+.longcat-duration-field { display: grid; gap: 8px; color: var(--canvas-text-primary, #eee); }
+.longcat-duration-field h3 { font-size: 13px; font-weight: 500; }
+.longcat-duration-labels { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 13px; }
+.longcat-duration-bounds { font-size: 11px; color: var(--canvas-text-secondary, #aaa); }
+.longcat-duration-field input { appearance: none; width: 100%; height: 24px; margin: 0; background: transparent; cursor: pointer; }
+.longcat-duration-field input::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--canvas-border-default, #444); }
+.longcat-duration-field input::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: var(--canvas-text-primary, #eee); }
+.longcat-duration-field input::-moz-range-track { height: 4px; border-radius: 2px; background: var(--canvas-border-default, #444); }
+.longcat-duration-field input::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: var(--canvas-text-primary, #eee); }
+.longcat-duration-field input:disabled { opacity: 0.4; cursor: not-allowed; }
+.longcat-duration-field input:focus-visible { outline: 1px solid var(--canvas-text-secondary, #aaa); outline-offset: 2px; }
+
 .seedance-draft-card {
   margin: 16px 0;
 }

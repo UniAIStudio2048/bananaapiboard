@@ -1866,6 +1866,7 @@ function handleVideoSubmissionRecoveryRequested() {
 function reconcileTasksForActiveTab() {
   for (const node of canvasStore.nodes) {
     if (node.data?.status !== 'processing' || !node.data?.taskId) continue
+    if (node.data.taskType === 'audio-generation') continue
 
     const task = ensureTaskPolling({
       taskId: node.data.taskId,

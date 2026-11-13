@@ -132,3 +132,8 @@ test('isCanvasImageGenerationNode / isCanvasAudioGenerationNode correctly identi
   assert.equal(isCanvasAudioGenerationNode({ type: 'audio', data: {} }), true)
   assert.equal(isCanvasAudioGenerationNode({ type: 'video', data: {} }), false)
 })
+
+test('audio generation resumes in AudioNode and must not be registered as an audio-edit task', () => {
+  assert.equal(shouldResumeCanvasVideoNodeWithoutTask({ type: 'audio', data: { taskId: 'clone-task', taskType: 'audio-generation', status: 'processing' } }, false), false)
+  assert.equal(shouldResumeCanvasVideoNodeWithoutTask({ type: 'audio', data: { taskId: 'edit-task', taskType: 'audio-edit', status: 'processing' } }, false), true)
+})
