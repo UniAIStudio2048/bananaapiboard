@@ -12,10 +12,11 @@ import router from './router'
 import { createI18n, initI18n } from './i18n'
 import { initTheme } from './utils/theme'
 import { initLogger, logPageView } from './utils/logger'
-import { loadBrandConfig, getBrand } from './config/tenant'
+import { loadBrandConfig, getBrand, getTenantHeaders, getApiUrl } from './config/tenant'
 import { refreshDocumentTitle } from './utils/pageTitle'
 import { clearAuthSession } from './api/client'
 import { captureSignupSource } from './utils/signupSource'
+import { installSiteAnalytics } from './utils/siteAnalytics'
 
 // 🔧 防止 Vite HMR 失败时自动全页刷新（开发模式）
 // 当 HMR 无法热更新某个模块时，Vite 默认会 reload 整个页面
@@ -112,6 +113,18 @@ const app = createApp(App)
 const pinia = createPinia()
 app.use(pinia)
 app.use(router)
+
+// 访客统计埋点（租户后台「访客统计」）：keepalive 保证关页前的最后一次上报也能发出
+installSiteAnalytics(router, {
+  send: payload => {
+    fetch(getApiUrl('/api/analytics/collect'), {
+      method: 'POST',
+      keepalive: true,
+      headers: { 'Content-Type': 'application/json', ...getTenantHeaders() },
+      body: JSON.stringify(payload)
+    }).catch(() => {})
+  }
+})
 app.use(createI18n())
 
 // 语言包初始化（中文已静态加载，不阻塞挂载）
