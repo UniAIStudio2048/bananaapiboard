@@ -2189,6 +2189,19 @@ const RUNNINGHUB_V31_MODES = [
 ]
 const isRunningHubAiAppVideoV31Model = computed(() => currentModelConfig.value?.apiType === 'runninghub-ai-app-video-v31')
 const isLongCatModel = computed(() => currentModelConfig.value?.apiType === 'runninghub-longcat')
+const isMotionTransferModel = computed(() => currentModelConfig.value?.apiType === 'runninghub-motion-transfer')
+const motionTransferDuration = computed({
+  get: () => props.data.motionTransferDuration || '',
+  set: value => canvasStore.updateNodeData(props.id, { motionTransferDuration: value })
+})
+const motionTransferDefaultPrompt = '图片1中的人物模仿视频1中的人物动作姿势，将视频1中的人物和背景替换为图片1中的人物和背景，保留视频1的运镜效果，人物和背景是：'
+watch(isMotionTransferModel, active => {
+  if (active && !promptText.value) {
+    promptText.value = motionTransferDefaultPrompt
+    canvasStore.updateNodeData(props.id, { prompt: motionTransferDefaultPrompt })
+  }
+}, { immediate: true })
+
 const longCatDuration = ref(props.data.longCatDuration || '')
 const longCatAudioDuration = computed(() => Number(getUpstreamData().audioDuration) || 0)
 watch(longCatDuration, value => canvasStore.updateNodeData(props.id, { longCatDuration: value }))
@@ -2627,7 +2640,7 @@ const showVideoParameterDuration = computed(() => {
 })
 
 const hasVideoParameterMenu = computed(() => {
-  return isLongCatModel.value || availableAspectRatios.value.length > 0 ||
+  return isMotionTransferModel.value || isLongCatModel.value || availableAspectRatios.value.length > 0 ||
     videoParameterResolutionOptions.value.length > 0 ||
     showVideoParameterDuration.value
 })
@@ -3712,7 +3725,7 @@ const videoInputMultiplier = computed(() => {
 })
 
 // 按输入时长 / 固定价单独计费的渠道，后端不应用视频输入倍率（shouldApplyGenericVideoInputMultiplier）
-const VIDEO_INPUT_MULTIPLIER_EXCLUDED_API_TYPES = ['heizhu-video', 'wavespeed-wan3', 'siray-wan3', 'rh-h3-enhanced', 'runninghub-ai-app-video', 'runninghub-ai-app-video-v31']
+const VIDEO_INPUT_MULTIPLIER_EXCLUDED_API_TYPES = ['heizhu-video', 'wavespeed-wan3', 'siray-wan3', 'rh-h3-enhanced', 'runninghub-ai-app-video', 'runninghub-ai-app-video-v31', 'runninghub-motion-transfer']
 
 // 是否对当前生成应用视频输入倍率：
 // - 配置了新字段 videoInputMultipliers 时，任意模型都按输入视频个数分档；
@@ -4338,6 +4351,9 @@ const waveSpeedReferenceVideoDuration = computed(() => {
 
 // 积分消耗计算（从模型配置中读取）
 const basePointsCost = computed(() => {
+  if (isMotionTransferModel.value) {
+    return Math.round((Number(motionTransferDuration.value) || upstreamVideoDuration.value) * Number(currentModelConfig.value?.costPerSecond ?? 1) * 100) / 100
+  }
   if (isLongCatModel.value) {
     const seconds = Number(longCatDuration.value) || longCatAudioDuration.value
     return Math.round(seconds * Number(currentModelConfig.value?.costPerSecond ?? 1) * 100) / 100
@@ -5741,6 +5757,7 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
     aspectRatio: selectedAspectRatio.value,
     duration: selectedDuration.value,
     longCatDuration: longCatDuration.value,
+    motionTransferDuration: motionTransferDuration.value,
     metadata: {
       source: 'canvas-video-node'
     }
@@ -5919,6 +5936,12 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   if (isVectorEngineJsonModel.value) {
     formData.append('resolution', capturedState.videoResolution || vectorengineResolution.value)
     console.log('[VideoNode] VectorEngine JSON 清晰度:', vectorengineResolution.value)
+  }
+
+  if (capturedState.apiType === 'runninghub-motion-transfer') {
+    formData.set('prompt', finalPrompt || '')
+    formData.set('duration', capturedState.motionTransferDuration || 'auto')
+    formData.set('reference_videos', JSON.stringify(capturedState.referenceVideos || referenceVideos.value))
   }
 
   if (capturedState.apiType === 'runninghub-longcat') {
@@ -6448,6 +6471,7 @@ function createNewOutputNode() {
       aspectRatio: selectedAspectRatio.value,
       duration: selectedDuration.value,
       longCatDuration: longCatDuration.value,
+      motionTransferDuration: motionTransferDuration.value,
       videoResolution: genericVideoResolutionOptions.value.length > 0 ? genericVideoResolution.value : '',
       ...(isRunningHubAiAppVideoModel.value ? { resolution: runningHubResolution.value } : {}),
       ...(isRunningHubAiAppVideoV31Model.value ? { v31Mode: v31Mode.value } : {}),
@@ -7112,6 +7136,7 @@ async function handleGenerate(options = {}) {
     model: selectedModel.value,
     duration: selectedDuration.value,
     longCatDuration: longCatDuration.value,
+    motionTransferDuration: motionTransferDuration.value,
     count: selectedCount.value,
     currentStatus: props.data.status
   })
@@ -7377,6 +7402,18 @@ async function handleGenerate(options = {}) {
     }
   }
 
+  if (!isHeygenFlow && isMotionTransferModel.value) {
+    if (finalImages.length !== 1 || referenceVideos.value.length !== 1 || referenceAudios.value.length) {
+      await showAlert('动作迁移需要 1 张人物图和 1 个参考视频（100 MB、45 秒以内）', '检查输入素材')
+      return
+    }
+    const seconds = Number(motionTransferDuration.value)
+    if (upstreamVideoDuration.value > 45 || (motionTransferDuration.value && (!Number.isFinite(seconds) || seconds <= 0 || seconds > 45 || (upstreamVideoDuration.value > 0 && seconds > upstreamVideoDuration.value)))) {
+      await showAlert('输出时长不能超过参考视频时长，参考视频最长 45 秒', '检查时长')
+      return
+    }
+  }
+
   if (!isHeygenFlow && isLongCatModel.value) {
     if (finalImages.length !== 1 || referenceAudios.value.length !== 1) {
       await showAlert('LongCat 需要连接 1 张图片和 1 段音频（不超过 45 秒）', '检查输入素材')
@@ -7449,6 +7486,7 @@ async function handleGenerate(options = {}) {
       aspectRatio: selectedAspectRatio.value,
       duration: selectedDuration.value,
       longCatDuration: longCatDuration.value,
+      motionTransferDuration: motionTransferDuration.value,
       resolution: genericVideoResolutionOptions.value.length > 0
         ? genericVideoResolution.value
         : (isRunningHubAiAppVideoModel.value ? runningHubResolution.value : ''),
@@ -7502,6 +7540,7 @@ async function handleGenerate(options = {}) {
     referenceVideos: [...referenceVideos.value],
     referenceAudios: [...referenceAudios.value],
     longCatDuration: longCatDuration.value,
+    motionTransferDuration: motionTransferDuration.value,
     isHeygenMode: isHeygenFlow,
     isDigitalHumanMode: isDigitalHumanFlow,
     digitalHuman: upstreamData.digitalHumans[0] || null,
@@ -7579,6 +7618,7 @@ async function handleGenerate(options = {}) {
             aspectRatio: selectedAspectRatio.value,
             duration: selectedDuration.value,
             longCatDuration: longCatDuration.value,
+            motionTransferDuration: motionTransferDuration.value,
             videoResolution: genericVideoResolutionOptions.value.length > 0 ? genericVideoResolution.value : '',
             resolution: isRunningHubAiAppVideoModel.value ? runningHubResolution.value : '',
             v31Mode: isRunningHubAiAppVideoV31Model.value ? v31Mode.value : '',
@@ -11673,6 +11713,12 @@ function toggleFullscreenPlayback() {
               :show-duration="showVideoParameterDuration"
             >
               <template #before-duration>
+                <section v-if="isMotionTransferModel" class="video-parameters-section longcat-duration-field">
+                  <div class="longcat-duration-labels"><h3>输出时长（秒）</h3><span>{{ motionTransferDuration ? `${motionTransferDuration}秒` : '参考视频时长' }}</span></div>
+                  <input :value="Number(motionTransferDuration) || 0" @input="motionTransferDuration = Number($event.target.value) === 0 ? '' : $event.target.value" type="range" min="0" :max="Math.min(upstreamVideoDuration || 45, 45)" step="0.01" class="nodrag nowheel" aria-label="动作迁移输出时长（秒）" :aria-valuetext="motionTransferDuration ? `${motionTransferDuration}秒` : '参考视频时长'" />
+                  <div class="longcat-duration-labels longcat-duration-bounds"><span>默认参考视频时长</span><span>{{ upstreamVideoDuration ? `${formatVideoNodePoints(upstreamVideoDuration)}秒` : '待检测' }}</span></div>
+                  <p class="longcat-duration-bounds">1 张人物图 + 1 个参考视频，视频不超过 100 MB、45 秒</p>
+                </section>
                 <section v-if="isLongCatModel" class="video-parameters-section longcat-duration-field">
                   <div class="longcat-duration-labels">
                     <h3>视频时长（秒）</h3>
@@ -11732,7 +11778,7 @@ function toggleFullscreenPlayback() {
             <template v-else-if="isWanModel && selectedWanMode === 'animate_mix'">
               {{ formatVideoNodePoints(wanAnimateCostPerSecond) }}积分/s
             </template>
-            <template v-else-if="isLongCatModel">
+            <template v-else-if="isLongCatModel || isMotionTransferModel">
               {{ formatVideoNodePoints(pointsCost * selectedCount) }} {{ t('imageGen.points') }}
             </template>
             <template v-else-if="isRunningHubAiAppVideoV31Model">
