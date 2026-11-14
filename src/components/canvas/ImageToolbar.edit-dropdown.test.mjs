@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../i18n/index.js'
 import { readFileSync } from 'node:fs'
 import { strict as assert } from 'node:assert'
 import { fileURLToPath } from 'node:url'
@@ -17,5 +18,5 @@ for (const id of ['repaint', 'erase', 'cutout', 'expand']) {
 }
 
 const dropdownBlock = source.match(/const editDropdownItems = \[([\s\S]*?)\n\]/)?.[1] || ''
-const labels = Array.from(dropdownBlock.matchAll(/label: '([^']+)'/g)).map(match => match[1])
+const labels = Array.from(dropdownBlock.matchAll(/get label\(\) \{ return translateUi\('([^']+)'\) \}/g)).map(match => translateUi(match[1]))
 assert.deepEqual(labels, ['编辑', '重绘', '擦除', '抠图', '扩图'])

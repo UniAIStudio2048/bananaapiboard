@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../../i18n/index.js'
 import * as React from 'react'
 import { useLayoutEffect, useState, type RefObject, type PointerEvent } from 'react'
 import { RotateCw } from 'lucide-react'
@@ -16,7 +17,7 @@ export function PreviewSelection({canvas,selection,main,mainIndex,mainVisible,vi
  },[canvas,selection,main,mainIndex,mainVisible,videos,images,text,urls,time,sourceTime])
  if(!bounds)return null
  return <div data-preview-selection className="pointer-events-none absolute border-2 border-[var(--mf-brand)]" style={{left:bounds.x,top:bounds.y,width:bounds.width,height:bounds.height,transform:`translate(-50%, -50%) rotate(${bounds.rotation}deg)`}}>
-  {(['左上','右上','左下','右下'] as const).map((name,index)=><button type="button" key={name} aria-label={`画面${name}缩放`} onPointerDown={event=>onHandle(event,'scale')} className={`pointer-events-auto absolute h-3 w-3 touch-none rounded-full border border-zinc-900 bg-[var(--mf-brand)] ${index<2?'top-0':'bottom-0'} ${index%2===0?'left-0':'right-0'} cursor-nwse-resize`} />)}
-  {<button type="button" aria-label="画面旋转" onPointerDown={event=>onHandle(event,'rotate')} className="pointer-events-auto absolute left-1/2 top-2 grid h-6 w-6 -translate-x-1/2 touch-none place-items-center rounded-full border border-[var(--mf-brand)] bg-zinc-900 text-white"><RotateCw size={14} aria-hidden="true" /></button>}
+  {([translateUi('uiMessages.mfef304a69096'),translateUi('uiMessages.mddf11974a72b'),translateUi('uiMessages.m8537c17b8e3e'),translateUi('uiMessages.meae5305a5c76')] as const).map((name,index)=><button type="button" key={name} aria-label={translateUi('uiMessages.m859afd226f34', { value1: (name) })} onPointerDown={event=>onHandle(event,'scale')} className={`pointer-events-auto absolute h-3 w-3 touch-none rounded-full border border-zinc-900 bg-[var(--mf-brand)] ${index<2?'top-0':'bottom-0'} ${index%2===0?'left-0':'right-0'} cursor-nwse-resize`} />)}
+  {<button type="button" aria-label={translateUi('uiMessages.m44e5b423634b')} onPointerDown={event=>onHandle(event,'rotate')} className="pointer-events-auto absolute left-1/2 top-2 grid h-6 w-6 -translate-x-1/2 touch-none place-items-center rounded-full border border-[var(--mf-brand)] bg-zinc-900 text-white"><RotateCw size={14} aria-hidden="true" /></button>}
  </div>
 }

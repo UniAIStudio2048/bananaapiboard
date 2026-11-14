@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -84,7 +85,7 @@ test('AssetPanel has the same fullscreen collection control pattern as HistoryPa
   assert.match(assetPanel, /const isFullscreen = ref\(false\)/)
   assert.match(assetPanel, /function toggleFullscreen\(/)
   assert.match(assetPanel, /:class="\{ fullscreen: isFullscreen \}"/)
-  assert.match(assetPanel, /:title="isFullscreen \? '退出全屏' : '全屏显示'"/)
+  assert.match(assetPanel, localizedPattern(/:title="isFullscreen \? '退出全屏' : '全屏显示'"/))
   assert.match(assetPanel, /class="header-actions"/)
   assert.match(assetPanel, /\.asset-panel-container\.fullscreen\s*\{[\s\S]*?position:\s*fixed/)
   assert.match(assetPanel, /\.asset-panel\.fullscreen\s*\{[\s\S]*?width:\s*90vw/)
@@ -112,7 +113,7 @@ test('AssetPanel bottom tag bar has explicit light theme colors', () => {
 
 test('AssetPreviewModal constrains cached preview images without cropping', () => {
   const previewModal = readFileSync(new URL('./AssetPreviewModal.vue', import.meta.url), 'utf8')
-  assert.match(previewModal, /class="preview-back-btn"[\s\S]*?>[\s\S]*返回/)
+  assert.match(previewModal, localizedPattern(/class="preview-back-btn"[\s\S]*?>[\s\S]*返回/))
   assert.match(previewModal, /\.preview-content :deep\(img\.preview-image\)\s*\{[\s\S]*?max-width:\s*100%/)
   assert.match(previewModal, /\.preview-content :deep\(img\.preview-image\)\s*\{[\s\S]*?max-height:\s*85vh/)
   assert.match(previewModal, /\.preview-content :deep\(img\.preview-image\)\s*\{[\s\S]*?object-fit:\s*contain/)
@@ -153,7 +154,7 @@ test('image node preset dropdown keeps an error state when presets fail to load'
   const imageNode = readFileSync(new URL('./nodes/ImageNode.vue', import.meta.url), 'utf8')
 
   assert.match(imageNode, /const presetLoadError = ref\(''\)/)
-  assert.match(imageNode, /presetLoadError\.value = error\.message \|\| '图像预设加载失败'/)
+  assert.match(imageNode, localizedPattern(/presetLoadError\.value = error\.message \|\| '图像预设加载失败'/))
   assert.match(imageNode, /id: 'preset-load-error'/)
   assert.match(imageNode, /type: 'error'/)
   assert.match(imageNode, /'preset-dropdown-error': preset\.type === 'error'/)

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
 const source = (await readFile(new URL('./video-analysis.js', import.meta.url), 'utf8'))
-  .replace(/^import .*$/m, "const getApiUrl = path => path; const getTenantHeaders = () => ({ 'X-Tenant-ID': 'test' })")
+  .replace("'../../i18n/index.js'", JSON.stringify(new URL('../../i18n/index.js', import.meta.url).href))
+  .replace(/^import .*config\/tenant.*$/m, "const getApiUrl = path => path; const getTenantHeaders = () => ({ 'X-Tenant-ID': 'test' })")
 const api = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)
 globalThis.localStorage = { getItem: () => 'test-token' }
 test('reads fragmented SSE and requires a persisted successful result', async () => {

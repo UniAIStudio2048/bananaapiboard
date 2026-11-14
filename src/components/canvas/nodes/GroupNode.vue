@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * GroupNode.vue - 编组节点（可视化分组容器）
  * 
@@ -23,7 +25,7 @@ const props = defineProps({
 const canvasStore = useCanvasStore()
 
 // 编组信息
-const groupName = computed(() => props.data.groupName || '新建组')
+const groupName = computed(() => props.data.groupName || translateUi('uiMessages.mf4182f80bbc6'))
 const groupColor = computed(() => props.data.groupColor || 'rgba(100, 116, 139, 0.08)')
 const borderColor = computed(() => props.data.borderColor || 'rgba(100, 116, 139, 0.25)')
 const nodeIds = computed(() => props.data.nodeIds || [])
@@ -111,7 +113,7 @@ function getCurrentWorkflowId() {
 async function loadGroupSchedules({ silent = false } = {}) {
   const workflowId = getCurrentWorkflowId()
   if (!workflowId) {
-    if (!silent) window.alert?.('请先保存工作流后再查看定时记录')
+    if (!silent) window.alert?.(translateUi('uiMessages.m4c3f0ded9c0e'))
     groupSchedules.value = []
     return
   }
@@ -123,7 +125,7 @@ async function loadGroupSchedules({ silent = false } = {}) {
       schedule.group_id === props.id || schedule.groupId === props.id
     ))
   } catch (err) {
-    if (!silent) window.alert?.(err?.message || '获取定时任务失败')
+    if (!silent) window.alert?.(err?.message || translateUi('uiMessages.m9351b3739752'))
   } finally {
     scheduleRecordsLoading.value = false
   }
@@ -142,7 +144,7 @@ async function handleCancelSchedule(schedule) {
     await cancelGroupSchedule(schedule.id)
     await loadGroupSchedules({ silent: true })
   } catch (err) {
-    window.alert?.(err?.message || '任务已开始或无法取消')
+    window.alert?.(err?.message || translateUi('uiMessages.mc22bcf4350a7'))
     await loadGroupSchedules({ silent: true })
   } finally {
     scheduleCancellingId.value = ''
@@ -152,7 +154,7 @@ async function handleCancelSchedule(schedule) {
 async function handleScheduleSubmit(payload) {
   const workflowId = getCurrentWorkflowId()
   if (!workflowId) {
-    window.alert?.('请先保存工作流后再设置定时执行')
+    window.alert?.(translateUi('uiMessages.m4851d3ae1370'))
     return
   }
 
@@ -168,9 +170,9 @@ async function handleScheduleSubmit(payload) {
     showScheduleDialog.value = false
     showScheduleRecords.value = true
     await loadGroupSchedules({ silent: true })
-    window.alert?.('定时执行已创建')
+    window.alert?.(translateUi('uiMessages.m453343554863'))
   } catch (err) {
-    window.alert?.(err?.message || '创建定时执行失败')
+    window.alert?.(err?.message || translateUi('uiMessages.m43715c875602'))
   } finally {
     scheduleSubmitting.value = false
   }
@@ -372,7 +374,7 @@ onUnmounted(() => {
         v-else
         class="group-name"
         @dblclick.stop="startEditName"
-        title="双击编辑组名"
+        :title="translateUi('uiMessages.m1512823a497b')"
       >{{ groupName }}</span>
 
       <!-- 编组工具栏（选中时显示） -->
@@ -380,39 +382,39 @@ onUnmounted(() => {
         <button
           class="toolbar-btn execute-btn"
           :class="{ 'is-running': isExecuting }"
-          :title="isExecuting ? '停止执行' : '整组执行'"
-          :aria-label="isExecuting ? '停止执行' : '整组执行'"
+          :title="isExecuting ? translateUi('uiMessages.m3bd371fcd96c') : translateUi('uiMessages.m5f01741f9375')"
+          :aria-label="isExecuting ? translateUi('uiMessages.m3bd371fcd96c') : translateUi('uiMessages.m5f01741f9375')"
           @click.stop="handleExecuteGroup"
         >
           <span class="toolbar-btn-icon">{{ isExecuting ? '■' : '▶' }}</span>
-          <span class="toolbar-btn-text">{{ isExecuting ? executionProgress : '整组执行' }}</span>
+          <span class="toolbar-btn-text">{{ isExecuting ? executionProgress : translateUi('uiMessages.m5f01741f9375') }}</span>
         </button>
         <button
           class="toolbar-btn schedule-btn"
-          title="定时执行"
-          aria-label="定时执行"
+          :title="translateUi('uiMessages.m978cb333292d')"
+          :aria-label="translateUi('uiMessages.m978cb333292d')"
           @click.stop="showScheduleDialog = true"
         >
           <span class="toolbar-btn-icon">⏱</span>
-          <span class="toolbar-btn-text">定时执行</span>
+          <span class="toolbar-btn-text">{{ translateUi('uiMessages.m978cb333292d') }}</span>
         </button>
         <button
           class="toolbar-btn schedule-records-btn"
-          title="定时记录"
-          aria-label="定时记录"
+          :title="translateUi('uiMessages.me32fd85dcee9')"
+          :aria-label="translateUi('uiMessages.me32fd85dcee9')"
           @click.stop="openScheduleRecords"
         >
           <span class="toolbar-btn-icon">≡</span>
-          <span class="toolbar-btn-text">定时记录</span>
+          <span class="toolbar-btn-text">{{ translateUi('uiMessages.me32fd85dcee9') }}</span>
         </button>
         <button
           class="toolbar-btn ungroup-btn"
-          title="解散编组"
-          aria-label="解散编组"
+          :title="translateUi('uiMessages.ma31de102e6e1')"
+          :aria-label="translateUi('uiMessages.ma31de102e6e1')"
           @click.stop="deleteGroup"
         >
           <span class="toolbar-btn-icon">⊘</span>
-          <span class="toolbar-btn-text">解组</span>
+          <span class="toolbar-btn-text">{{ translateUi('uiMessages.m208b2e807c1b') }}</span>
         </button>
       </div>
     </div>
@@ -448,7 +450,7 @@ onUnmounted(() => {
 
     <!-- 操作提示区域（底部） -->
     <div v-if="(selected || isHovered) && !isExecuting" class="group-tips">
-      <span class="tips-text">双击编辑组名 · 拖拽边角缩放</span>
+      <span class="tips-text">{{ translateUi('uiMessages.mf036889b215a') }}</span>
     </div>
     
     <!-- 缩放手柄（选中或悬停时显示） -->

@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../i18n/index.js'
 /**
  * Canvas Nodes API
  * 节点执行相关 API，复用现有的图片/视频生成接口
@@ -142,21 +143,21 @@ export async function generateImageFromText(params) {
     const error = await response.json().catch(() => ({}))
     throwPromptSafetyErrorIfNeeded(error)
     if (error.error === 'insufficient_points' || response.status === 402) {
-      throw new Error('当前积分余额不足，任务提交失败')
+      throw new Error(translateUi('uiMessages.mf02eb368d929'))
     }
     if (response.status === 429 && error.error === 'user_concurrent_limit_exceeded') {
-      const err = new Error(error.message || '已达到并发限制，请升级套餐')
+      const err = new Error(error.message || translateUi('uiMessages.m4c69d777410e'))
       err.code = 'concurrent_limit_exceeded'
       err.details = error.details
       throw err
     }
     if (response.status === 403 && error.error === 'model_package_required') {
-      const err = new Error(error.message || '需要购买对应套餐后使用')
+      const err = new Error(error.message || translateUi('uiMessages.m861a77c9f9fb'))
       err.code = 'model_package_required'
       err.details = error.entitlement
       throw err
     }
-    throw new Error(error.message || error.error || '图片生成失败')
+    throw new Error(error.message || error.error || translateUi('uiMessages.m086b43528545'))
   }
 
   return response.json()
@@ -253,21 +254,21 @@ export async function generateImageFromImage(params) {
     console.error('[API] 图生图请求失败:', error)
     throwPromptSafetyErrorIfNeeded(error)
     if (error.error === 'insufficient_points' || response.status === 402) {
-      throw new Error('当前积分余额不足，任务提交失败')
+      throw new Error(translateUi('uiMessages.mf02eb368d929'))
     }
     if (response.status === 429 && error.error === 'user_concurrent_limit_exceeded') {
-      const err = new Error(error.message || '已达到并发限制，请升级套餐')
+      const err = new Error(error.message || translateUi('uiMessages.m4c69d777410e'))
       err.code = 'concurrent_limit_exceeded'
       err.details = error.details
       throw err
     }
     if (response.status === 403 && error.error === 'model_package_required') {
-      const err = new Error(error.message || '需要购买对应套餐后使用')
+      const err = new Error(error.message || translateUi('uiMessages.m861a77c9f9fb'))
       err.code = 'model_package_required'
       err.details = error.entitlement
       throw err
     }
-    throw new Error(error.message || error.error || '图片生成失败')
+    throw new Error(error.message || error.error || translateUi('uiMessages.m086b43528545'))
   }
 
   return response.json()
@@ -324,9 +325,9 @@ export async function generateVideoFromText(params) {
     throwPromptSafetyErrorIfNeeded(error)
     // 统一积分不足错误提示
     if (error.error === 'insufficient_points' || response.status === 402) {
-      throw new Error('当前积分余额不足，任务提交失败')
+      throw new Error(translateUi('uiMessages.mf02eb368d929'))
     }
-    throw new Error(error.message || error.error || '视频生成失败')
+    throw new Error(error.message || error.error || translateUi('uiMessages.m5a586025ef2c'))
   }
   
   return response.json()
@@ -384,9 +385,9 @@ export async function generateVideoFromImage(params) {
     throwPromptSafetyErrorIfNeeded(error)
     // 统一积分不足错误提示
     if (error.error === 'insufficient_points' || response.status === 402) {
-      throw new Error('当前积分余额不足，任务提交失败')
+      throw new Error(translateUi('uiMessages.mf02eb368d929'))
     }
-    throw new Error(error.message || error.error || '视频生成失败')
+    throw new Error(error.message || error.error || translateUi('uiMessages.m5a586025ef2c'))
   }
   
   return response.json()
@@ -521,7 +522,7 @@ export async function submitAudioEdit(params) {
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
     throwPromptSafetyErrorIfNeeded(data)
-    throw new Error(data.message || data.error || '音频处理任务提交失败')
+    throw new Error(data.message || data.error || translateUi('uiMessages.mc1f5c2418b17'))
   }
 
   return data
@@ -624,7 +625,8 @@ export function pollTaskStatus(taskId, type = 'image', options = {}) {
         
         // 检查超时
         const elapsed = Date.now() - startTime
-        if (elapsed > timeout) {
+        const effectiveTimeout = type === 'image' && result.usage?.provider === 'minimax-h3-image' ? Math.max(timeout, 12 * 60 * 1000) : timeout
+        if (elapsed > effectiveTimeout) {
           console.error('[pollTaskStatus] 任务超时:', {
             taskId,
             elapsed: `${Math.round(elapsed / 1000)}s`,
@@ -674,9 +676,9 @@ export async function deductCropPoints(cropType) {
   if (!response.ok) {
     // 积分不足时返回友好提示
     if (data.error === 'insufficient_points') {
-      throw new Error(data.message || '积分不足')
+      throw new Error(data.message || translateUi('imageGen.insufficientPoints'))
     }
-    throw new Error(data.message || data.error || '积分扣除失败')
+    throw new Error(data.message || data.error || translateUi('uiMessages.m5ab58e46c515'))
   }
   
   return data
@@ -694,7 +696,7 @@ export async function removeImageBackground(imageUrl, bgType = 'transparent', bg
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || '抠图失败')
+    throw new Error(error.message || translateUi('uiMessages.m6ce163c10e10'))
   }
   
   return response.json()
@@ -712,7 +714,7 @@ export async function inpaintImageLocal({ imageUrl, image = null, mask, method =
 
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
-    throw new Error(data.message || data.error || '污点修复失败')
+    throw new Error(data.message || data.error || translateUi('uiMessages.m47c0b2fb88fd'))
   }
 
   return data

@@ -1,3 +1,6 @@
+import * as i18nTestRuntime from '../../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -12,8 +15,8 @@ test('an already mounted image node refreshes model ratios when tenant configura
   const version = ref(0)
   let modelConfig = [{ value: 'test', aspectRatios: ['auto', '8:1'] }]
   const block = source.slice(source.indexOf('const models = computed('), source.indexOf('const selectedModelConfig = computed('))
-  const models = new Function('computed', 'hasImageInput', 'getAvailableImageModels', 'getTenantConfigVersion', `${block}; return models`)(
-    computed, ref(false), () => modelConfig, () => version.value
+  const models = new Function('translateUi', 'uiLanguage', 'computed', 'hasImageInput', 'getAvailableImageModels', 'getTenantConfigVersion', `${block}; return models`)(
+    translateUi, uiLanguage, computed, ref(false), () => modelConfig, () => version.value
   )
   assert.deepEqual(models.value[0].aspectRatios, ['auto', '8:1'])
   modelConfig = [{ value: 'test', aspectRatios: ['1:4'] }]
@@ -25,7 +28,7 @@ function menu(config) {
   const modelLookupList = ref([{ value: 'test', aspectRatios: config }])
   const selectedModel = ref('test')
   const block = source.slice(source.indexOf('const aspectRatios = ['), source.indexOf('// 监听模型变化'))
-  const available = new Function('computed', 'modelLookupList', 'selectedModel', `${block}; return availableImageAspectRatios`)(computed, modelLookupList, selectedModel)
+  const available = new Function('translateUi', 'uiLanguage', 'computed', 'modelLookupList', 'selectedModel', `${block}; return availableImageAspectRatios`)(translateUi, uiLanguage, computed, modelLookupList, selectedModel)
   return { available, modelLookupList, selectedModel }
 }
 
@@ -57,7 +60,7 @@ test('a model/config change replaces a hidden selection with the first lit optio
     isPixmaxImage2Model: ref(false), selectedQuality: ref('high'), console: { log() {} }
   }
   const block = source.slice(source.indexOf('watch([selectedModel, imageSizes,'), source.indexOf('// 计算单次积分消耗'))
-  const stop = new Function(...Object.keys(dependencies), `return ${block.trim()}`)(...Object.values(dependencies))
+  const stop = new Function('translateUi', 'uiLanguage', ...Object.keys(dependencies), `return ${block.trim()}`)(translateUi, uiLanguage, ...Object.values(dependencies))
   try {
     modelLookupList.value.push({ value: 'next', aspectRatios: ['8:1'] })
     selectedModel.value = 'next'

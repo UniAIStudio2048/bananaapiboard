@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 import { shallowRef } from 'vue'
 import { normalizeRechargeLimits } from '@/utils/rechargeLimits'
 import { normalizeAudioModels, VOICE_DESIGN_STYLES } from './audioModels.js'
@@ -67,7 +68,7 @@ const defaultConfig = {
     logo: '/logo.png',
     favicon: '/favicon.ico',
     primaryColor: '#FBBF24',  // 黄色（香蕉色）
-    description: 'AI 图像生成平台'
+    get description() { return translateUi('uiMessages.m3ea8ce5e7b9c') }
   },
   
   // 模型名称配置（默认为空，使用原始名称）
@@ -308,7 +309,7 @@ function getFallbackModelEntitlement(model = {}) {
       visible: false,
       usable: false,
       reason: accessMode === 'private_assigned' ? 'private_assigned_required' : 'private_package_required',
-      message: '需要购买对应套餐后使用',
+      get message() { return translateUi('uiMessages.m861a77c9f9fb') },
       requiredPackage
     }
   }
@@ -317,7 +318,7 @@ function getFallbackModelEntitlement(model = {}) {
     visible: true,
     usable: false,
     reason: 'package_required',
-    message: '需要购买对应套餐后使用',
+    get message() { return translateUi('uiMessages.m861a77c9f9fb') },
     requiredPackage
   }
 }
@@ -907,7 +908,7 @@ export const getRechargeLimits = () => normalizeRechargeLimits(config.rechargeLi
 // 获取租户计价货币单位与展示符号/单位词（CNY=¥/元，USD=$/美元）
 export const getCurrencyUnit = () => config.currencyUnit === 'USD' ? 'USD' : 'CNY'
 export const getCurrencySymbol = () => config.currencyUnit === 'USD' ? '$' : '¥'
-export const getCurrencyUnitLabel = () => config.currencyUnit === 'USD' ? '美元' : '元'
+export const getCurrencyUnitLabel = () => config.currencyUnit === 'USD' ? translateUi('uiMessages.mdcdd3b5c450b') : translateUi('uiMessages.m7f77f23af7b0')
 
 // 获取 Sora 角色创建配置（积分消耗等）
 export const getSoraCharacterConfig = () => config.soraCharacterConfig || { points_cost: 0 }
@@ -1001,13 +1002,13 @@ export const getAvailableImageModels = (mode = null) => {
   // 默认模型配置（当没有任何配置时使用）
   // 注意：description 应从租户管理后台(9000端口)配置，这里默认为空
   const defaultModels = [
-    { value: 'nano-banana', label: 'Nano Banana', icon: '🍌', points: 1, description: '快速生成，适合日常使用', hasResolutionPricing: false, pointsCost: 1, supportedModes: 'both' },
-    { value: 'nano-banana-hd', label: 'Nano Banana HD', icon: '🍌', points: 3, description: '高清画质，细节更丰富', hasResolutionPricing: false, pointsCost: 3, supportedModes: 'both' },
-    { value: 'nano-banana-2', label: 'Nano Banana 2', icon: '🍌', points: null, description: '最新版本，支持多种分辨率', hasResolutionPricing: true, pointsCost: { '1k': 3, '2k': 4, '4k': 5 }, supportedModes: 'both' },
-    { value: 'flux-pro', label: 'Flux Pro', icon: 'F', points: 5, description: '专业级图像生成，极致画质', hasResolutionPricing: false, pointsCost: 5, supportedModes: 'both' },
-    { value: 'flux-dev', label: 'Flux Dev', icon: 'F', points: 3, description: '开发版本，平衡速度与质量', hasResolutionPricing: false, pointsCost: 3, supportedModes: 'both' },
-    { value: 'flux-schnell', label: 'Flux Schnell', icon: 'F', points: 2, description: '快速生成模式', hasResolutionPricing: false, pointsCost: 2, supportedModes: 'both' },
-    { value: 'stable-diffusion-xl', label: 'Stable Diffusion XL', icon: 'S', points: 2, description: '开源模型，稳定可靠', hasResolutionPricing: false, pointsCost: 2, supportedModes: 'both' }
+    { value: 'nano-banana', label: 'Nano Banana', icon: '🍌', points: 1, get description() { return translateUi('uiMessages.m02d12cdb2b9e') }, hasResolutionPricing: false, pointsCost: 1, supportedModes: 'both' },
+    { value: 'nano-banana-hd', label: 'Nano Banana HD', icon: '🍌', points: 3, get description() { return translateUi('uiMessages.mbe45b994ce7a') }, hasResolutionPricing: false, pointsCost: 3, supportedModes: 'both' },
+    { value: 'nano-banana-2', label: 'Nano Banana 2', icon: '🍌', points: null, get description() { return translateUi('uiMessages.m6d78d4d85628') }, hasResolutionPricing: true, pointsCost: { '1k': 3, '2k': 4, '4k': 5 }, supportedModes: 'both' },
+    { value: 'flux-pro', label: 'Flux Pro', icon: 'F', points: 5, get description() { return translateUi('uiMessages.m0ca1e3f20983') }, hasResolutionPricing: false, pointsCost: 5, supportedModes: 'both' },
+    { value: 'flux-dev', label: 'Flux Dev', icon: 'F', points: 3, get description() { return translateUi('uiMessages.m54ba83779730') }, hasResolutionPricing: false, pointsCost: 3, supportedModes: 'both' },
+    { value: 'flux-schnell', label: 'Flux Schnell', icon: 'F', points: 2, get description() { return translateUi('uiMessages.ma8b4be330ad3') }, hasResolutionPricing: false, pointsCost: 2, supportedModes: 'both' },
+    { value: 'stable-diffusion-xl', label: 'Stable Diffusion XL', icon: 'S', points: 2, get description() { return translateUi('uiMessages.m49c0249de351') }, hasResolutionPricing: false, pointsCost: 2, supportedModes: 'both' }
   ]
   
   // 根据模式过滤默认模型
@@ -1131,15 +1132,15 @@ export const getAvailableVideoModels = (options = {}) => {
       label: 'Sora 2', 
       // 图标使用首字母，样式在组件中定义为黑白灰
       icon: 'S', 
-      description: 'OpenAI Sora 视频生成模型，支持文生视频和图生视频', 
+      get description() { return translateUi('uiMessages.m99ac06b53a95') },
       hasDurationPricing: true, 
       pointsCost: { '10': 20, '15': 30 },
       // 支持的时长选项
       durations: ['10', '15'],
       // 支持的方向选项
       aspectRatios: [
-        { value: '16:9', label: '横屏 (16:9)' },
-        { value: '9:16', label: '竖屏 (9:16)' }
+        { value: '16:9', get label() { return translateUi('uiMessages.m848cb51e297f') } },
+        { value: '9:16', get label() { return translateUi('uiMessages.m1f7a6c75ad56') } }
       ],
       // 支持的模式：t2v=文生视频, i2v=图生视频
       supportedModes: { t2v: true, i2v: true, a2v: false }
@@ -1147,43 +1148,43 @@ export const getAvailableVideoModels = (options = {}) => {
     'sora2-pro': { 
       label: 'Sora 2 Pro', 
       icon: 'S', 
-      description: '专业版 Sora 模型，更高分辨率和细节表现，支持25秒长视频', 
+      get description() { return translateUi('uiMessages.md8668269bff3') },
       hasDurationPricing: true, 
       pointsCost: { '10': 300, '15': 450, '25': 750 },
       // Pro 支持 25s
       durations: ['10', '15', '25'],
       aspectRatios: [
-        { value: '16:9', label: '横屏 (16:9)' },
-        { value: '9:16', label: '竖屏 (9:16)' }
+        { value: '16:9', get label() { return translateUi('uiMessages.m848cb51e297f') } },
+        { value: '9:16', get label() { return translateUi('uiMessages.m1f7a6c75ad56') } }
       ],
       supportedModes: { t2v: true, i2v: true, a2v: false }
     },
     // ==================== 旧版 Sora 模型（保持兼容）====================
     'sora-2': { 
-      label: 'Sora 2 (旧版)', 
+      get label() { return translateUi('uiMessages.m14bde3fbcdda') },
       icon: 'S', 
-      description: '旧版 Sora 模型，建议使用新版 Sora 2', 
+      get description() { return translateUi('uiMessages.md00d411f9ea5') },
       hasDurationPricing: true, 
       pointsCost: { '10': 20, '15': 30 },
       durations: ['10', '15'],
-      aspectRatios: [{ value: '16:9', label: '横屏 (16:9)' }],
+      aspectRatios: [{ value: '16:9', get label() { return translateUi('uiMessages.m848cb51e297f') } }],
       supportedModes: { t2v: true, i2v: true, a2v: false }
     },
     'sora-2-pro': { 
-      label: 'Sora 2 Pro (旧版)', 
+      get label() { return translateUi('uiMessages.me6de05bdb3ad') },
       icon: 'S', 
-      description: '旧版专业版 Sora 模型', 
+      get description() { return translateUi('uiMessages.ma50e24e0a7b3') },
       hasDurationPricing: true, 
       pointsCost: { '10': 300, '15': 450, '25': 750 },
       durations: ['10', '15', '25'],
-      aspectRatios: [{ value: '16:9', label: '横屏 (16:9)' }],
+      aspectRatios: [{ value: '16:9', get label() { return translateUi('uiMessages.m848cb51e297f') } }],
       supportedModes: { t2v: true, i2v: true, a2v: false }
     },
     // ==================== VEO3 系列（整合入口）====================
     'veo3': { 
       label: 'VEO 3.1', 
       icon: 'V', 
-      description: 'Google DeepMind 视频模型，支持多种生成模式和清晰度', 
+      get description() { return translateUi('uiMessages.m893cf54667d5') },
       hasDurationPricing: false, 
       pointsCost: 100,
       supportedModes: { t2v: true, i2v: true, a2v: false },
@@ -1191,10 +1192,10 @@ export const getAvailableVideoModels = (options = {}) => {
       isVeoModel: true,
       // VEO 模式选项
       veoModes: [
-        { value: 'fast', label: 'fast首尾帧', description: '快速生成', actualModel: 'veo3.1-fast', maxImages: 2, pointsCost: 80 },
-        { value: 'standard', label: '首尾帧', description: '标准质量', actualModel: 'veo3.1', maxImages: 2, pointsCost: 100 },
-        { value: 'components', label: '多图参考', description: '最多3张图', actualModel: 'veo3.1-components', maxImages: 3, pointsCost: 120 },
-        { value: 'pro', label: 'Pro首尾帧', description: '最高画质', actualModel: 'veo3.1-pro', maxImages: 2, pointsCost: 150 }
+        { value: 'fast', get label() { return translateUi('uiMessages.me73a6863512c') }, get description() { return translateUi('uiMessages.m893819bb34b0') }, actualModel: 'veo3.1-fast', maxImages: 2, pointsCost: 80 },
+        { value: 'standard', get label() { return translateUi('uiMessages.ma44f24ac18b3') }, get description() { return translateUi('uiMessages.md5aea2920992') }, actualModel: 'veo3.1', maxImages: 2, pointsCost: 100 },
+        { value: 'components', get label() { return translateUi('uiMessages.m0d99795be0dd') }, get description() { return translateUi('uiMessages.mfe8ba45f9518') }, actualModel: 'veo3.1-components', maxImages: 3, pointsCost: 120 },
+        { value: 'pro', get label() { return translateUi('uiMessages.me57de3ba874e') }, get description() { return translateUi('uiMessages.m80a084036462') }, actualModel: 'veo3.1-pro', maxImages: 2, pointsCost: 150 }
       ],
       // VEO 清晰度选项
       veoResolutions: [
@@ -1205,15 +1206,15 @@ export const getAvailableVideoModels = (options = {}) => {
       defaultVeoResolution: '1080p'
     },
     // 保留独立模型配置用于后端兼容
-    'veo3.1-fast': { label: 'VEO 3.1 Fast', icon: 'V', description: '快速生成，首尾帧控制', hasDurationPricing: false, pointsCost: 80, supportedModes: { t2v: true, i2v: true, a2v: false }, hidden: true },
-    'veo3.1-components': { label: 'VEO 3.1 多图', icon: 'V', description: '多图参考生成', hasDurationPricing: false, pointsCost: 120, supportedModes: { t2v: true, i2v: true, a2v: false }, hidden: true },
-    'veo3.1': { label: 'VEO 3.1 标准', icon: 'V', description: '标准版首尾帧', hasDurationPricing: false, pointsCost: 100, supportedModes: { t2v: true, i2v: true, a2v: false }, hidden: true },
-    'veo3.1-pro': { label: 'VEO 3.1 Pro', icon: 'V', description: 'Pro版首尾帧', hasDurationPricing: false, pointsCost: 150, supportedModes: { t2v: true, i2v: true, a2v: false }, hidden: true },
+    'veo3.1-fast': { label: 'VEO 3.1 Fast', icon: 'V', get description() { return translateUi('uiMessages.mef7b5d56c79f') }, hasDurationPricing: false, pointsCost: 80, supportedModes: { t2v: true, i2v: true, a2v: false }, hidden: true },
+    'veo3.1-components': { get label() { return translateUi('uiMessages.m09171ccc564a') }, icon: 'V', get description() { return translateUi('uiMessages.m4d861c907c8e') }, hasDurationPricing: false, pointsCost: 120, supportedModes: { t2v: true, i2v: true, a2v: false }, hidden: true },
+    'veo3.1': { get label() { return translateUi('uiMessages.md16c42eba9bb') }, icon: 'V', get description() { return translateUi('uiMessages.ma976232f932d') }, hasDurationPricing: false, pointsCost: 100, supportedModes: { t2v: true, i2v: true, a2v: false }, hidden: true },
+    'veo3.1-pro': { label: 'VEO 3.1 Pro', icon: 'V', get description() { return translateUi('uiMessages.m5585cfdb37fd') }, hasDurationPricing: false, pointsCost: 150, supportedModes: { t2v: true, i2v: true, a2v: false }, hidden: true },
     // ==================== Kling（可灵）图生视频模型 ====================
     'kling-v2-6-pro': { 
-      label: 'Kling 2.6 Pro (首尾帧)', 
+      get label() { return translateUi('uiMessages.mbc6c4e2f8c5d') },
       icon: 'K', 
-      description: '可灵 v2.6 专业版，支持首帧和尾帧控制', 
+      get description() { return translateUi('uiMessages.mdc5cebb7ca7f') },
       hasDurationPricing: true, 
       pointsCost: { '5': 24, '10': 48 }, 
       durations: ['5', '10'],
@@ -1222,16 +1223,16 @@ export const getAvailableVideoModels = (options = {}) => {
     },
     // ==================== Kling O1 文/图生视频（画布支持首尾帧/多图参考/视频编辑三模式切换） ====================
     'kling-video-o1-pro': { 
-      label: 'Kling O1 文/图生视频 (专家)', 
+      get label() { return translateUi('uiMessages.ma7dadf4c412e') },
       icon: 'K', 
-      description: '可灵 O1 全能视频，画布模式支持首尾帧、多图参考、视频编辑三种模式', 
+      get description() { return translateUi('uiMessages.m92cb83302b3c') },
       hasDurationPricing: true, 
       pointsCost: { '5': 60, '10': 120 }, 
       durations: ['5', '10'],
       aspectRatios: [
-        { value: '16:9', label: '横屏 (16:9)' },
-        { value: '9:16', label: '竖屏 (9:16)' },
-        { value: '1:1', label: '方形 (1:1)' }
+        { value: '16:9', get label() { return translateUi('uiMessages.m848cb51e297f') } },
+        { value: '9:16', get label() { return translateUi('uiMessages.m1f7a6c75ad56') } },
+        { value: '1:1', get label() { return translateUi('uiMessages.m2c2c18d9f020') } }
       ],
       isImageToVideo: false,
       isKlingOmni: true,
@@ -1240,16 +1241,16 @@ export const getAvailableVideoModels = (options = {}) => {
     },
     // ==================== Kling O1 视频编辑（画布默认视频编辑子模式） ====================
     'kling-video-o1-edit-pro': { 
-      label: 'Kling O1 视频编辑 (专家)', 
+      get label() { return translateUi('uiMessages.mdfd531de4b02') },
       icon: 'K', 
-      description: '可灵 O1 视频编辑，支持单视频+可选图片输入，画布模式可切换首尾帧/多参考', 
+      get description() { return translateUi('uiMessages.m590148b825a4') },
       hasDurationPricing: true, 
       pointsCost: { '5': 60, '10': 120, '15': 180 }, 
       durations: ['5', '10'],
       aspectRatios: [
-        { value: '16:9', label: '横屏 (16:9)' },
-        { value: '9:16', label: '竖屏 (9:16)' },
-        { value: '1:1', label: '方形 (1:1)' }
+        { value: '16:9', get label() { return translateUi('uiMessages.m848cb51e297f') } },
+        { value: '9:16', get label() { return translateUi('uiMessages.m1f7a6c75ad56') } },
+        { value: '1:1', get label() { return translateUi('uiMessages.m2c2c18d9f020') } }
       ],
       isImageToVideo: false,
       isKlingOmni: true,
@@ -1316,15 +1317,15 @@ export const getAvailableVideoModels = (options = {}) => {
     // 默认 VEO 模式配置（当租户后台未配置时使用）
     // 注意：普通 VEO 模型只支持 1080p，4K 选项已单独作为 VEO 4K 组
     const defaultVeoModes = [
-      { value: 'fast', label: 'fast首尾帧', description: '快速生成', actualModel: 'veo3.1-fast', maxImages: 2, pointsCost: 80, supportedResolutions: ['1080p'] },
-      { value: 'standard', label: '首尾帧', description: '标准质量', actualModel: 'veo3.1', maxImages: 2, pointsCost: 100, supportedResolutions: ['1080p'] },
-      { value: 'components', label: '多图参考', description: '最多3张图', actualModel: 'veo3.1-components', maxImages: 3, pointsCost: 120, supportedResolutions: ['1080p'] },
-      { value: 'pro', label: 'Pro首尾帧', description: '最高画质', actualModel: 'veo3.1-pro', maxImages: 2, pointsCost: 150, supportedResolutions: ['1080p'] }
+      { value: 'fast', get label() { return translateUi('uiMessages.me73a6863512c') }, get description() { return translateUi('uiMessages.m893819bb34b0') }, actualModel: 'veo3.1-fast', maxImages: 2, pointsCost: 80, supportedResolutions: ['1080p'] },
+      { value: 'standard', get label() { return translateUi('uiMessages.ma44f24ac18b3') }, get description() { return translateUi('uiMessages.md5aea2920992') }, actualModel: 'veo3.1', maxImages: 2, pointsCost: 100, supportedResolutions: ['1080p'] },
+      { value: 'components', get label() { return translateUi('uiMessages.m0d99795be0dd') }, get description() { return translateUi('uiMessages.mfe8ba45f9518') }, actualModel: 'veo3.1-components', maxImages: 3, pointsCost: 120, supportedResolutions: ['1080p'] },
+      { value: 'pro', get label() { return translateUi('uiMessages.me57de3ba874e') }, get description() { return translateUi('uiMessages.m80a084036462') }, actualModel: 'veo3.1-pro', maxImages: 2, pointsCost: 150, supportedResolutions: ['1080p'] }
     ]
     
     let finalVeoModes = defaultVeoModes
     let veoPointsCost = 100
-    let veoAspectRatios = [{ value: '16:9', label: '横屏 (16:9)' }]
+    let veoAspectRatios = [{ value: '16:9', get label() { return translateUi('uiMessages.m848cb51e297f') } }]
     
     // 🔧 记录第一个 VEO 子模型在原始配置中的位置，用于排序
     let veoInsertIndex = -1
@@ -1410,7 +1411,7 @@ export const getAvailableVideoModels = (options = {}) => {
       value: 'veo3',
       label: 'VEO 3.1',
       icon: 'V',
-      description: 'Google DeepMind 视频模型，支持多种生成模式',
+      get description() { return translateUi('uiMessages.mb29e2067cf91') },
       hasDurationPricing: false,
       pointsCost: veoPointsCost,
       durations: [],
@@ -1443,7 +1444,7 @@ export const getAvailableVideoModels = (options = {}) => {
         
         // 根据名称推断模式类型
         let modeValue = 'standard'
-        let modeLabel = '首尾帧'
+        let modeLabel = translateUi('uiMessages.ma44f24ac18b3')
         let maxImages = 2
         
         // 🆕 先检测 fast-components 组合（fast多图参考）
@@ -1499,13 +1500,13 @@ export const getAvailableVideoModels = (options = {}) => {
       }
       
       const veo4kPointsCost = uniqueVeo4kModes[0]?.pointsCost || 8
-      const veo4kAspectRatios = veo4kSubModels[0].aspectRatios || [{ value: '16:9', label: '横屏 (16:9)' }]
+      const veo4kAspectRatios = veo4kSubModels[0].aspectRatios || [{ value: '16:9', get label() { return translateUi('uiMessages.m848cb51e297f') } }]
       
       veo4kEntry = {
         value: 'veo4k',
         label: 'VEO 4K',
         icon: 'V',
-        description: 'VEO 3.1 4K 高清版，支持fast首尾帧、fast多图参考、首尾帧、多图参考和Pro模式',
+        get description() { return translateUi('uiMessages.me5ce5c0134bf') },
         hasDurationPricing: false,
         pointsCost: veo4kPointsCost,
         durations: [],
@@ -1545,8 +1546,8 @@ export const getAvailableVideoModels = (options = {}) => {
       // 文生视频模式（不需要图片/视频输入）
       klingO1Modes.push({
         value: 'text2video',
-        label: '文生视频',
-        description: '纯文本描述生成视频',
+        get label() { return translateUi('canvas.textNode.textToVideo') },
+        get description() { return translateUi('uiMessages.m4d1ceb16d7f7') },
         subMode: null,
         actualModel: baseActualModel,
         maxImages: 0,
@@ -1557,8 +1558,8 @@ export const getAvailableVideoModels = (options = {}) => {
       // 首尾帧模式（所有 O1 子模型都支持，走同一个 omni-video 端点）
       klingO1Modes.push({
         value: 'first_last_frame',
-        label: '首尾帧',
-        description: '首帧/尾帧图片控制',
+        get label() { return translateUi('uiMessages.ma44f24ac18b3') },
+        get description() { return translateUi('uiMessages.m93e2f72e7e4f') },
         subMode: 'first_last_frame',
         actualModel: baseActualModel,
         maxImages: 2,
@@ -1569,8 +1570,8 @@ export const getAvailableVideoModels = (options = {}) => {
       // 多图参考模式
       klingO1Modes.push({
         value: 'multi_ref',
-        label: '多图参考',
-        description: '最多7张参考图',
+        get label() { return translateUi('uiMessages.m0d99795be0dd') },
+        get description() { return translateUi('uiMessages.m40b34c8a972e') },
         subMode: 'multi_ref',
         actualModel: baseActualModel,
         maxImages: 7,
@@ -1581,8 +1582,8 @@ export const getAvailableVideoModels = (options = {}) => {
       // 视频编辑模式
       klingO1Modes.push({
         value: 'video_edit',
-        label: '视频编辑',
-        description: '编辑已有视频+可选图片',
+        get label() { return translateUi('canvas.nodeConfig.videoEdit.label') },
+        get description() { return translateUi('uiMessages.mdee131324f11') },
         subMode: 'video_edit',
         actualModel: editModel.name,
         maxImages: 4,
@@ -1594,14 +1595,14 @@ export const getAvailableVideoModels = (options = {}) => {
         value: 'klingO1',
         label: 'Kling O1',
         icon: 'K',
-        description: '可灵 O1 全能视频，支持文生视频、首尾帧、多图参考、视频编辑',
+        get description() { return translateUi('uiMessages.mc8bf51cf017e') },
         hasDurationPricing: true,
         pointsCost: basePointsCost,
         durations: ['5', '10'],
         aspectRatios: omniModel.aspectRatios || [
-          { value: '16:9', label: '横屏 (16:9)' },
-          { value: '9:16', label: '竖屏 (9:16)' },
-          { value: '1:1', label: '方形 (1:1)' }
+          { value: '16:9', get label() { return translateUi('uiMessages.m848cb51e297f') } },
+          { value: '9:16', get label() { return translateUi('uiMessages.m1f7a6c75ad56') } },
+          { value: '1:1', get label() { return translateUi('uiMessages.m2c2c18d9f020') } }
         ],
         supportedModes: { t2v: true, i2v: true, a2v: false },
         apiType: omniModel.apiType,
@@ -1707,7 +1708,7 @@ export const getAvailableVideoModels = (options = {}) => {
           hasDurationPricing: false,
           pointsCost: typeof modelConfig.pointsCost === 'number' ? modelConfig.pointsCost : 100,
           durations: [],
-          aspectRatios: modelConfig.aspectRatios || [{ value: '16:9', label: '横屏 (16:9)' }],
+          aspectRatios: modelConfig.aspectRatios || [{ value: '16:9', get label() { return translateUi('uiMessages.m848cb51e297f') } }],
           supportedModes: { t2v: true, i2v: true, a2v: false },
           apiType: 'vectorengine',
           vectorengineConfig: modelConfig.vectorengineConfig,
@@ -1758,7 +1759,7 @@ export const getAvailableVideoModels = (options = {}) => {
       
       // 获取新格式配置中的 aspectRatios 和 supportedModes
       // 兼容两种格式：字符串数组或对象数组
-      let aspectRatios = modelConfig.aspectRatios || defaultConfig.aspectRatios || [{ value: '16:9', label: '横屏 (16:9)' }]
+      let aspectRatios = modelConfig.aspectRatios || defaultConfig.aspectRatios || [{ value: '16:9', get label() { return translateUi('uiMessages.m848cb51e297f') } }]
       if (Array.isArray(aspectRatios) && aspectRatios.length > 0) {
         aspectRatios = aspectRatios.map(ar => {
           if (typeof ar === 'string') {
@@ -1969,7 +1970,7 @@ export const getAvailableVideoModels = (options = {}) => {
       modelDurations = filterByteforDurations(modelFullConfig, modelDurations)
       
       // 兼容两种格式：字符串数组或对象数组
-      let aspectRatios = modelFullConfig.aspectRatios || defaultConfig.aspectRatios || [{ value: '16:9', label: '横屏 (16:9)' }]
+      let aspectRatios = modelFullConfig.aspectRatios || defaultConfig.aspectRatios || [{ value: '16:9', get label() { return translateUi('uiMessages.m848cb51e297f') } }]
       if (Array.isArray(aspectRatios) && aspectRatios.length > 0) {
         aspectRatios = aspectRatios.map(ar => {
           if (typeof ar === 'string') {
@@ -2214,14 +2215,14 @@ export const getAvailableMusicModels = () => {
     {
       id: 'chirp-v4',
       name: 'Chirp V4',
-      description: '最新版本，音质更佳',
+      get description() { return translateUi('uiMessages.m6687add903fd') },
       pointsCost: 20,
       icon: '♫'
     },
     {
       id: 'chirp-v3-5',
       name: 'Chirp V3.5',
-      description: '稳定版本',
+      get description() { return translateUi('uiMessages.m34f59508e30d') },
       pointsCost: 15,
       icon: '♪'
     }

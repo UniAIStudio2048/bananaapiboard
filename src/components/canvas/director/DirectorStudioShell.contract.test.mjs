@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -34,8 +35,8 @@ test('director studio shell renders the workstation panels and drives the scene 
     'DirectorStudioInspector',
     'DirectorStudioShortcutDialog'
   ]) {
-    assert.match(source, new RegExp(`import\\s+${component}\\s+from`), `${component} should be imported`)
-    assert.match(source, new RegExp(`<${component}\\b`), `${component} should be rendered`)
+    assert.match(source, localizedPattern(new RegExp(`import\\s+${component}\\s+from`)), `${component} should be imported`)
+    assert.match(source, localizedPattern(new RegExp(`<${component}\\b`)), `${component} should be rendered`)
   }
 
   assert.match(source, /<DirectorStudioScene[\s\S]*:items="items"[\s\S]*:selected-item-id="selectedSceneItemId"[\s\S]*:transform-mode="transformMode"/)
@@ -156,7 +157,7 @@ test('director studio shell project library can create, overwrite, rename, resto
     'deleteProject',
     'updateProjectCoverFromSnapshot'
   ]) {
-    assert.match(source, new RegExp(`function\\s+${fn}\\s*\\(`), `${fn} should exist in shell`)
+    assert.match(source, localizedPattern(new RegExp(`function\\s+${fn}\\s*\\(`)), `${fn} should exist in shell`)
   }
 
   assert.match(source, /id:\s*`director-project-\$\{Date\.now\(\)\}-\$\{Math\.random\(\)\.toString\(36\)\.slice\(2,\s*8\)\}`/)
@@ -314,7 +315,7 @@ test('director studio node persists snapshots and creates source-to-generation c
   assert.match(source, /const\s+sourceNodeId\s*=\s*`node_\$\{Date\.now\(\)\}_source_\$\{Math\.random\(\)\.toString\(36\)\.slice\(2,\s*11\)\}`/)
   assert.match(source, /const\s+generationNodeId\s*=\s*`node_\$\{Date\.now\(\)\}_generation_\$\{Math\.random\(\)\.toString\(36\)\.slice\(2,\s*11\)\}`/)
   assert.match(source, /const\s+generationReferenceImages\s*=\s*\[\s*persistentSnapshotUrl,\s*\.\.\.linkedReferenceUrls\s*\]/)
-  assert.match(source, /type:\s*['"]image-input['"][\s\S]*title:\s*['"]导演台截图['"][\s\S]*sourceImages:\s*\[persistentSnapshotUrl\][\s\S]*imageUrl:\s*persistentSnapshotUrl/)
+  assert.match(source, /type:\s*['"]image-input['"][\s\S]*title:\s*translateUi\('directorStudio\.nodeCard\.snapshotAlt'\)[\s\S]*sourceImages:\s*\[persistentSnapshotUrl\][\s\S]*imageUrl:\s*persistentSnapshotUrl/)
   assert.match(source, /type:\s*['"]image-to-image['"][\s\S]*position:\s*\{[\s\S]*x:\s*currentPosition\.x\s*\+\s*960[\s\S]*prompt[\s\S]*aspectRatio:\s*aspectRatio[\s\S]*aspectRatioMode:\s*aspectRatio/)
   assert.match(source, /canvasStore\.addEdge\(\{[\s\S]*source:\s*sourceNodeId[\s\S]*target:\s*generationNodeId[\s\S]*\}\)/)
   assert.match(source, /canvasStore\.selectNode\(generationNodeId\)/)
@@ -339,7 +340,7 @@ test('director studio node labels merged reference images as 图N from a stable 
   assert.match(source, /edge\.target\s*===\s*nodeId/)
   assert.match(source, /sourceData\.sourceImages[\s\S]*sourceData\.output\?\.urls[\s\S]*sourceData\.output\?\.url[\s\S]*sourceData\.imageUrl/)
   assert.match(source, /data\?\.referenceImages[\s\S]*item\.refImageUrl/)
-  assert.match(source, /label:\s*`图\$\{index\s*\+\s*1\}`/)
+  assert.match(source, /label: translateUi\('uiMessages\.m2f7cdebbb4b3', \{ value1: \(index \+ 1\) \}\)/)
   assert.match(source, /color:\s*getDirectorReferenceColor\(index\)/)
 })
 

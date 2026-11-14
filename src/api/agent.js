@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 
 function headers(json = false) {
@@ -17,7 +18,7 @@ async function request(path, options = {}) {
   })
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
-    const error = new Error(data.message || data.error || 'Agent 请求失败')
+    const error = new Error(data.message || data.error || translateUi('uiMessages.m7243195f5d9e'))
     error.status = response.status
     error.body = data
     throw error
@@ -50,7 +51,7 @@ export async function streamAgentRun(id, { onEvent, lastEventId = 0, signal } = 
   })
   if (!response.ok) {
     const data = await response.json().catch(() => ({}))
-    throw new Error(data.message || data.error || 'Agent 事件流连接失败')
+    throw new Error(data.message || data.error || translateUi('uiMessages.me754bd2bf509'))
   }
   const reader = response.body.getReader()
   const decoder = new TextDecoder()

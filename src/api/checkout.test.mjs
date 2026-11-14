@@ -1,13 +1,14 @@
+import { t as translateUi } from '../i18n/index.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 
-const source = readFileSync(new URL('./checkout.js', import.meta.url), 'utf8').replace(/^import .*$/m, '').replace('export const checkoutApi', 'const checkoutApi')
+const source = readFileSync(new URL('./checkout.js', import.meta.url), 'utf8').replace(/^import .*$/gm, '').replace('export const checkoutApi', 'const checkoutApi')
 function fixture(fetchImpl) {
   const timers = new Map(); let serial = 0, received
   const api = runInNewContext(`${source}\ncheckoutApi`, {
-    AbortController, AbortSignal: {}, FormData, window: { location: { origin: 'https://example.test' } },
+    translateUi, AbortController, AbortSignal: {}, FormData, window: { location: { origin: 'https://example.test' } },
     localStorage: { getItem: () => null }, getTenantHeaders: () => ({}), getApiUrl: path => path,
     setTimeout: (fn, delay) => { assert.equal(delay, 25000); timers.set(++serial, fn); return serial },
     clearTimeout: id => timers.delete(id),

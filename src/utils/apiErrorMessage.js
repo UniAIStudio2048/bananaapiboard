@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 function firstString(values) {
   for (const value of values) {
     if (typeof value === 'string' && value.trim()) return value.trim()
@@ -35,7 +36,7 @@ function cleanChannelDetail(message) {
     .trim()
 }
 
-export function getApiErrorMessage(payload = {}, fallback = '生成失败') {
+export function getApiErrorMessage(payload = {}, fallback = translateUi('canvas.audioNode.generateFailed')) {
   if (typeof payload === 'string') return payload.trim() || fallback
 
   const message = firstString([payload?.message])

@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * CanvasToolbar.vue - 左侧工具栏
  */
@@ -47,8 +49,8 @@ function closeToolbarPanels() {
 
 // 节点类型列表 - 黑白灰简洁风格
 const nodeTypes = computed(() => [
-  { type: 'script', icon: '▤', label: '脚本', tag: 'NEW', description: '剧本 · 资产 · 分镜' },
-  { type: 'video-breakdown', icon: '▤', label: '逐帧拉片', tag: null, description: '分镜 · 动态 · 音乐' },
+  { type: 'script', icon: '▤', get label() { return translateUi('uiMessages.m5d4f709636ee') }, tag: 'NEW', get description() { return translateUi('uiMessages.md5fd06d922aa') } },
+  { type: 'video-breakdown', icon: '▤', get label() { return translateUi('uiMessages.md41f3dc4304e') }, tag: null, get description() { return translateUi('uiMessages.m94721424aecd') } },
   {
     type: 'text-input',
     icon: 'Aa',
@@ -124,7 +126,7 @@ function createNode(nodeType) {
   canvasStore.addNode({
     type: nodeType,
     position,
-    data: nodeType === 'script' ? { title: '脚本', width: 380, height: 320 } : {}
+    data: nodeType === 'script' ? { title: translateUi('uiMessages.m5d4f709636ee'), width: 380, height: 320 } : {}
   })
   
   showNodePanel.value = false
@@ -334,7 +336,7 @@ async function handleUserUpdate() {
     <!-- 分享工作流 -->
     <button
       class="canvas-toolbar-btn icon-btn"
-      title="分享工作流"
+      :title="translateUi('uiMessages.m1d211c6fcd4c')"
       @click="shareWorkflow"
     >
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">

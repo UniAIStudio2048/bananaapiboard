@@ -1,8 +1,9 @@
+import { t as translateUi } from '../../../i18n/index.js'
 export const blendModes = [
- ['normal','正常'], ['darken','变暗'], ['multiply','正片叠底'], ['color-burn','颜色加深'],
- ['lighten','变亮'], ['screen','滤色'], ['plus-lighter','线性减淡(添加)'], ['color-dodge','颜色减淡'],
- ['overlay','叠加'], ['soft-light','柔光'], ['hard-light','强光'], ['difference','差值'], ['exclusion','排除'],
- ['hue','色相'], ['saturation','饱和度'], ['color','颜色'], ['luminosity','明度'],
+ ['normal','uiMessages.m296de0e31f8c'], ['darken','uiMessages.m07ba6329553a'], ['multiply','uiMessages.m29b81751af64'], ['color-burn','uiMessages.mebb4b68533f6'],
+ ['lighten','uiMessages.mfde6b8089807'], ['screen','uiMessages.me9fec455f1e4'], ['plus-lighter','uiMessages.mdb37ff3bcb74'], ['color-dodge','uiMessages.m06b59e81acb8'],
+ ['overlay','uiMessages.m045d4bf17444'], ['soft-light','uiMessages.m2eb88a373a7f'], ['hard-light','uiMessages.mc2909f9ae1b3'], ['difference','uiMessages.m973e5d7657db'], ['exclusion','uiMessages.mac83d3972fe9'],
+ ['hue','uiMessages.m3ff6d1c07cfc'], ['saturation','uiMessages.m762f17e26780'], ['color','directorStudio.inspector.color'], ['luminosity','uiMessages.mc5fce2a15bee'],
 ] as const
 export type BlendMode = typeof blendModes[number][0]
 const classes:Record<BlendMode,string> = {

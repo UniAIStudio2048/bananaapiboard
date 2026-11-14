@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, computed, watch } from 'vue'
 import { useTeamStore } from '@/stores/team'
 import { copyAssetsToSpace } from '@/api/canvas/assets'
@@ -67,7 +69,7 @@ async function handleCopy() {
     emit('success')
     close()
   } catch (err) {
-    errorMsg.value = err.message || '复制失败'
+    errorMsg.value = err.message || translateUi('uiMessages.m753d8bb0da99')
   } finally {
     copying.value = false
   }
@@ -90,8 +92,8 @@ watch(() => props.visible, (val) => {
         <div class="copy-dialog">
           <div class="dialog-header">
             <div class="header-left">
-              <h3>复制到空间</h3>
-              <span class="item-count">{{ items.length }} 个项目</span>
+              <h3>{{ translateUi('uiMessages.m6a9819d3c84f') }}</h3>
+              <span class="item-count">{{ translateUi('uiMessages.m62cceec4a023', { value1: (items.length) }) }}</span>
             </div>
             <button class="close-btn" @click="close">×</button>
           </div>
@@ -106,16 +108,16 @@ watch(() => props.visible, (val) => {
               >
                 <span class="space-icon">{{ space.icon }}</span>
                 <span class="space-name">{{ space.name }}</span>
-                <span v-if="space.type === 'team'" class="member-count">{{ space.memberCount }}人</span>
-                <span v-if="isCurrentSpace(space)" class="current-tag">当前</span>
+                <span v-if="space.type === 'team'" class="member-count">{{ translateUi('uiMessages.m48a8e95b1394', { value1: (space.memberCount) }) }}</span>
+                <span v-if="isCurrentSpace(space)" class="current-tag">{{ translateUi('uiMessages.mcb62ebd689ee') }}</span>
                 <span v-if="selectedSpace === space.id" class="check-mark">✓</span>
               </div>
             </div>
           </div>
           <div class="dialog-footer">
-            <button class="cancel-btn" @click="close" :disabled="copying">取消</button>
+            <button class="cancel-btn" @click="close" :disabled="copying">{{ translateUi('common.cancel') }}</button>
             <button class="confirm-btn" @click="handleCopy" :disabled="!selectedSpace || copying">
-              {{ copying ? '复制中...' : '确认复制' }}
+              {{ copying ? translateUi('uiMessages.m9c195f89cf41') : translateUi('uiMessages.m559e976912d7') }}
             </button>
           </div>
         </div>

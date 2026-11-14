@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -24,6 +25,6 @@ test('训练提交和状态轮询不会用全量资产刷新覆盖即时状态',
 test('已完成的数字人不提供独立添加到画布入口，只可作为图像节点引用', () => {
   assert.match(source, /emit = defineEmits\(\['insert-image', 'refresh', 'upsert'\]\)/)
   assert.match(source, /@click="emit\('insert-image', asset\)"/)
-  assert.doesNotMatch(source, /添加到画布/)
+  assert.doesNotMatch(source, localizedPattern(/添加到画布/))
   assert.doesNotMatch(source, /emit\('insert', asset\)/)
 })

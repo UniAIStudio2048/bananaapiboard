@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 function firstValue(...values) {
   return values.find(value => value !== undefined && value !== null && value !== '')
 }
@@ -13,7 +14,7 @@ function readMeta(item, ...keys) {
 
 export function formatHistoryTimestamp(value) {
   const raw = firstValue(value)
-  if (raw === undefined) return '未知'
+  if (raw === undefined) return translateUi('uiMessages.m4d8c1c5b4283')
 
   let date
   if (typeof raw === 'number') {
@@ -25,7 +26,7 @@ export function formatHistoryTimestamp(value) {
     date = new Date(raw)
   }
 
-  if (Number.isNaN(date.getTime())) return '未知'
+  if (Number.isNaN(date.getTime())) return translateUi('uiMessages.m4d8c1c5b4283')
   return date.toLocaleString('zh-CN', {
     hour12: false,
     year: 'numeric',

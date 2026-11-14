@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { watch, ref, onMounted, computed } from 'vue'
 import PhoneAuthForm from '@/components/auth/PhoneAuthForm.vue'
 import WechatLoginButton from '@/components/auth/WechatLoginButton.vue'
@@ -119,8 +121,8 @@ const inviteRewardText = computed(() => {
   const invitee = inviteRewards.value.invitee_bonus
   if (inviter === 0 && invitee === 0) return ''
   return inviteRewardAfterFirstPayment.value
-    ? `被邀请人完成首次充值后，邀请人获得${inviter}积分，被邀请人获得${invitee}积分`
-    : `邀请人获得${inviter}积分，被邀请人获得${invitee}积分`
+    ? translateUi('uiMessages.m9a0583335488', { value1: (inviter), value2: (invitee) })
+    : translateUi('uiMessages.m11a2b13ba658', { value1: (inviter), value2: (invitee) })
 })
 
 // 构建完整邮箱地址
@@ -146,14 +148,14 @@ const fullEmail = computed(() => {
 async function sendVerificationCode() {
   const email = fullEmail.value
   if (!email) {
-    error.value = '请先输入邮箱'
+    error.value = translateUi('auth.pleaseEnterEmail')
     return
   }
 
   // 验证邮箱格式
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (!emailRegex.test(email)) {
-    error.value = '请输入有效的邮箱地址'
+    error.value = translateUi('auth.invalidEmail')
     return
   }
 
@@ -170,11 +172,11 @@ async function sendVerificationCode() {
     
     if (!r.ok) {
       const data = await r.json()
-      throw new Error(data.message || '发送失败')
+      throw new Error(data.message || translateUi('uiMessages.mac77953a1e06'))
     }
     
     codeSent.value = true
-    message.value = '验证码已发送到您的邮箱'
+    message.value = translateUi('uiMessages.m4d111e7693c1')
     
     // 开始倒计时
     countdown.value = 60
@@ -188,7 +190,7 @@ async function sendVerificationCode() {
     
     setTimeout(() => { message.value = '' }, 3000)
   } catch (e) {
-    error.value = e.message || '发送验证码失败'
+    error.value = e.message || translateUi('uiMessages.m0a7b29f34fae')
   } finally {
     sendingCode.value = false
   }
@@ -199,17 +201,17 @@ async function resetPassword() {
   error.value = ''
   
   if (!account.value || !emailCode.value || !newPassword.value) {
-    error.value = '请填写所有必填项'
+    error.value = translateUi('uiMessages.m25872b05ede5')
     return
   }
   
   if (newPassword.value !== confirmPassword.value) {
-    error.value = '两次输入的密码不一致'
+    error.value = translateUi('uiMessages.m58807745708e')
     return
   }
   
   if (newPassword.value.length < 6) {
-    error.value = '密码长度至少6位'
+    error.value = translateUi('uiMessages.m8eee17404155')
     return
   }
   
@@ -228,10 +230,10 @@ async function resetPassword() {
     
     if (!r.ok) {
       const data = await r.json()
-      throw new Error(data.message || '重置失败')
+      throw new Error(data.message || translateUi('uiMessages.m4230b353344a'))
     }
     
-    message.value = '密码重置成功，请使用新密码登录'
+    message.value = translateUi('uiMessages.m84e22a633bf5')
     setTimeout(() => {
       resetMode.value = false
       mode.value = 'login'
@@ -240,7 +242,7 @@ async function resetPassword() {
       confirmPassword.value = ''
     }, 2000)
   } catch (e) {
-    error.value = e.message || '密码重置失败'
+    error.value = e.message || translateUi('uiMessages.mb0703ade4f60')
   } finally {
     loading.value = false
   }
@@ -261,17 +263,17 @@ async function submit() {
   // 注册邮箱始终必填；验证码仅在开启强制验证时必填。
   if (mode.value === 'register') {
     if (!email) {
-      error.value = hasWhitelist.value ? '请填写邮箱前缀并选择后缀' : '请输入邮箱地址'
+      error.value = hasWhitelist.value ? translateUi('uiMessages.m26fbd001ac3c') : translateUi('uiMessages.m74db7d9f074a')
       return
     }
     // 验证邮箱格式
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
-      error.value = '请输入有效的邮箱地址'
+      error.value = translateUi('auth.invalidEmail')
       return
     }
     if (emailConfig.value.require_email_verification && !emailCode.value) {
-      error.value = '请输入邮箱验证码'
+      error.value = translateUi('auth.emailCodeRequired')
       return
     }
   }
@@ -280,12 +282,12 @@ async function submit() {
   if (mode.value === 'register' && requireInviteCode.value) {
     const trimmedCode = inviteCode.value?.trim() || ''
     if (!trimmedCode) {
-      error.value = '请输入邀请码，该租户已开启邀请码注册'
+      error.value = translateUi('uiMessages.m4941915e32a2')
       return
     }
     // 验证邀请码格式（6-12位字母或数字，大小写均可）
     if (!/^[a-z0-9]{6,12}$/i.test(trimmedCode)) {
-      error.value = '邀请码格式无效，应为6-12位字母或数字'
+      error.value = translateUi('uiMessages.m4ad4e7ead45a')
       return
     }
   }
@@ -309,19 +311,19 @@ async function submit() {
       const data = await r.json()
       // 根据错误类型显示不同的提示
       if (data.error === 'disabled') {
-        error.value = '账号已被禁用'
+        error.value = translateUi('auth.accountDisabled')
       } else if (data.error === 'invalid_credentials') {
-        error.value = '密码不正确，请重试'
+        error.value = translateUi('uiMessages.mc91161fb30c0')
       } else if (data.error === 'not_found') {
-        error.value = '用户不存在'
+        error.value = translateUi('auth.userNotFound')
       } else if (data.error === 'too_many_requests') {
-        error.value = data.message || '密码错误次数过多，请5分钟后重试'
+        error.value = data.message || translateUi('uiMessages.mdc52a1075134')
       } else if (data.error === 'username_exists') {
-        error.value = '该用户名已被注册，请更换一个用户名'
+        error.value = translateUi('uiMessages.me1b636cbf060')
       } else if (data.error === 'email_exists') {
-        error.value = '该邮箱已被注册'
+        error.value = translateUi('uiMessages.mca59e824b463')
       } else {
-        error.value = data.message || '提交失败'
+        error.value = data.message || translateUi('uiMessages.m1440c7e23865')
       }
       throw new Error(data.error || 'failed')
     }
@@ -341,12 +343,12 @@ async function submit() {
       console.warn('[Auth] 清除用户数据失败:', e)
     }
     
-    message.value = mode.value === 'register' ? '注册成功，已赠送积分' : '登录成功'
+    message.value = mode.value === 'register' ? translateUi('uiMessages.mf2a38ddf1a00') : translateUi('uiMessages.m645b934deb86')
     const params = new URLSearchParams(location.search)
     const redirect = params.get('redirect') || ''
     setTimeout(() => { location.href = redirect || '/' }, 600)
   } catch (e) {
-    if (!error.value) error.value = '提交失败'
+    if (!error.value) error.value = translateUi('uiMessages.m1440c7e23865')
   } finally {
     loading.value = false
   }
@@ -368,10 +370,10 @@ function handleSmsAuthenticated() {
           <span class="text-white font-bold text-2xl">AI</span>
         </div>
         <h2 class="text-3xl font-bold gradient-text">
-          {{ mode === 'register' ? '创建账户' : '欢迎回来' }}
+          {{ mode === 'register' ? translateUi('uiMessages.m733dee6d8897') : translateUi('auth.welcomeBack') }}
         </h2>
         <p class="mt-2 text-slate-600 dark:text-slate-400">
-          {{ mode === 'register' ? '开始您的AI创作之旅' : '继续您的创意探索' }}
+          {{ mode === 'register' ? translateUi('uiMessages.m912fa286e189') : translateUi('uiMessages.mb15b668261dd') }}
         </p>
       </div>
 
@@ -386,7 +388,7 @@ function handleSmsAuthenticated() {
               ? 'bg-white dark:bg-dark-700 text-primary-600 dark:text-primary-400 shadow-sm' 
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'"
           >
-            👤 登录
+            {{ translateUi('uiMessages.m75dfd450503c') }}
           </button>
           <button 
             v-if="policy.registration_enabled" @click="mode = 'register'"
@@ -395,15 +397,15 @@ function handleSmsAuthenticated() {
               ? 'bg-white dark:bg-dark-700 text-primary-600 dark:text-primary-400 shadow-sm' 
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'"
           >
-            ⭐ 注册
+            {{ translateUi('uiMessages.mee49e426a537') }}
           </button>
         </div>
         
         <!-- 重置密码标题 -->
         <div v-if="resetMode && !phoneFormMode" class="mb-6">
-          <h3 class="text-lg font-semibold text-slate-800 dark:text-white">🔑 重置密码</h3>
+          <h3 class="text-lg font-semibold text-slate-800 dark:text-white">{{ translateUi('uiMessages.mdd02b6d5deaa') }}</h3>
           <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">
-            请输入注册邮箱，我们将发送验证码到您的邮箱
+            {{ translateUi('uiMessages.m02df660fb01c') }}
           </p>
         </div>
 
@@ -420,13 +422,13 @@ function handleSmsAuthenticated() {
           <!-- 注册模式且需要邮箱验证：显示用户名和邮箱分开的输入 -->
           <div v-if="needSeparateEmailInput">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              👤 用户名 *
+              {{ translateUi('uiMessages.mc474bcdeb47d') }}
             </label>
             <input 
               v-model="account" 
               type="text" 
               class="input"
-              placeholder="请输入用户名"
+              :placeholder="translateUi('user.enterUsername')"
               required
             />
           </div>
@@ -434,7 +436,7 @@ function handleSmsAuthenticated() {
           <!-- 有白名单：邮箱前缀+下拉选择后缀 -->
           <div v-if="needSeparateEmailInput && hasWhitelist">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              📧 邮箱 *
+              {{ translateUi('uiMessages.m03a7ed034706') }}
             </label>
             <div class="flex items-center gap-2">
               <input 
@@ -442,7 +444,7 @@ function handleSmsAuthenticated() {
                 type="text" 
                 class="input" 
                 style="flex: 2; min-width: 0;"
-                placeholder="邮箱前缀"
+                :placeholder="translateUi('auth.emailPrefix')"
                 required
               />
               <span class="flex items-center text-slate-700 dark:text-slate-300 font-medium">@</span>
@@ -452,27 +454,27 @@ function handleSmsAuthenticated() {
                 style="flex: 1; min-width: 120px;"
                 required
               >
-                <option value="" disabled>选择后缀</option>
+                <option value="" disabled>{{ translateUi('auth.selectSuffix') }}</option>
                 <option v-for="domain in emailConfig.email_whitelist" :key="domain" :value="domain">
                   {{ domain }}
                 </option>
               </select>
             </div>
             <p class="text-xs text-amber-600 dark:text-amber-400 mt-1">
-              ⚠️ 仅白名单邮箱可以注册
+              {{ translateUi('auth.whitelistOnly') }}
             </p>
           </div>
 
           <!-- 无白名单但需要验证：完整邮箱输入框 -->
           <div v-if="needSeparateEmailInput && !hasWhitelist">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              📧 邮箱 *
+              {{ translateUi('uiMessages.m03a7ed034706') }}
             </label>
             <input 
               v-model="emailAddress" 
               type="email" 
               class="input"
-              placeholder="请输入您的邮箱地址"
+              :placeholder="translateUi('uiMessages.m20adb0e5c4b0')"
               required
             />
           </div>
@@ -480,26 +482,26 @@ function handleSmsAuthenticated() {
           <!-- 其他模式（登录/不需要邮箱验证的注册）：显示原来的邮箱/登录名输入框 -->
           <div v-if="!needSeparateEmailInput">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              {{ mode === 'login' && !resetMode ? copy.loginAccount : '📧 邮箱/登录名' }}
+              {{ mode === 'login' && !resetMode ? copy.loginAccount : translateUi('uiMessages.ma548549beb7e') }}
             </label>
             <input 
               v-model="account" 
               type="text" 
               class="input"
-              :placeholder="mode === 'login' && !resetMode ? copy.loginAccountPlaceholder : '请输入邮箱或登录名'"
+              :placeholder="mode === 'login' && !resetMode ? copy.loginAccountPlaceholder : translateUi('uiMessages.m28f9afcc275a')"
               required
             />
           </div>
 
           <div v-if="!resetMode">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              🔒 密码
+              {{ translateUi('uiMessages.mdcb0e6666186') }}
             </label>
             <input 
               v-model="password" 
               type="password" 
               class="input"
-              placeholder="请输入密码"
+              :placeholder="translateUi('uiMessages.m728a7b601c56')"
               required
             />
           </div>
@@ -507,14 +509,14 @@ function handleSmsAuthenticated() {
           <!-- 邮箱验证码（注册时且需要验证时显示，或密码重置时） -->
           <div v-if="(mode === 'register' && emailConfig.require_email_verification) || resetMode">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              📬 邮箱验证码 *
+              {{ translateUi('uiMessages.m0096358dcbfa') }}
             </label>
             <div class="flex space-x-2">
               <input 
                 v-model="emailCode" 
                 type="text" 
                 class="input flex-1"
-                placeholder="请输入6位验证码"
+                :placeholder="translateUi('uiMessages.m6bc8d6f5786b')"
                 maxlength="6"
                 required
               />
@@ -524,7 +526,7 @@ function handleSmsAuthenticated() {
                 :disabled="sendingCode || codeSent || !fullEmail"
                 class="btn-secondary whitespace-nowrap"
               >
-                {{ sendingCode ? '发送中...' : codeSent ? `${countdown}秒后重发` : '发送验证码' }}
+                {{ sendingCode ? translateUi('auth.sending') : codeSent ? translateUi('uiMessages.med3a91ed4429', { value1: (countdown) }) : translateUi('auth.sendCode') }}
               </button>
             </div>
           </div>
@@ -532,13 +534,13 @@ function handleSmsAuthenticated() {
           <!-- 新密码（密码重置时显示） -->
           <div v-if="resetMode">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              🔒 新密码 *
+              {{ translateUi('uiMessages.m121ade4d580a') }}
             </label>
             <input 
               v-model="newPassword" 
               type="password" 
               class="input"
-              placeholder="请输入新密码（至少6位）"
+              :placeholder="translateUi('uiMessages.medef5df61d32')"
               required
             />
           </div>
@@ -546,13 +548,13 @@ function handleSmsAuthenticated() {
           <!-- 确认新密码（密码重置时显示） -->
           <div v-if="resetMode">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              🔒 确认新密码 *
+              {{ translateUi('uiMessages.m30a2e8e4e716') }}
             </label>
             <input 
               v-model="confirmPassword" 
               type="password" 
               class="input"
-              placeholder="请再次输入新密码"
+              :placeholder="translateUi('user.enterConfirmPassword')"
               required
             />
           </div>
@@ -560,20 +562,20 @@ function handleSmsAuthenticated() {
           <!-- 邀请码输入（仅注册时显示） -->
           <div v-if="mode === 'register' && !resetMode">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              🎁 邀请码{{ requireInviteCode ? ' *' : '（可选）' }}
+              {{ translateUi('uiMessages.maa8359e65c1d', { value1: (requireInviteCode ? ' *' : translateUi('uiMessages.m3d5c3c3dbaca')) }) }}
             </label>
             <input
               v-model="inviteCode"
               type="text"
               class="input"
-              :placeholder="requireInviteCode ? '必填：请输入邀请码' : '请输入邀请码'"
+              :placeholder="requireInviteCode ? translateUi('uiMessages.medfbb29710fa') : translateUi('uiMessages.m884fcf3305da')"
               :required="requireInviteCode"
             />
             <p v-if="requireInviteCode" class="mt-2 text-xs text-orange-500 dark:text-orange-400">
-              ⚠️ 该租户已开启邀请码注册，必须填写有效的邀请码
+              {{ translateUi('uiMessages.m237d848d0c3f') }}
             </p>
             <p v-else-if="inviteRewardText" class="mt-2 text-xs text-slate-500 dark:text-slate-400">
-              💡 填写邀请码{{ inviteRewardAfterFirstPayment ? '可' : '即可' }}获得奖励：{{ inviteRewardText }}
+              {{ translateUi('uiMessages.m19dd8f378946', { value1: (inviteRewardAfterFirstPayment ? translateUi('uiMessages.m8b9cefa38e83') : translateUi('uiMessages.mdb9c132f9b81')), value2: (inviteRewardText) }) }}
             </p>
           </div>
 
@@ -586,7 +588,7 @@ function handleSmsAuthenticated() {
               v-model="signupSource"
               class="input bg-white dark:bg-dark-700 text-slate-900 dark:text-slate-100"
             >
-              <option value="">请选择</option>
+              <option value="">{{ translateUi('uiMessages.mda590a8fe3ce') }}</option>
               <option v-for="option in SIGNUP_SOURCE_OPTIONS" :key="option.value" :value="option.value">
                 {{ option.label }}
               </option>
@@ -604,10 +606,10 @@ function handleSmsAuthenticated() {
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              处理中...
+              {{ translateUi('common.processing') }}
             </span>
             <span v-else>
-              {{ resetMode ? '重置密码' : (mode === 'register' ? '注册账户' : '登录') }}
+              {{ resetMode ? translateUi('uiMessages.md70928debc2e') : (mode === 'register' ? translateUi('uiMessages.m223713a2813d') : translateUi('nav.login')) }}
             </span>
           </button>
 
@@ -619,7 +621,7 @@ function handleSmsAuthenticated() {
               @click="resetMode = true"
               class="text-sm text-primary-600 dark:text-primary-400 hover:underline"
             >
-              忘记密码？
+              {{ translateUi('uiMessages.m1d02d7f1c5c4') }}
             </button>
             <button
               v-if="resetMode"
@@ -627,7 +629,7 @@ function handleSmsAuthenticated() {
               @click="resetMode = false; mode = 'login'"
               class="text-sm text-slate-600 dark:text-slate-400 hover:underline"
             >
-              返回登录
+              {{ translateUi('uiMessages.m747b0f9082e6') }}
             </button>
           </div>
         </form>
@@ -659,7 +661,7 @@ function handleSmsAuthenticated() {
               <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
             </svg>
             <div class="text-sm text-blue-700 dark:text-blue-400">
-              <p class="font-medium">🎉 邀请码已填写！</p>
+              <p class="font-medium">{{ translateUi('uiMessages.m39e2af69bace') }}</p>
               <p class="mt-1">{{ inviteRewardText }}</p>
             </div>
           </div>
@@ -672,22 +674,22 @@ function handleSmsAuthenticated() {
           <div class="w-12 h-12 mx-auto mb-3 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full flex items-center justify-center">
             <span class="text-white text-xl">🎨</span>
           </div>
-          <h4 class="font-medium text-slate-900 dark:text-slate-100">AI图像生成</h4>
-          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">创造独特的视觉作品</p>
+          <h4 class="font-medium text-slate-900 dark:text-slate-100">{{ translateUi('uiMessages.m7be8a66f6f3f') }}</h4>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ translateUi('uiMessages.m69aa6f22eca4') }}</p>
         </div>
         <div class="text-center">
           <div class="w-12 h-12 mx-auto mb-3 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center">
             <span class="text-white text-xl">⚡</span>
           </div>
-          <h4 class="font-medium text-slate-900 dark:text-slate-100">积分系统</h4>
-          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">注册赠送，邀请有奖</p>
+          <h4 class="font-medium text-slate-900 dark:text-slate-100">{{ translateUi('uiMessages.m4b76b9be6cf2') }}</h4>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ translateUi('uiMessages.m923c9f73c1fe') }}</p>
         </div>
         <div class="text-center">
           <div class="w-12 h-12 mx-auto mb-3 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center">
             <span class="text-white text-xl">📱</span>
           </div>
-          <h4 class="font-medium text-slate-900 dark:text-slate-100">响应式设计</h4>
-          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">随时随地创作</p>
+          <h4 class="font-medium text-slate-900 dark:text-slate-100">{{ translateUi('uiMessages.m8801a7a65da5') }}</h4>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ translateUi('uiMessages.m4d829d8c6c33') }}</p>
         </div>
       </div>
     </div>

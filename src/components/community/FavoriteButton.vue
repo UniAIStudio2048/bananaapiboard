@@ -14,12 +14,14 @@
     >
       <path stroke-linecap="round" stroke-linejoin="round" d="M5 5.5A2.5 2.5 0 017.5 3h9A2.5 2.5 0 0119 5.5v15a.5.5 0 01-.79.407L12 16.5l-6.21 4.407A.5.5 0 015 20.5v-15z" />
     </svg>
-    <span>{{ loading ? '处理中...' : (isFavorited ? '已收藏' : '收藏') }}</span>
+    <span>{{ loading ? translateUi('common.processing') : (isFavorited ? translateUi('uiMessages.m471dd4d7f869') : translateUi('canvas.assetPanel.favorite')) }}</span>
     <span v-if="displayCount > 0" class="text-xs text-white/60">{{ displayCount }}</span>
   </button>
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, ref } from 'vue'
 import { toggleFavorite } from '@/api/community'
 

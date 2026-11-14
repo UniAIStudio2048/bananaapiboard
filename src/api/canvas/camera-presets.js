@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../i18n/index.js'
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 
 function getAuthHeaders() {
@@ -20,7 +21,7 @@ export async function getCameraPresets(spaceType = 'personal', teamId = null) {
 
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.error || '获取摄像机预设失败')
+    throw new Error(error.error || translateUi('uiMessages.m593e6b9d9d25'))
   }
 
   return response.json()
@@ -35,7 +36,7 @@ export async function createCameraPreset({ name, settings, summary, spaceType, t
 
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.error || '创建摄像机预设失败')
+    throw new Error(error.error || translateUi('uiMessages.mb06510fba7e1'))
   }
 
   return response.json()
@@ -50,7 +51,7 @@ export async function updateCameraPreset(id, { name, settings, summary, sortOrde
 
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.error || '更新摄像机预设失败')
+    throw new Error(error.error || translateUi('uiMessages.m2096e1478fb9'))
   }
 
   return response.json()
@@ -64,7 +65,7 @@ export async function deleteCameraPreset(id) {
 
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.error || '删除摄像机预设失败')
+    throw new Error(error.error || translateUi('uiMessages.m9761acf10790'))
   }
 
   return response.json()
@@ -79,7 +80,7 @@ export async function setActiveCameraPreset(presetId, spaceType = 'personal', te
 
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.error || '设置激活预设失败')
+    throw new Error(error.error || translateUi('uiMessages.m7b98a9385af1'))
   }
 
   return response.json()

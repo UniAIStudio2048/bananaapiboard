@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * NodeSelector.vue - 节点选择器面板
  */
@@ -292,9 +294,9 @@ function handleAudioOperation(operationType) {
       type: 'text-input',
       position: textPosition,
       data: {
-        title: '提取文案',
+        title: translateUi('uiMessages.m639126e780f2'),
         text: '',
-        placeholder: '音频转文字结果将显示在这里...'
+        placeholder: translateUi('uiMessages.mcbf4612c2f89')
       }
     })
     if (textNode?.id) {
@@ -316,7 +318,7 @@ function handleAudioOperation(operationType) {
       type: 'image-input',
       position: imagePosition,
       data: {
-        title: '人物图片',
+        title: translateUi('uiMessages.m0870dff55644'),
         sourceImages: ['/logo.svg'],
         status: 'success'
       }
@@ -377,7 +379,7 @@ function createStoryboardGrid() {
     type: 'storyboard',
     position,
     data: {
-      title: '分镜格子',
+      title: translateUi('canvas.nodeConfig.storyboardGrid.label'),
       gridSize: '3x3', // 默认 3x3
       aspectRatio: '16:9', // 默认 16:9
       images: [], // 存储图片 URL
@@ -446,7 +448,7 @@ function selectNodeType(type) {
   }
   
   // 准备节点初始数据
-  const nodeData = type === 'script' ? { title: '脚本', width: 380, height: 320 } : type === 'video-breakdown' ? { title: '逐帧拉片', width: 340, height: 500, breakdownDimensions: ['shots', 'motions', 'audio'], status: 'idle' } : {}
+  const nodeData = type === 'script' ? { title: translateUi('uiMessages.m5d4f709636ee'), width: 380, height: 320 } : type === 'video-breakdown' ? { title: translateUi('uiMessages.md41f3dc4304e'), width: 340, height: 500, breakdownDimensions: ['shots', 'motions', 'audio'], status: 'idle' } : {}
   
   // 检查是否是 LLM 预设类型，如果是，转换为文本节点 + 预设
   let actualNodeType = type
@@ -461,7 +463,7 @@ function selectNodeType(type) {
   } else if (LLM_PRESET_MAP[type]) {
     actualNodeType = 'text-input'
     nodeData.selectedPreset = LLM_PRESET_MAP[type]
-    nodeData.title = NODE_TYPE_CONFIG[type]?.label || '文本'
+    nodeData.title = NODE_TYPE_CONFIG[type]?.label || translateUi('canvas.nodeConfig.textInput.label')
   }
 
   if (type === DIRECTOR_STUDIO_NODE_TYPE) {
@@ -480,7 +482,7 @@ function selectNodeType(type) {
       position.x = triggerNode.value.position.x + 500
       position.y = triggerNode.value.position.y
     }
-    nodeData.title = '分镜格子'
+    nodeData.title = translateUi('canvas.nodeConfig.storyboardGrid.label')
     nodeData.gridSize = '3x3'
     nodeData.aspectRatio = '16:9'
     nodeData.images = Array(9).fill(null)
@@ -504,7 +506,7 @@ function selectNodeType(type) {
       // 设置生成数量为 9（但实际通过 count 参数控制）
       nodeData.count = 9
       // 设置标题
-      nodeData.title = '9宫格分镜'
+      nodeData.title = translateUi('uiMessages.m24ddde14ada1')
     }
   }
   
@@ -514,8 +516,8 @@ function selectNodeType(type) {
     const sourceData = triggerNode.value.data
     if (sourceData?.output?.url) {
       actualNodeType = 'video'
-      nodeData.title = '视频编辑'
-      nodeData.label = '视频编辑'
+      nodeData.title = translateUi('canvas.nodeConfig.videoEdit.label')
+      nodeData.label = translateUi('canvas.nodeConfig.videoEdit.label')
       nodeData.nodeRole = 'edit'
       nodeData.editMode = true
       nodeData.sourceVideoUrl = sourceData.output.url
@@ -528,8 +530,8 @@ function selectNodeType(type) {
     const sourceData = triggerNode.value.data
     if (sourceData?.output?.url) {
       actualNodeType = 'video'
-      nodeData.title = '视频延长'
-      nodeData.label = '视频延长'
+      nodeData.title = translateUi('canvas.videoNode.videoExtend')
+      nodeData.label = translateUi('canvas.videoNode.videoExtend')
       nodeData.nodeRole = 'extend'
       nodeData.extendMode = true
       nodeData.sourceVideoUrl = sourceData.output.url
@@ -560,7 +562,7 @@ function selectNodeType(type) {
       // 将节点类型改为图像节点
       actualNodeType = 'image-input'
       // 设置标题
-      nodeData.title = '尾帧图片'
+      nodeData.title = translateUi('uiMessages.m9b31d6cfb16f')
       // 设置节点角色为源节点（显示提取的图片）
       nodeData.nodeRole = 'source'
       // 标记这是从视频提取的
@@ -568,7 +570,7 @@ function selectNodeType(type) {
       nodeData.videoUrl = sourceData.output.url
       nodeData.needsFrameExtraction = false
       nodeData.status = 'processing'
-      nodeData.progress = '截取中'
+      nodeData.progress = translateUi('uiMessages.mb94d243aa53f')
     }
   }
   
@@ -678,7 +680,7 @@ async function extractLastFrameToNode(nodeId, videoUrl) {
     canvasStore.updateNodeData(nodeId, {
       status: 'error',
       progress: '',
-      error: error.message || '截取视频尾帧失败'
+      error: error.message || translateUi('uiMessages.mb766b26e4837')
     })
   }
 }
@@ -688,7 +690,7 @@ function loadVideoDuration(videoUrl) {
     const video = document.createElement('video')
     const timeout = setTimeout(() => {
       cleanup()
-      reject(new Error('读取视频时长超时'))
+      reject(new Error(translateUi('uiMessages.mb391db5013d3')))
     }, 10000)
 
     function cleanup() {
@@ -706,12 +708,12 @@ function loadVideoDuration(videoUrl) {
       if (duration > 0) {
         resolve(duration)
       } else {
-        reject(new Error('无法读取视频时长'))
+        reject(new Error(translateUi('uiMessages.mfa308eefa87b')))
       }
     }
     video.onerror = () => {
       cleanup()
-      reject(new Error('读取视频时长失败'))
+      reject(new Error(translateUi('uiMessages.m1dcb7b2861cf')))
     }
     video.src = videoUrl
     video.load()
@@ -777,7 +779,7 @@ async function handleFileUpload(event) {
         const blobUrl = URL.createObjectURL(file)
         nodeType = 'image-input'
         nodeData = {
-          title: file.name || '图片',
+          title: file.name || translateUi('canvas.nodeConfig.imageInput.label'),
           nodeRole: 'source',
           sourceImages: [blobUrl],
           isUploading: true
@@ -790,7 +792,7 @@ async function handleFileUpload(event) {
         const blobUrl = URL.createObjectURL(file)
         nodeType = 'video'
         nodeData = {
-          title: file.name || '视频',
+          title: file.name || translateUi('canvas.nodeConfig.videoInput.label'),
           status: 'success',
           output: {
             type: 'video',
@@ -805,7 +807,7 @@ async function handleFileUpload(event) {
         const blobUrl = URL.createObjectURL(file)
         nodeType = 'audio-input'
         nodeData = {
-          title: file.name || '音频',
+          title: file.name || translateUi('canvas.nodeConfig.audioInput.label'),
           audioUrl: blobUrl,
           fileName: file.name,
           status: 'success',
@@ -835,7 +837,7 @@ async function handleFileUpload(event) {
         nodeType = 'text-input'
         nodeData = {
           title: file.name,
-          text: `已上传文件: ${file.name}\n类型: ${fileType}\n大小: ${formatFileSize(file.size)}`
+          text: translateUi('uiMessages.m43033c1ef281', { value1: (file.name), value2: (fileType), value3: (formatFileSize(file.size)) })
         }
       }
       
@@ -1015,7 +1017,7 @@ function formatFileSize(bytes) {
     <!-- 功能选项（仅非节点触发时显示） -->
     <template v-if="!triggerNode">
       <div class="node-selector-divider"></div>
-      <div class="node-selector-title">功能节点</div>
+      <div class="node-selector-title">{{ translateUi('uiMessages.m97d65c93ca03') }}</div>
       <div v-if="isDigitalHumanLibraryEnabled()" class="node-selector-item" @click="selectNodeType(NODE_TYPES.DIGITAL_HUMAN)" :title="t(NODE_TYPE_CONFIG[NODE_TYPES.DIGITAL_HUMAN].description)">
         <UserRound class="node-selector-icon" aria-hidden="true" />
         <div class="node-selector-info">
@@ -1030,11 +1032,11 @@ function formatFileSize(bytes) {
           <div class="node-selector-desc">{{ t(NODE_TYPE_CONFIG[NODE_TYPES.SEEDANCE_CHARACTER].description) }}</div>
         </div>
       </div>
-      <div class="node-selector-item" title="创建可拖拽排序的图片网格" @click="createStoryboardGrid">
+      <div class="node-selector-item" :title="translateUi('canvas.nodeConfig.storyboardGrid.desc')" @click="createStoryboardGrid">
         <LayoutGrid class="node-selector-icon" aria-hidden="true" />
         <div class="node-selector-info">
-          <div class="node-selector-name">分镜格子</div>
-          <div class="node-selector-desc">创建可拖拽排序的图片网格</div>
+          <div class="node-selector-name">{{ translateUi('canvas.nodeConfig.storyboardGrid.label') }}</div>
+          <div class="node-selector-desc">{{ translateUi('canvas.nodeConfig.storyboardGrid.desc') }}</div>
         </div>
       </div>
     </template>
@@ -1053,7 +1055,7 @@ function formatFileSize(bytes) {
     
     <button v-if="!triggerNode" type="button" class="node-selector-item history-menu-item" @click="handleSelectHistory">
       <History class="node-selector-icon" aria-hidden="true" />
-      <span class="node-selector-name">从生成历史选择</span>
+      <span class="node-selector-name">{{ translateUi('uiMessages.m73c8136b0056') }}</span>
     </button>
 
     <!-- 隐藏的文件上传输入框 -->

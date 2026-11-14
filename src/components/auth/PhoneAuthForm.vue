@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, ref, watch } from 'vue'
 import PhoneVerificationFields from './PhoneVerificationFields.vue'
 import { smsRequest, completeSmsAuthentication } from '@/api/sms'
@@ -42,7 +44,7 @@ async function submit(){
       <PhoneVerificationFields v-model="verification" :purpose="mode" :countries="countries" :busy="busy" />
       <template v-if="mode!=='login'"><label>{{ mode==='retrieve'?copy.newPassword:copy.password }}<input v-model="password" :placeholder="copy.passwordPlaceholder" type="password" autocomplete="new-password" minlength="6" maxlength="256" required :disabled="busy" /></label><label>{{ copy.confirm }}<input v-model="confirm" :placeholder="copy.confirmPlaceholder" type="password" autocomplete="new-password" required :disabled="busy" /></label></template>
       <label v-if="mode==='register'">{{ copy.invite }}{{ requireInviteCode?' *':'' }}<input v-model="invite" :placeholder="requireInviteCode ? copy.inviteRequired : copy.invitePlaceholder" maxlength="12" :required="requireInviteCode" :disabled="busy" /></label>
-      <label v-if="mode==='register'&&showSignupSource">{{ SIGNUP_SOURCE_LABEL }}<select v-model="signupSource" :disabled="busy"><option value="">请选择</option><option v-for="option in SIGNUP_SOURCE_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
+      <label v-if="mode==='register'&&showSignupSource">{{ SIGNUP_SOURCE_LABEL }}<select v-model="signupSource" :disabled="busy"><option value="">{{ translateUi('uiMessages.mda590a8fe3ce') }}</option><option v-for="option in SIGNUP_SOURCE_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
       <p v-if="error" role="alert" class="sms-error">{{ error }}</p>
       <button type="submit" class="primary" :disabled="busy">{{ busy?copy.submitting:mode==='register'?copy.register:mode==='retrieve'?copy.reset:copy.login }}</button>
     </template>

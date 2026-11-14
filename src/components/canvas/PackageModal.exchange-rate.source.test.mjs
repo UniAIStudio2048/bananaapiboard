@@ -13,5 +13,5 @@ test('package modal loads tenant balance-to-points exchange rate', () => {
 
 test('package modal calculates conversion preview from tenant exchange rate', () => {
   assert.match(source, /Math\.floor\(yuan \* convertExchangeRate\.value\)/)
-  assert.match(source, /汇率：1\{\{ currencyUnitLabel \}\} = \{\{ convertExchangeRate \}\}积分/)
+  assert.match(source, /translateUi\('uiMessages\.mf075f934ac3b', \{ value1: \(currencyUnitLabel\), value2: \(convertExchangeRate\) \}\)/)
 })

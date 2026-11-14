@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import { readFileSync } from 'node:fs'
 import { strict as assert } from 'node:assert'
 import { fileURLToPath } from 'node:url'
@@ -20,7 +21,7 @@ assert.match(
 
 assert.match(
   source,
-  /class="workflow-context-menu"[\s\S]*?class="context-menu-item"[\s\S]*?复制工作流 ID/,
+  localizedPattern(/class="workflow-context-menu"[\s\S]*?class="context-menu-item"[\s\S]*?复制工作流 ID/),
   'The context menu should include an icon-and-label workflow ID copy action'
 )
 
@@ -35,7 +36,7 @@ assert.doesNotMatch(source, /window\.prompt\(/, 'Workflow rename should not use 
 
 assert.match(
   source,
-  /handleWorkflowContextAction\('rename'\)[\s\S]*?重命名工作流/,
+  localizedPattern(/handleWorkflowContextAction\('rename'\)[\s\S]*?重命名工作流/),
   'The context menu should include a workflow rename action'
 )
 

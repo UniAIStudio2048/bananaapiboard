@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi, currentLanguage as uiLanguage } from '@/i18n'
+
 import BreakdownReferenceDetails from '../BreakdownReferenceDetails.vue'
 import { streamVideo as vStreamVideo } from '@/directives/streamVideo'
 import SeedanceReviewButton from '../SeedanceReviewButton.vue'
@@ -204,9 +206,9 @@ const errorMessage = ref('')
 const duplicateSubmitGuard = createCanvasDuplicateSubmitGuard()
 
 function getDisplayErrorMessage(msg) {
-  const message = msg || errorMessage.value || '生成失败'
+  const message = msg || errorMessage.value || translateUi('canvas.audioNode.generateFailed')
   if (props.data?._preserveRawVideoError) {
-    return typeof message === 'string' && message.trim() ? message.trim() : '生成失败'
+    return typeof message === 'string' && message.trim() ? message.trim() : translateUi('imageGen.failed')
   }
   return formatVideoNodeErrorMessage(message, { model: props.data?.model || selectedModel.value })
 }
@@ -256,9 +258,9 @@ function isTimeoutError(msg) {
 
 function getErrorHint(msg) {
   const normalized = getDisplayErrorMessage(msg)
-  if (normalized.includes('时长超限')) return '参考视频时长超出当前渠道限制，请裁剪参考视频后重试'
-  if (isContentSafetyError(normalized)) return '请修改提示词或更换参考图片后重试'
-  if (isTimeoutError(normalized)) return '生成时间过长，请稍后重试或简化提示词'
+  if (normalized.includes('时长超限')) return translateUi('uiMessages.mec91b1e9d32c')
+  if (isContentSafetyError(normalized)) return translateUi('uiMessages.mb8705a65f9cb')
+  if (isTimeoutError(normalized)) return translateUi('uiMessages.m303c84eb838d')
   return ''
 }
 const promptText = ref(sanitizePromptEditorText(props.data.prompt || ''))
@@ -528,7 +530,7 @@ function toggleCount() {
   
   // 检查是否超过用户套餐限制
   if (nextCount > userConcurrentLimit.value) {
-    alert(`您的套餐最大支持 ${userConcurrentLimit.value} 次并发，请升级套餐以使用更多并发`)
+    alert(translateUi('uiMessages.med9fb65e5b97', { value1: (userConcurrentLimit.value) }))
     return
   }
   
@@ -867,7 +869,7 @@ const referenceMediaList = computed(() => {
       type: 'video',
       index: i + 1,
       url,
-      label: `视频${i + 1}`,
+      get label() { return translateUi('uiMessages.m1ffa0c134949', { value1: (i + 1) }) },
       key: getReferenceMediaKey('video', url, i + 1, sourceNode?.id),
       thumbnailUrl: getReferenceVideoThumbnail(url)
     })
@@ -878,7 +880,7 @@ const referenceMediaList = computed(() => {
       type: 'image',
       index: i + 1,
       url,
-      label: `图片${i + 1}`,
+      get label() { return translateUi('uiMessages.m1af51a3a6c2e', { value1: (i + 1) }) },
       key: getReferenceMediaKey('image', url, i + 1, sourceNode?.id),
       thumbnailUrl: getReferenceImageThumbnail(url)
     })
@@ -889,7 +891,7 @@ const referenceMediaList = computed(() => {
       type: 'audio',
       index: i + 1,
       url,
-      label: `音频${i + 1}`,
+      get label() { return translateUi('uiMessages.m01182cf2cda3', { value1: (i + 1) }) },
       key: getReferenceMediaKey('audio', url, i + 1, sourceNode?.id)
     })
   })
@@ -1375,10 +1377,10 @@ const viduDisplayResolutions = computed(() => {
 
 // Vidu 模式选项
 const VIDU_MODE_OPTIONS = [
-  { value: 'auto', label: '自动选择', description: '根据图片数量自动选择', maxImages: 7 },
-  { value: 'i2v', label: '首帧驱动', description: '单图生成视频', maxImages: 1 },
-  { value: 'start-end', label: '首尾帧', description: '首帧到尾帧过渡', maxImages: 2, minImages: 2 },
-  { value: 'reference', label: '多图参考', description: '综合多图元素创作', maxImages: 7 }
+  { value: 'auto', get label() { return translateUi('uiMessages.mdb9773faa309') }, get description() { return translateUi('uiMessages.meb0287c1b2aa') }, maxImages: 7 },
+  { value: 'i2v', get label() { return translateUi('uiMessages.m65d2a0f60dd8') }, get description() { return translateUi('uiMessages.m8fe432d5126d') }, maxImages: 1 },
+  { value: 'start-end', get label() { return translateUi('uiMessages.ma44f24ac18b3') }, get description() { return translateUi('uiMessages.m2e582f4ae3a1') }, maxImages: 2, minImages: 2 },
+  { value: 'reference', get label() { return translateUi('uiMessages.m0d99795be0dd') }, get description() { return translateUi('uiMessages.m12fd5353ce7c') }, maxImages: 7 }
 ]
 
 // ==================== Kling 模型相关 ====================
@@ -1404,22 +1406,22 @@ const klingCameraValue = ref(props.data.klingCameraValue || 0)  // simple 模式
 
 // Kling 运镜类型选项
 const KLING_CAMERA_TYPES = [
-  { value: '', label: '智能匹配', description: '根据文本/图片自动选择' },
-  { value: 'simple', label: '简单运镜', description: '自定义单一方向运镜' },
-  { value: 'down_back', label: '下移拉远', description: '镜头下压并后退' },
-  { value: 'forward_up', label: '推进上移', description: '镜头前进并上仰' },
-  { value: 'right_turn_forward', label: '右旋推进', description: '先右旋转后前进' },
-  { value: 'left_turn_forward', label: '左旋推进', description: '先左旋并前进' }
+  { value: '', get label() { return translateUi('uiMessages.mf378166f5749') }, get description() { return translateUi('uiMessages.m3d5fd61af8df') } },
+  { value: 'simple', get label() { return translateUi('uiMessages.m6c385147ff31') }, get description() { return translateUi('uiMessages.m2002e108a6b5') } },
+  { value: 'down_back', get label() { return translateUi('uiMessages.md295419fc6cb') }, get description() { return translateUi('uiMessages.m373c50d9599c') } },
+  { value: 'forward_up', get label() { return translateUi('uiMessages.mc7a5620490de') }, get description() { return translateUi('uiMessages.mad4e5d6355a3') } },
+  { value: 'right_turn_forward', get label() { return translateUi('uiMessages.m4f440a3d8153') }, get description() { return translateUi('uiMessages.m148310fb656a') } },
+  { value: 'left_turn_forward', get label() { return translateUi('uiMessages.m778ff2c1fedd') }, get description() { return translateUi('uiMessages.m04d1a60fd185') } }
 ]
 
 // Kling simple 模式配置选项（6选1）
 const KLING_CAMERA_CONFIGS = [
-  { value: 'horizontal', label: '水平运镜', description: '沿x轴平移，负左正右' },
-  { value: 'vertical', label: '垂直运镜', description: '沿y轴平移，负下正上' },
-  { value: 'pan', label: '水平摇镜', description: '绕y轴旋转，负左正右' },
-  { value: 'tilt', label: '垂直摇镜', description: '绕x轴旋转，负下正上' },
-  { value: 'roll', label: '旋转运镜', description: '绕z轴旋转，负逆正顺' },
-  { value: 'zoom', label: '变焦', description: '焦距变化，负拉近正推远' }
+  { value: 'horizontal', get label() { return translateUi('uiMessages.m868ae9d70fc4') }, get description() { return translateUi('uiMessages.m832813996e05') } },
+  { value: 'vertical', get label() { return translateUi('uiMessages.mef8991043c83') }, get description() { return translateUi('uiMessages.m868eafff6b31') } },
+  { value: 'pan', get label() { return translateUi('uiMessages.m18998965e4d8') }, get description() { return translateUi('uiMessages.mee208883337a') } },
+  { value: 'tilt', get label() { return translateUi('uiMessages.ma44ebae5a8c3') }, get description() { return translateUi('uiMessages.m66be6024003b') } },
+  { value: 'roll', get label() { return translateUi('uiMessages.mb1bffae797fc') }, get description() { return translateUi('uiMessages.me98f81c5020e') } },
+  { value: 'zoom', get label() { return translateUi('uiMessages.m069090904c7d') }, get description() { return translateUi('uiMessages.ma333f7cd7167') } }
 ]
 
 // Kling 2.6+ 音频相关选项
@@ -1581,12 +1583,12 @@ function getFirstAvailableMode(preferredMode, availableModes, fallback = 'text2v
 }
 
 const SEEDANCE2_MODES = [
-  { value: 'text2video', label: '文生视频', desc: '纯文本提示词生成视频', needsImage: false, needsVideo: false },
-  { value: 'image2video_first', label: '首帧', desc: '1张图作为首帧', needsImage: true, needsVideo: false, maxImages: 1 },
-  { value: 'image2video_first_last', label: '首尾帧', desc: '2张图分别作为首帧和尾帧', needsImage: true, needsVideo: false, maxImages: 2 },
-  { value: 'multimodal_ref', label: '多模态', desc: '可连接上游视频/图像/文本/音频节点', needsImage: false, needsVideo: false, maxImages: 9 },
-  { value: 'video_edit', label: '编辑', desc: '需连接上游视频节点，图片/文本/音频可选', needsImage: false, needsVideo: true },
-  { value: 'video_extend', label: '延长', desc: '需连接上游视频节点，最多支持3段视频参考', needsImage: false, needsVideo: true }
+  { value: 'text2video', get label() { return translateUi('canvas.nodeTypes.textToVideo') }, get desc() { return translateUi('uiMessages.m7b312d899ff1') }, needsImage: false, needsVideo: false },
+  { value: 'image2video_first', get label() { return translateUi('uiMessages.m0eee51419641') }, get desc() { return translateUi('uiMessages.me15d3718fe27') }, needsImage: true, needsVideo: false, maxImages: 1 },
+  { value: 'image2video_first_last', get label() { return translateUi('uiMessages.ma44f24ac18b3') }, get desc() { return translateUi('uiMessages.m9e20659387ae') }, needsImage: true, needsVideo: false, maxImages: 2 },
+  { value: 'multimodal_ref', get label() { return translateUi('uiMessages.m5d7b7e77768b') }, get desc() { return translateUi('uiMessages.mdfdb839e05d9') }, needsImage: false, needsVideo: false, maxImages: 9 },
+  { value: 'video_edit', get label() { return translateUi('common.edit') }, get desc() { return translateUi('uiMessages.md80de9eba738') }, needsImage: false, needsVideo: true },
+  { value: 'video_extend', get label() { return translateUi('uiMessages.m2895115abd8a') }, get desc() { return translateUi('uiMessages.m85d8cd6c0835') }, needsImage: false, needsVideo: true }
 ]
 
 const supportedModesConfig = computed(() => {
@@ -1605,11 +1607,11 @@ const seedance2Modes = computed(() => {
       return {
         ...mode,
         maxImages: seedance2Limits.value.maxImages,
-        desc: `可连接上游视频/图像/文本/音频节点，最多 ${seedance2Limits.value.maxImages} 图 / ${seedance2Limits.value.maxVideos} 视频 / ${seedance2Limits.value.maxAudios} 音频`
+        get desc() { return translateUi('uiMessages.m1f6ee3977b81', { value1: (seedance2Limits.value.maxImages), value2: (seedance2Limits.value.maxVideos), value3: (seedance2Limits.value.maxAudios) }) }
       }
     }
     if (mode.value === 'video_extend') {
-      return { ...mode, desc: `需连接上游视频节点，最多支持${seedance2Limits.value.maxVideos}段视频参考` }
+      return { ...mode, get desc() { return translateUi('uiMessages.m56431468c684', { value1: (seedance2Limits.value.maxVideos) }) } }
     }
     return mode
   })
@@ -1628,9 +1630,9 @@ const minimaxH3Resolution = ref(props.data.minimaxH3Resolution || '')
 let didInitializeMinimaxH3Mode = Boolean(props.data.minimaxH3Mode)
 
 const MINIMAX_H3_MODES = [
-  { value: 'text2video', label: '文生视频', desc: '纯文本提示词生成视频', needsImage: false, maxImages: 0 },
-  { value: 'image2video_first', label: '图生视频', desc: '1张图片作为首帧', needsImage: true, maxImages: 1 },
-  { value: 'multimodal_ref', label: '参考生视频', desc: '参考图片/视频/音频生成视频', needsImage: false, maxImages: 9 }
+  { value: 'text2video', get label() { return translateUi('canvas.nodeTypes.textToVideo') }, get desc() { return translateUi('uiMessages.m7b312d899ff1') }, needsImage: false, maxImages: 0 },
+  { value: 'image2video_first', get label() { return translateUi('canvas.nodeTypes.imageToVideo') }, get desc() { return translateUi('uiMessages.mf88b41d276f2') }, needsImage: true, maxImages: 1 },
+  { value: 'multimodal_ref', get label() { return translateUi('uiMessages.ma57e31487279') }, get desc() { return translateUi('uiMessages.mb0e6fe236557') }, needsImage: false, maxImages: 9 }
 ]
 
 const minimaxH3Modes = computed(() => {
@@ -1733,11 +1735,11 @@ async function uploadWan3Document(file) {
   const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
   const contentType = WAN3_DOCUMENT_CONTENT_TYPES[extension]
   if (!contentType) {
-    await showAlert('参考文件仅支持 doc、docx、xls、xlsx、ppt、pptx、pdf、txt、key、pages、numbers 或 md', '文件格式不支持')
+    await showAlert(translateUi('uiMessages.m4a105c09dca8'), translateUi('uiMessages.m24cd1a8c47de'))
     return
   }
   if (file.size > 100 * 1024 * 1024) {
-    await showAlert('参考文件不能超过100MB', '文件过大')
+    await showAlert(translateUi('uiMessages.m364b7866badc'), translateUi('uiMessages.m5bfcab76a601'))
     return
   }
 
@@ -1748,13 +1750,13 @@ async function uploadWan3Document(file) {
       : new File([file], file.name, { type: contentType, lastModified: file.lastModified })
     const uploaded = await uploadCanvasDocument(uploadFile, { nodeId: props.id, tabId: canvasStore.activeTabId })
     if (uploaded.status !== 'completed' || !uploaded.url) {
-      throw new Error('参考文件上传未完成')
+      throw new Error(translateUi('uiMessages.m9fa18284e979'))
     }
     wan3File.value = { url: uploaded.url, name: file.name, size: file.size }
     wan3Link.value = ''
-    showToast('参考文件上传完成', 'success')
+    showToast(translateUi('uiMessages.m380a52a739ba'), 'success')
   } catch (error) {
-    await showAlert(error.message || '参考文件上传失败，请重试', '上传失败')
+    await showAlert(error.message || translateUi('uiMessages.mb73a9315f7d8'), translateUi('errors.uploadFailed'))
   } finally {
     wan3FileUploading.value = false
   }
@@ -1776,8 +1778,8 @@ const isWanModel = computed(() => isWanVideoModel(currentModelConfig.value))
 const selectedWanMode = ref(props.data.wanMode || 't2v')
 const selectedWanAnimateMode = ref(props.data.wanAnimateMode || 'wan-std')
 const wanAnimateModeOptions = [
-  { value: 'wan-std', label: '标准' },
-  { value: 'wan-pro', label: '专业' }
+  { value: 'wan-std', get label() { return translateUi('directorStudio.cameraPresets.standard') } },
+  { value: 'wan-pro', get label() { return translateUi('uiMessages.m349b21c03d6a') } }
 ]
 
 const wanSupportedModesConfig = computed(() => {
@@ -1817,10 +1819,10 @@ async function setAutoReviewMaterials(event) {
       canvas: { ...preferences.canvas, autoReviewMaterials: { ...preferences.canvas?.autoReviewMaterials, [model]: enabled } }
     }
     const result = await updateUserPreferences(updatedPreferences)
-    if (!result?.success) throw new Error('自动过审设置保存失败，请重试')
+    if (!result?.success) throw new Error(translateUi('uiMessages.m7c54f60a9dff'))
     if (userInfo?.value) userInfo.value.preferences = updatedPreferences
   } catch (error) {
-    showToast(error.message || '自动校验设置保存失败', 'error')
+    showToast(error.message || translateUi('uiMessages.m144dacf3832f'), 'error')
   } finally { savingAutoReview.value = false }
 }
 
@@ -1849,20 +1851,20 @@ const validateMotionVideoUrl = async (url) => {
       video.onloadedmetadata = () => {
         klingMotionVideoDuration.value = Math.ceil(video.duration)
         if (video.duration > 30) {
-          klingMotionVideoError.value = `视频时长 ${Math.ceil(video.duration)} 秒，超过最大限制 30 秒`
+          klingMotionVideoError.value = translateUi('uiMessages.ma02e79eb125c', { value1: (Math.ceil(video.duration)) })
         } else {
           klingMotionVideoError.value = ''
         }
         resolve()
       }
       video.onerror = () => {
-        klingMotionVideoError.value = '无法加载视频，请检查URL是否正确'
+        klingMotionVideoError.value = translateUi('uiMessages.m4b806fede93b')
         reject(new Error('Video load failed'))
       }
       // 添加超时处理
       setTimeout(() => {
         if (!video.duration) {
-          klingMotionVideoError.value = '视频加载超时，请检查URL'
+          klingMotionVideoError.value = translateUi('uiMessages.m50160db351ce')
           reject(new Error('Video load timeout'))
         }
       }, 10000)
@@ -1971,10 +1973,10 @@ const veoResolution = ref(props.data.veoResolution || '1080p')
 // VEO 模式选项（从模型配置获取）
 const VEO_MODE_OPTIONS = computed(() => {
   return currentModelConfig.value?.veoModes || [
-    { value: 'fast', label: 'fast首尾帧', description: '快速生成', actualModel: 'veo3.1-fast', maxImages: 2, pointsCost: 80 },
-    { value: 'standard', label: '首尾帧', description: '标准质量', actualModel: 'veo3.1', maxImages: 2, pointsCost: 100 },
-    { value: 'components', label: '多图参考', description: '最多3张图', actualModel: 'veo3.1-components', maxImages: 3, pointsCost: 120 },
-    { value: 'pro', label: 'Pro首尾帧', description: '最高画质', actualModel: 'veo3.1-pro', maxImages: 2, pointsCost: 150 }
+    { value: 'fast', get label() { return translateUi('uiMessages.me73a6863512c') }, get description() { return translateUi('uiMessages.m893819bb34b0') }, actualModel: 'veo3.1-fast', maxImages: 2, pointsCost: 80 },
+    { value: 'standard', get label() { return translateUi('uiMessages.ma44f24ac18b3') }, get description() { return translateUi('uiMessages.md5aea2920992') }, actualModel: 'veo3.1', maxImages: 2, pointsCost: 100 },
+    { value: 'components', get label() { return translateUi('uiMessages.m0d99795be0dd') }, get description() { return translateUi('uiMessages.mfe8ba45f9518') }, actualModel: 'veo3.1-components', maxImages: 3, pointsCost: 120 },
+    { value: 'pro', get label() { return translateUi('uiMessages.me57de3ba874e') }, get description() { return translateUi('uiMessages.m80a084036462') }, actualModel: 'veo3.1-pro', maxImages: 2, pointsCost: 150 }
   ]
 })
 
@@ -2057,12 +2059,12 @@ const selectedKlingV3OmniMode = ref(props.data.klingV3OmniMode || 'text2video')
 function getDefaultKlingV3OmniModes(modelConfig = {}) {
   const actualModel = modelConfig.value || modelConfig.name || selectedModel.value
   return [
-    { value: 'text2video', label: '文生视频', subMode: 'text2video', actualModel, maxImages: 0, description: '纯文本生成视频' },
-    { value: 'image2video', label: '图生视频', subMode: 'image2video', actualModel, maxImages: 1, description: '单张首帧图生成视频' },
-    { value: 'first_last_frame', label: '首尾帧', subMode: 'first_last_frame', actualModel, maxImages: 2, description: '首帧和尾帧控制视频' },
-    { value: 'subject_control', label: '主体控制', subMode: 'subject_control', actualModel, maxImages: 7, description: '使用参考图控制主体' },
-    { value: 'video_reference', label: '视频参考', subMode: 'video_reference', actualModel, maxImages: 4, description: '参考视频风格或动作' },
-    { value: 'multi_shot', label: '多镜头', subMode: 'multi_shot', actualModel, maxImages: 7, description: '多镜头叙事视频' }
+    { value: 'text2video', label: translateUi('canvas.nodeTypes.textToVideo'), subMode: 'text2video', actualModel, maxImages: 0, description: translateUi('uiMessages.mad66a5f2c57c') },
+    { value: 'image2video', label: translateUi('canvas.nodeTypes.imageToVideo'), subMode: 'image2video', actualModel, maxImages: 1, description: translateUi('uiMessages.mf2cacb4b6316') },
+    { value: 'first_last_frame', label: translateUi('uiMessages.ma44f24ac18b3'), subMode: 'first_last_frame', actualModel, maxImages: 2, description: translateUi('uiMessages.m84ef40b46c16') },
+    { value: 'subject_control', label: translateUi('uiMessages.med8546148e1e'), subMode: 'subject_control', actualModel, maxImages: 7, description: translateUi('uiMessages.m599cbd6ea4af') },
+    { value: 'video_reference', label: translateUi('uiMessages.mc85d51e6e4b6'), subMode: 'video_reference', actualModel, maxImages: 4, description: translateUi('uiMessages.mbfdce0e7f7c4') },
+    { value: 'multi_shot', label: translateUi('uiMessages.m4d5610ea36d3'), subMode: 'multi_shot', actualModel, maxImages: 7, description: translateUi('uiMessages.m50498b4b957e') }
   ]
 }
 
@@ -2180,12 +2182,12 @@ const isRunningHubAiAppVideoModel = computed(() => {
 
 // RunningHub 全能视频 V3.1：六种生成模式（与视频生成页快速模板一致）
 const RUNNINGHUB_V31_MODES = [
-  { value: 't2v', label: '文生视频', needsImages: 0, needsAudio: false },
-  { value: 'i2v', label: '图生视频（首帧）', needsImages: 1, needsAudio: false },
-  { value: 'first_last_frame', label: '首尾帧生视频', needsImages: 2, needsAudio: false },
-  { value: 'last_frame', label: '尾帧生视频', needsImages: 1, needsAudio: false },
-  { value: 'multi_image', label: '多图生视频（≤3图）', needsImages: 1, needsAudio: false },
-  { value: 'image_audio', label: '图像+音频生视频', needsImages: 1, needsAudio: true }
+  { value: 't2v', get label() { return translateUi('canvas.nodeTypes.textToVideo') }, needsImages: 0, needsAudio: false },
+  { value: 'i2v', get label() { return translateUi('uiMessages.mcba35bf1fba8') }, needsImages: 1, needsAudio: false },
+  { value: 'first_last_frame', get label() { return translateUi('uiMessages.mffac1f54a210') }, needsImages: 2, needsAudio: false },
+  { value: 'last_frame', get label() { return translateUi('uiMessages.m01d4729a767b') }, needsImages: 1, needsAudio: false },
+  { value: 'multi_image', get label() { return translateUi('uiMessages.macf43c0bc42e') }, needsImages: 1, needsAudio: false },
+  { value: 'image_audio', get label() { return translateUi('uiMessages.mac958a0778ba') }, needsImages: 1, needsAudio: true }
 ]
 const isRunningHubAiAppVideoV31Model = computed(() => currentModelConfig.value?.apiType === 'runninghub-ai-app-video-v31')
 const isLongCatModel = computed(() => currentModelConfig.value?.apiType === 'runninghub-longcat')
@@ -2455,14 +2457,14 @@ watch(seedance25ModeConstraints, () => {
 }, { immediate: true })
 
 const aspectRatios = [
-  { value: '16:9', label: '16:9 横屏' },
-  { value: '9:16', label: '9:16 竖屏' },
-  { value: '1:1', label: '1:1 方形' },
+  { value: '16:9', get label() { return translateUi('uiMessages.mad2164a05f00') } },
+  { value: '9:16', get label() { return translateUi('uiMessages.m30f5816508c2') } },
+  { value: '1:1', get label() { return translateUi('uiMessages.m5a2d829e4234') } },
   { value: '3:4', label: '3:4' },
   { value: '4:3', label: '4:3' },
   { value: '3:2', label: '3:2' },
   { value: '2:3', label: '2:3' },
-  { value: '21:9', label: '21:9 超宽' }
+  { value: '21:9', get label() { return translateUi('uiMessages.m811454bf5ef1') } }
 ]
 
 const availableAspectRatios = computed(() => {
@@ -2470,12 +2472,12 @@ const availableAspectRatios = computed(() => {
   if (seedance25ModeConstraints.value?.ratio) {
     return [{
       value: seedance25ModeConstraints.value.ratio,
-      displayLabel: isZh ? '自适应' : 'Auto'
+      displayLabel: isZh ? translateUi('uiMessages.m8f1f75950e38') : 'Auto'
     }]
   }
   // multimodal_ref（reference）官方不限制比例：既可选具体宽高比，也可选自适应 adaptive。
   // 在比例列表前补一个「自适应」选项，让用户能显式选 adaptive。
-  const adaptiveOption = { value: 'adaptive', label: isZh ? '自适应' : 'Auto', displayLabel: isZh ? '自适应' : 'Auto' }
+  const adaptiveOption = { value: 'adaptive', label: isZh ? translateUi('uiMessages.m8f1f75950e38') : 'Auto', displayLabel: isZh ? translateUi('uiMessages.m8f1f75950e38') : 'Auto' }
   const isMultimodalRef = seedance25ModeConstraints.value?.omniReferenceTaskType === 'reference'
 
   const configuredRatios = currentModelConfig.value?.aspectRatios
@@ -2542,7 +2544,7 @@ const durations = computed(() => {
   // video_edit 模式时长固定为「自动」(-1)，基于 mode ref 即时判定，不依赖异步加载的 seedance25ModeConstraints
   // （seedance2Limits.js: video_edit duration=-1 硬编码，后端永远预扣 10s）
   if (isSeedance2Model.value && selectedSeedance2Mode.value === 'video_edit') {
-    return [{ value: '-1', label: '自动' }]
+    return [{ value: '-1', get label() { return translateUi('imageGen.auto') } }]
   }
   // auto 时长：模型 seedanceConfig.autoDuration===true 时支持 auto（非 text2video）；或当前模式 constraints 标记 duration=-1
   const supportsAuto = isSeedance2Model.value && (
@@ -2565,7 +2567,7 @@ const durations = computed(() => {
 
   // auto 选项插到最前（在 1 秒前），text2video 模式不显示 auto（与现有约束一致）
   if (supportsAuto && selectedSeedance2Mode.value !== 'text2video') {
-    return [{ value: '-1', label: '自动' }, ...secondOptions]
+    return [{ value: '-1', get label() { return translateUi('imageGen.auto') } }, ...secondOptions]
   }
   return secondOptions
 })
@@ -2723,7 +2725,7 @@ async function retryFetchVideoUrl(taskId, retryCount = 0) {
     canvasStore.updateNodeData(props.id, {
       status: 'error',
       progress: null,
-      error: '视频处理完成但获取失败，请点击重试',
+      error: translateUi('uiMessages.m1ba80e3ccdf9'),
       _failedTaskId: taskId
     })
     removeCompletedTask(taskId)
@@ -2762,7 +2764,7 @@ async function retryFetchVideoUrl(taskId, retryCount = 0) {
 async function handleManualRetryFetch() {
   const taskId = props.data?.taskId || props.data?.soraTaskId || props.data?._failedTaskId
   if (!taskId) {
-    showToast('无法获取任务ID，请重新生成', 'error')
+    showToast(translateUi('uiMessages.mbee5d183dfbb'), 'error')
     return
   }
 
@@ -2770,7 +2772,7 @@ async function handleManualRetryFetch() {
 
   canvasStore.updateNodeData(props.id, {
     status: 'processing',
-    progress: isHD ? '重新获取高清视频...' : '重新获取中...',
+    progress: isHD ? translateUi('uiMessages.m8d847c3e1ee1') : translateUi('uiMessages.m3358a973fc5b'),
     error: null,
     _preserveRawVideoError: false
   })
@@ -2793,7 +2795,7 @@ async function handleManualRetryFetch() {
         ...(isHD ? { pointsCost: result?.pointsCost || 0 } : {})
       })
       removeCompletedTask(taskId)
-      showToast(isHD ? '高清视频获取成功' : '视频获取成功', 'success')
+      showToast(isHD ? translateUi('uiMessages.m89b64f2e0ace') : translateUi('uiMessages.m88c6bb62cb12'), 'success')
     } else {
       const statusLower = (result?.status || '').toLowerCase()
       if (statusLower === 'failure' || statusLower === 'failed' || statusLower === 'timeout') {
@@ -2801,20 +2803,20 @@ async function handleManualRetryFetch() {
         canvasStore.updateNodeData(props.id, {
           status: 'error',
           progress: null,
-          ...buildAsyncVideoErrorData(result?.error || result?.fail_reason || (isHD ? '高清处理失败' : '视频生成失败'), model)
+          ...buildAsyncVideoErrorData(result?.error || result?.fail_reason || (isHD ? translateUi('uiMessages.m8c799ce57125') : translateUi('uiMessages.m5a586025ef2c')), model)
         })
       } else if (statusLower === 'processing' || statusLower === 'pending') {
         canvasStore.updateNodeData(props.id, {
           status: 'processing',
-          progress: isHD ? '高清处理中，请稍后再试...' : '视频仍在处理中，请稍后重试',
+          progress: isHD ? translateUi('uiMessages.m9b7c893b146c') : translateUi('uiMessages.ma3c0896ee2e2'),
           _failedTaskId: taskId
         })
-        showToast(isHD ? '高清任务仍在处理中，请耐心等待' : '视频仍在处理中，请稍后重试', 'info')
+        showToast(isHD ? translateUi('uiMessages.m8649b201fcdf') : translateUi('uiMessages.ma3c0896ee2e2'), 'info')
       } else {
         canvasStore.updateNodeData(props.id, {
           status: 'error',
           progress: null,
-          error: '视频仍在处理中或获取失败，请稍后重试',
+          error: translateUi('uiMessages.m3c49d49130d1'),
           _failedTaskId: taskId
         })
       }
@@ -2823,7 +2825,7 @@ async function handleManualRetryFetch() {
     canvasStore.updateNodeData(props.id, {
       status: 'error',
       progress: null,
-      error: `获取视频失败: ${err.message}`,
+      error: translateUi('uiMessages.m8dab27cf7c2d', { value1: (err.message) }),
       _failedTaskId: taskId
     })
   }
@@ -2851,7 +2853,7 @@ function handleBackgroundTaskComplete(event) {
         },
         pointsCost: task.result?.pointsCost || 0
       })
-      showToast(`高清处理完成${task.result?.pointsCost > 0 ? `，消耗 ${formatPoints(task.result.pointsCost)} 积分` : ''}`, 'success')
+      showToast(translateUi('uiMessages.m615f749d80f5', { value1: (task.result?.pointsCost > 0 ? translateUi('uiMessages.m52f949782f06', { value1: (formatPoints(task.result.pointsCost)) }) : '') }), 'success')
       removeCompletedTask(taskId)
     } else {
       console.warn(`[VideoNode] 高清任务已完成但视频URL为空，启动兜底重试: ${taskId}`)
@@ -2901,14 +2903,14 @@ function handleBackgroundTaskFailed(event) {
     canvasStore.updateNodeData(props.id, {
       status: 'error',
       progress: null,
-      error: task.error || '高清处理失败'
+      error: task.error || translateUi('uiMessages.m8c799ce57125')
     })
-    showToast(task.error || '高清处理失败，未扣除积分', 'error')
+    showToast(task.error || translateUi('uiMessages.md0df86ba0a2e'), 'error')
     removeCompletedTask(taskId)
     return
   }
   
-  const errorMsg = task.error || '视频生成失败'
+  const errorMsg = task.error || translateUi('uiMessages.m5a586025ef2c')
   const model = getTaskVideoModel(task)
   canvasStore.updateNodeData(props.id, {
     status: 'error',
@@ -2930,7 +2932,7 @@ function handleBackgroundTaskProgress(event) {
     // 高清任务的后端进度包含秒数（如 "高清处理中... (120秒)"），
     // 会被 progressPercent 误解为百分比，使用固定文案避免误导
     canvasStore.updateNodeData(props.id, {
-      progress: task.type === 'video-hd' ? '高清处理中...' : '生成中...',
+      progress: task.type === 'video-hd' ? translateUi('uiMessages.m27f66d065ff4') : translateUi('canvas.audioNode.generating'),
       processingStartedAt: props.data.processingStartedAt || task.createdAt || task.created_at || Date.now()
     })
   }
@@ -2997,7 +2999,7 @@ function checkAndRestoreBackgroundTasks() {
       }
     } else if (task.status === 'failed') {
       console.log(`[VideoNode] 恢复失败的任务: ${task.taskId}`)
-      const errorMsg = task.type === 'video-hd' ? '高清处理失败' : '视频生成失败'
+      const errorMsg = task.type === 'video-hd' ? translateUi('uiMessages.m8c799ce57125') : translateUi('uiMessages.m5a586025ef2c')
       const model = getTaskVideoModel(task)
       canvasStore.updateNodeData(props.id, {
         status: 'error',
@@ -3008,7 +3010,7 @@ function checkAndRestoreBackgroundTasks() {
     } else if (task.status === 'processing' || task.status === 'pending') {
       // 任务仍在进行中，更新进度显示
       console.log(`[VideoNode] 任务仍在进行中: ${task.taskId}`)
-      const progressText = task.type === 'video-hd' ? '高清处理中...' : '生成中...'
+      const progressText = task.type === 'video-hd' ? translateUi('uiMessages.m27f66d065ff4') : translateUi('canvas.audioNode.generating')
       if (props.data.status !== 'processing') {
         canvasStore.updateNodeData(props.id, {
           status: 'processing',
@@ -3089,7 +3091,7 @@ function handleBackgroundTaskNetworkError(event) {
     canvasStore.updateNodeData(props.id, {
       status: 'error',
       progress: null,
-      error: message || '任务属于其他登录态或租户，请切回提交任务时的账号/租户后重新获取',
+      error: message || translateUi('uiMessages.m26abe215a291'),
       taskId: task.taskId,
       soraTaskId: task.taskId,
       _failedTaskId: task.taskId,
@@ -3101,9 +3103,9 @@ function handleBackgroundTaskNetworkError(event) {
   const currentStatus = props.data?.status
   if (currentStatus !== 'processing' && currentStatus !== 'pending') return
   canvasStore.updateNodeData(props.id, {
-    progress: '网络异常，重试中...',
+    progress: translateUi('uiMessages.m8fa4860ebec7'),
     _networkRetrying: true,
-    _networkRetryMessage: message || '网络连接异常'
+    _networkRetryMessage: message || translateUi('uiMessages.me8ce9263039d')
   })
 }
 
@@ -3113,7 +3115,7 @@ function handleBackgroundTaskNetworkRecovered(event) {
   if (!task || task.nodeId !== props.id) return
   if (!props.data?._networkRetrying) return
   canvasStore.updateNodeData(props.id, {
-    progress: '生成中...',
+    progress: translateUi('canvas.audioNode.generating'),
     _networkRetrying: false,
     _networkRetryMessage: null
   })
@@ -3284,7 +3286,7 @@ const videoToolInitialSource = computed(() => {
   if (!url) return null
   return {
     id: props.id,
-    name: props.data.title || props.data.label || '视频',
+    name: props.data.title || props.data.label || translateUi('canvas.nodeConfig.videoInput.label'),
     url,
     thumbnailUrl: videoPosterUrl.value,
     duration: Number(props.data.duration) || Number(props.data.output?.duration) || 10
@@ -3295,7 +3297,7 @@ const canvasVideoToolSources = computed(() => {
     .filter(node => node?.data?.output?.url && (node.type === 'video' || node.type === 'video-input' || node.data.output.type === 'video'))
     .map(node => ({
       id: node.id,
-      name: node.data.title || node.data.label || '视频',
+      name: node.data.title || node.data.label || translateUi('canvas.nodeConfig.videoInput.label'),
       url: node.data.output.url,
       thumbnailUrl: node.data.output.thumbnailUrl || node.data.output.thumbnail_url || node.data.output.cover_url || node.data.output.coverUrl || node.data.thumbnailUrl || node.data.thumbnail_url || node.data.cover_url || node.data.coverUrl,
       duration: Number(node.data.duration) || Number(node.data.output?.duration) || 10
@@ -3465,7 +3467,7 @@ const isDefaultProgress = computed(() => {
   
   const p = String(progress).toLowerCase().trim()
   // 这些是默认状态文本，不需要额外显示
-  const defaultTexts = ['0%', '排队中...', '生成中...', '处理中...', 'pending', 'queued', 'processing']
+  const defaultTexts = ['0%', translateUi('uiMessages.m6c7ddc5a86aa'), translateUi('canvas.audioNode.generating'), translateUi('tips.processing'), 'pending', 'queued', 'processing']
   return defaultTexts.some(t => p === t.toLowerCase() || p.startsWith('并行生成'))
 })
 
@@ -3794,15 +3796,15 @@ const isDigitalHumanMode = computed(() => !!activeDigitalHuman.value)
 const isHeygenLipsyncMode = computed(() => isHeygenModelSelected.value && !isDigitalHumanMode.value && referenceVideos.value.length > 0 && referenceAudios.value.length > 0)
 const isHeygenMode = computed(() => isHeygenModelSelected.value || isDigitalHumanMode.value || isHeygenLipsyncMode.value)
 const heygenInputHint = computed(() => {
-  if (isDigitalHumanMode.value) return '输入：数字人资产 + 音频'
-  if (isHeygenLipsyncMode.value) return '输入：视频 + 音频（换口型）'
-  return '支持：数字人资产 + 音频，或视频 + 音频（换口型）'
+  if (isDigitalHumanMode.value) return translateUi('uiMessages.mb822773843c2')
+  if (isHeygenLipsyncMode.value) return translateUi('uiMessages.m91fc3c1b0d27')
+  return translateUi('uiMessages.ma752c131d9af')
 })
 const heygenChannelId = computed(() => activeDigitalHuman.value?.channelId || props.data?.heygenChannelId || '')
 const selectedHeygenChannelName = computed(() => {
   const channel = heygenChannels.value.find(item => item.id === heygenChannelId.value)
-  if (!channel) return '选择渠道'
-  return heygenChannels.value.length === 1 ? '默认渠道' : channel.name
+  if (!channel) return translateUi('uiMessages.m2693c140595d')
+  return heygenChannels.value.length === 1 ? translateUi('uiMessages.m86c05a5bbfdc') : channel.name
 })
 const heygenRawPerSecond = computed(() => {
   const channel = heygenChannels.value.find(item => item.id === heygenChannelId.value)
@@ -3845,7 +3847,7 @@ watch([selectedWanMode, referenceVideos, isWanModel], () => {
   const currentDuration = Number(selectedDuration.value)
   if (currentDuration > 10) {
     selectedDuration.value = '10'
-    showToast('Wan 多参考包含视频时，时长已自动调整为10秒', 'warning')
+    showToast(translateUi('uiMessages.m16a9d5d7770e'), 'warning')
   }
 })
 
@@ -3879,11 +3881,11 @@ const activeVideoModeSelector = computed(() => {
   if (isKlingMotionControl.value && !isCozeVideoSwapModel.value) {
     return {
       key: 'kling-motion',
-      label: '运镜模式',
+      get label() { return translateUi('uiMessages.m8e34226d055c') },
       value: klingMotionMode.value,
       options: [
-        { value: 'std', label: '标准' },
-        { value: 'pro', label: '专业' }
+        { value: 'std', get label() { return translateUi('directorStudio.cameraPresets.standard') } },
+        { value: 'pro', get label() { return translateUi('uiMessages.m349b21c03d6a') } }
       ]
     }
   }
@@ -3891,7 +3893,7 @@ const activeVideoModeSelector = computed(() => {
   if (isViduModel.value && referenceImages.value.length > 0) {
     return {
       key: 'vidu',
-      label: '图生模式',
+      get label() { return translateUi('uiMessages.m8751ffa1ad6e') },
       value: viduMode.value,
       options: VIDU_MODE_OPTIONS
     }
@@ -3900,7 +3902,7 @@ const activeVideoModeSelector = computed(() => {
   if (isVeoModel.value) {
     return {
       key: 'veo',
-      label: 'VEO 模式',
+      get label() { return translateUi('uiMessages.m0bb0a501a1b3') },
       value: veoMode.value,
       options: VEO_MODE_OPTIONS.value
     }
@@ -3909,7 +3911,7 @@ const activeVideoModeSelector = computed(() => {
   if (isKlingO1Model.value) {
     return {
       key: 'kling-o1',
-      label: 'O1 模式',
+      get label() { return translateUi('uiMessages.mb550fa769d90') },
       value: selectedKlingO1Mode.value,
       options: klingO1Modes.value
     }
@@ -3918,7 +3920,7 @@ const activeVideoModeSelector = computed(() => {
   if (isKlingV3OmniModel.value) {
     return {
       key: 'kling-v3-omni',
-      label: 'v3 Omni 模式',
+      get label() { return translateUi('uiMessages.m042e0348e74d') },
       value: selectedKlingV3OmniMode.value,
       options: klingV3OmniModes.value
     }
@@ -3927,7 +3929,7 @@ const activeVideoModeSelector = computed(() => {
   if (isRouterBeeWan3Model.value) {
     return {
       key: 'routerbee-wan3',
-      label: 'RouterBee 模式',
+      get label() { return translateUi('uiMessages.m8f1ef6531515') },
       value: selectedRouterBeeWan3Mode.value,
       options: ROUTERBEE_WAN3_MODES
     }
@@ -3936,7 +3938,7 @@ const activeVideoModeSelector = computed(() => {
   if (isWan3Model.value) {
     return {
       key: 'wan3',
-      label: '万相 3.0 模式',
+      get label() { return translateUi('uiMessages.maf0542b8a696') },
       value: selectedWan3Mode.value,
       options: WAN3_MODES.filter(mode => (!mode.apiType || mode.apiType === currentModelConfig.value?.apiType) &&
         (!['wavespeed-wan3', 'siray-wan3', 'grsai-wan3'].includes(currentModelConfig.value?.apiType) || !['file', 'link'].includes(mode.value)))
@@ -3946,7 +3948,7 @@ const activeVideoModeSelector = computed(() => {
   if (isWanModel.value) {
     return {
       key: 'wan',
-      label: 'Wan 模式',
+      get label() { return translateUi('uiMessages.md9601667f9f3') },
       value: selectedWanMode.value,
       options: wanModes.value
     }
@@ -3955,7 +3957,7 @@ const activeVideoModeSelector = computed(() => {
   if (isSeedance2Model.value) {
     return {
       key: 'seedance-2',
-      label: isHappyHorseModel.value ? 'Happy Horse 模式' : 'SD2 模式',
+      label: isHappyHorseModel.value ? translateUi('uiMessages.mb86d6a19fc68') : translateUi('uiMessages.mb8acc5e6678a'),
       value: selectedSeedance2Mode.value,
       options: seedance2Modes.value
     }
@@ -3964,7 +3966,7 @@ const activeVideoModeSelector = computed(() => {
   if (isMinimaxH3Model.value) {
     return {
       key: 'minimax-h3',
-      label: 'H3 模式',
+      get label() { return translateUi('uiMessages.m130e37076756') },
       value: selectedMinimaxH3Mode.value || minimaxH3DefaultMode.value,
       options: isAtlasCloudVideoModel.value ? atlasCloudModeOptions.value : minimaxH3Modes.value
     }
@@ -3973,7 +3975,7 @@ const activeVideoModeSelector = computed(() => {
   if (isRunningHubAiAppVideoV31Model.value) {
     return {
       key: 'runninghub-v31',
-      label: '生成模式',
+      get label() { return translateUi('uiMessages.m29ccb4125180') },
       value: v31Mode.value,
       options: RUNNINGHUB_V31_MODES
     }
@@ -3985,7 +3987,7 @@ const activeVideoModeSelector = computed(() => {
 const activeVideoSubmodeSelector = computed(() => {
   if (isWanModel.value && selectedWanMode.value === 'animate_mix') {
     return {
-      label: '换人模式',
+      get label() { return translateUi('uiMessages.m30e94ccdae37') },
       value: selectedWanAnimateMode.value,
       options: wanAnimateModeOptions
     }
@@ -4077,7 +4079,7 @@ function getLocalMediaDuration(file, mediaType) {
     }
     el.onerror = () => {
       cleanup()
-      reject(new Error(mediaType === 'video' ? '无法读取视频时长，请更换视频文件' : '无法读取音频时长，请更换音频文件'))
+      reject(new Error(mediaType === 'video' ? translateUi('uiMessages.m856c308013df') : translateUi('uiMessages.m696a39979f43')))
     }
     el.src = url
   })
@@ -4092,7 +4094,7 @@ async function validateSeedanceVideoFile(file) {
   if (validationMessage) throw new Error(validationMessage)
   if (seedance25ModeConstraints.value?.minReferenceVideoDuration &&
     metadata.duration < seedance25ModeConstraints.value.minReferenceVideoDuration) {
-    throw new Error(`参考视频时长需在${seedance25ModeConstraints.value.minReferenceVideoDuration}到${seedance25ModeConstraints.value.maxReferenceVideoDuration}秒之间`)
+    throw new Error(translateUi('uiMessages.m93c2b74af905', { value1: (seedance25ModeConstraints.value.minReferenceVideoDuration), value2: (seedance25ModeConstraints.value.maxReferenceVideoDuration) }))
   }
   return metadata.duration
 }
@@ -4585,13 +4587,13 @@ const klingOfficialSelectedDurationTotalCost = computed(() => {
 
 const klingOfficialSelectedDurationCostText = computed(() => {
   // Keep this in script because templates unwrap refs before property access.
-  return selectedDuration.value ? `${selectedDuration.value}s = ${formatVideoNodePoints(klingOfficialSelectedDurationTotalCost.value)}积分` : ''
+  return selectedDuration.value ? translateUi('uiMessages.m0943bf0b1369', { value1: (selectedDuration.value), value2: (formatVideoNodePoints(klingOfficialSelectedDurationTotalCost.value)) }) : ''
 })
 
 // RunningHub 全能视频 V3.1：按所选秒数实时计算总消耗（不展示单秒价格）
 const runningHubV31CostText = computed(() => {
   if (!isRunningHubAiAppVideoV31Model.value || !selectedDuration.value) return ''
-  return `${formatVideoNodePoints(pointsCost.value * selectedCount.value)}积分`
+  return translateUi('uiMessages.m0b5bba8d3d7b', { value1: (formatVideoNodePoints(pointsCost.value * selectedCount.value)) })
 })
 
 // 按秒计费模型在画布上展示单秒价格；pointsCost 仍保留为提交时的预扣总积分。
@@ -4634,9 +4636,9 @@ const userPoints = computed(() => {
 const modeLabel = computed(() => {
   // 根据是否有参考图片自动判断模式
   if (referenceImages.value.length > 0) {
-    return '图生视频'
+    return translateUi('canvas.videoNode.imageToVideo')
   }
-  return '文生视频'
+  return translateUi('canvas.textNode.textToVideo')
 })
 
 // 快捷操作 - 使用翻译键
@@ -4689,7 +4691,7 @@ function handleTextToVideo() {
     type: 'text-input',
     position: textNodePosition,
     data: {
-      title: '视频描述',
+      title: translateUi('uiMessages.m0a2fdd705e97'),
       text: ''
     }
   })
@@ -4727,7 +4729,7 @@ function handleImageToVideo() {
     type: 'image-input',
     position: imageNodePosition,
     data: {
-      title: '参考图片',
+      title: translateUi('canvas.templates.nodeTitle.referenceImage'),
       sourceImages: [defaultImage],
       status: 'success'
     }
@@ -4767,7 +4769,7 @@ function handleKeyframesToVideo() {
     type: 'image-input',
     position: firstFramePosition,
     data: {
-      title: '首帧',
+      title: translateUi('uiMessages.m0eee51419641'),
       sourceImages: [defaultImage],
       status: 'success'
     }
@@ -4794,7 +4796,7 @@ function handleKeyframesToVideo() {
     type: 'image-input',
     position: lastFramePosition,
     data: {
-      title: '尾帧',
+      title: translateUi('uiMessages.m8a07f2e0a84c'),
       sourceImages: [defaultImage],
       status: 'success'
     }
@@ -4855,7 +4857,7 @@ function handleMotionImitation() {
     type: 'image-input',
     position: imagePosition,
     data: {
-      title: '参考人物',
+      title: translateUi('uiMessages.ma853a7b25b9e'),
       sourceImages: [defaultImage],
       status: 'success'
     }
@@ -4882,7 +4884,7 @@ function handleMotionImitation() {
     type: 'video-input',
     position: videoPosition,
     data: {
-      title: '动作视频',
+      title: translateUi('uiMessages.mcbc391055c91'),
       nodeRole: 'source',
       status: 'idle'
     }
@@ -5291,7 +5293,7 @@ async function reuploadToCloud(url) {
     })
     
     if (!response.ok) {
-      throw new Error(`获取图片失败: ${response.status}`)
+      throw new Error(translateUi('uiMessages.m51ad3ca5f373', { value1: (response.status) }))
     }
     
     const blob = await response.blob()
@@ -5304,7 +5306,7 @@ async function reuploadToCloud(url) {
       return urls[0]
     }
     
-    throw new Error('上传返回空结果')
+    throw new Error(translateUi('uiMessages.m3f39ca479089'))
   } catch (error) {
     console.error('[VideoNode] 重新上传失败:', error)
     // 回退到原始 URL
@@ -5546,7 +5548,7 @@ async function ensureAccessibleUrls(imageUrls) {
         // 从 blob URL 获取图片数据
         const response = await fetch(url)
         if (!response.ok) {
-          throw new Error(`获取 blob 图片失败: ${response.status}`)
+          throw new Error(translateUi('uiMessages.m2251b688a1f9', { value1: (response.status) }))
         }
         const blob = await response.blob()
         const file = new File([blob], `blob_${Date.now()}.png`, { type: blob.type || 'image/png' })
@@ -5626,7 +5628,7 @@ async function ensureCanvasWorkflowForVideoSubmission(nodeId) {
   const currentTab = canvasStore.getCurrentTab?.()
   const workflowData = canvasStore.exportWorkflowForSave()
   if (!currentTab?.id || !workflowData.nodes?.some(node => node.id === nodeId)) {
-    throw new Error('画布保存失败，无法提交视频生成任务')
+    throw new Error(translateUi('uiMessages.mec262e9cf10f'))
   }
 
   const currentSpace = currentTab.workflowSpaceType
@@ -5638,10 +5640,10 @@ async function ensureCanvasWorkflowForVideoSubmission(nodeId) {
   if (currentTab.workflowId) {
     const flushResult = await canvasStore.flushIncrementalWriter?.()
     if (flushResult?.ok === false || flushResult?.paused || flushResult?.offline) {
-      throw new Error('协作版本已变化，请刷新工作流后再提交视频生成任务')
+      throw new Error(translateUi('uiMessages.mb3c800b45699'))
     }
     if (canvasStore.getCurrentTab?.()?.id !== currentTab.id) {
-      throw new Error('工作流已切换，本次视频尚未提交，请返回原工作流重试')
+      throw new Error(translateUi('uiMessages.m1f1ddb0dc637'))
     }
     // 已落库的个人节点也走增量同步，避免提交前全量快照与自动保存互相冲突。
     if (flushResult && flushResult.reason !== 'writer_unavailable') {
@@ -5651,13 +5653,13 @@ async function ensureCanvasWorkflowForVideoSubmission(nodeId) {
       }
     }
     if (currentSpace.spaceType === 'team') {
-      throw new Error('画布节点尚未保存，请刷新工作流后再提交视频生成任务')
+      throw new Error(translateUi('uiMessages.m868c73870f56'))
     }
   }
 
   const result = await saveWorkflow({
     ...(currentTab.workflowId ? { id: currentTab.workflowId } : {}),
-    name: currentTab.name || `草稿_${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`,
+    name: currentTab.name || translateUi('uiMessages.mb0f9ff13e0a1', { value1: (new Date().toLocaleTimeString(uiLanguage.value, { hour: '2-digit', minute: '2-digit' })) }),
     uploadToCloud: false,
     isDraft: true,
     spaceType: currentSpace.spaceType,
@@ -5667,11 +5669,11 @@ async function ensureCanvasWorkflowForVideoSubmission(nodeId) {
   const workflow = result?.workflow
   const workflowId = workflow?.id || result?.id
   if (!workflowId) {
-    throw new Error('画布保存失败，无法提交视频生成任务')
+    throw new Error(translateUi('uiMessages.mec262e9cf10f'))
   }
 
   if (canvasStore.getCurrentTab?.()?.id !== currentTab.id) {
-    throw new Error('工作流已切换，本次视频尚未提交，请返回原工作流重试')
+    throw new Error(translateUi('uiMessages.m1f1ddb0dc637'))
   }
   canvasStore.markCurrentTabSaved(workflowId, workflow?.workflow_uid, {
     space_type: workflow?.space_type || currentSpace.spaceType,
@@ -5686,18 +5688,18 @@ async function ensureCanvasWorkflowForVideoSubmission(nodeId) {
 async function prepareVideoSubmissionContext(nodeId, capturedState) {
   const tabId = capturedState.submissionTabId || canvasStore.getCurrentTab?.()?.id
   if (canvasStore.getCurrentTab?.()?.id !== tabId) {
-    throw new Error('工作流已切换，本次视频尚未提交，请返回原工作流重试')
+    throw new Error(translateUi('uiMessages.m1f1ddb0dc637'))
   }
   let timer
   try {
     const context = await Promise.race([
       ensureCanvasWorkflowForVideoSubmission(nodeId),
       new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error('画布保存超时，视频尚未提交，请稍后重试')), 30000)
+        timer = setTimeout(() => reject(new Error(translateUi('uiMessages.mc5a31a69bcd9'))), 30000)
       })
     ])
     if (canvasStore.getCurrentTab?.()?.id !== tabId) {
-      throw new Error('工作流已切换，本次视频尚未提交，请返回原工作流重试')
+      throw new Error(translateUi('uiMessages.m1f1ddb0dc637'))
     }
     capturedState.submissionWorkflowId = context.workflowId
     return context
@@ -5735,7 +5737,7 @@ async function sendSeedanceDraftFinalRequest(taskId, submission) {
         canvas_node_id: submission.nodeId, canvas_workflow_id: submission.workflowId, canvas_tab_id: submission.tabId })
     })
     const data = await response.json()
-    if (!response.ok) throw Object.assign(new Error(data.message || '生成正片失败'), { payload: data })
+    if (!response.ok) throw Object.assign(new Error(data.message || translateUi('uiMessages.me7ca49737ed1')), { payload: data })
     return { data, submissionId: submission.submissionId }
   } catch (error) {
     error.clientSubmissionId = submission.submissionId
@@ -5784,7 +5786,7 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
             channelId: capturedState.heygenChannelId,
             videoUrl: upstreamData.videos[0] || '',
             audioUrl: upstreamData.audios[0] || '',
-            title: finalPrompt || '视频换口型',
+            title: finalPrompt || translateUi('uiMessages.mbcf052e4a87d'),
             mode: 'precision'
           })
       return { data, submissionId: submission.submissionId }
@@ -5998,14 +6000,14 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   // Kling 动作迁移模型特有参数
   if (isKlingMotionControl.value) {
     if (isCozeVideoSwapModel.value && finalImages.length === 0) {
-      throw new Error('Coze 视频换人需要连接或上传1张人物图片')
+      throw new Error(translateUi('uiMessages.m13b661495ea7'))
     }
     // 从上游视频节点获取参考视频
     const motionVideoUrl = isCozeVideoSwapModel.value
       ? (capturedState?.motionVideoUrl || upstreamVideoUrl.value)
       : upstreamVideoUrl.value
     if (!motionVideoUrl) {
-      throw new Error(isCozeVideoSwapModel.value ? 'Coze 视频换人需要连接一个视频节点作为参考视频来源' : '请连接一个视频节点作为参考视频来源')
+      throw new Error(isCozeVideoSwapModel.value ? translateUi('uiMessages.m8872d890933d') : translateUi('uiMessages.mb6d3a13efb8e'))
     }
     // 参考视频 URL（来自上游视频节点）
     formData.append('kling_motion_video_url', motionVideoUrl)
@@ -6041,13 +6043,13 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
       if (['audio-input', 'audio'].includes(sourceNode.type) || (sourceNode.type === 'seedance-character' && getSeedanceMediaType(sourceNode.data) === 'audio')) {
         const dur = Number(sourceNode.data.audioDuration || sourceNode.data.duration || sourceNode.data.output?.duration || 0)
         if (dur && dur < 2) {
-          await showAlert(`参考音频时长 ${dur.toFixed(1)} 秒，不满足模型限制（单个音频不短于 2 秒）。请更换音频后重试。`, '音频时长不足')
+          await showAlert(translateUi('uiMessages.me1a340b4fa59', { value1: (dur.toFixed(1)) }), translateUi('uiMessages.mbbd554a80c07'))
           isGenerating.value = false
           return
         }
         const maxAudioDuration = seedance2Limits.value.maxReferenceMediaDuration || 15
         if (dur && dur > maxAudioDuration) {
-          await showAlert(`参考音频时长 ${Math.round(dur)} 秒，超过模型限制（单个音频不超过 ${maxAudioDuration} 秒）。请裁剪音频后重试。`, '音频时长超限')
+          await showAlert(translateUi('uiMessages.m02ea9080490c', { value1: (Math.round(dur)), value2: (maxAudioDuration) }), translateUi('uiMessages.m077c413ba47c'))
           isGenerating.value = false
           return
         }
@@ -6056,7 +6058,7 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
     }
     const totalAudioCap = seedance2Limits.value.maxTotalReferenceMediaDuration || (isMinimaxH3Model.value || seedance2Limits.value.maxAudios <= 3 ? 15 : Infinity)
     if (totalAudioDuration > totalAudioCap) {
-      await showAlert(`参考音频总时长 ${Math.round(totalAudioDuration)} 秒，超过模型限制（总时长不超过 ${totalAudioCap} 秒）。请减少音频或裁剪后重试。`, '音频时长超限')
+      await showAlert(translateUi('uiMessages.m24820cbac48e', { value1: (Math.round(totalAudioDuration)), value2: (totalAudioCap) }), translateUi('uiMessages.m077c413ba47c'))
       isGenerating.value = false
       return
     }
@@ -6376,14 +6378,14 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   
   if (!response.ok) {
     if (response.status === 429 && data.error === 'user_concurrent_limit_exceeded') {
-      const err = new Error(data.message || '已达到并发限制，请升级套餐')
+      const err = new Error(data.message || translateUi('uiMessages.m4c69d777410e'))
       err.code = 'concurrent_limit_exceeded'
       err.payload = data
       err.clientSubmissionId = submission.submissionId
       throw err
     }
     if (response.status === 403 && data.error === 'model_package_required') {
-      const err = new Error(data.message || '需要购买对应套餐后使用')
+      const err = new Error(data.message || translateUi('uiMessages.m861a77c9f9fb'))
       err.code = 'model_package_required'
       err.details = data.entitlement
       err.payload = data
@@ -6391,14 +6393,14 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
       throw err
     }
     if (data?.error === 'prompt_safety_blocked') {
-      const err = new Error(data.message || '提示词未通过安全审核，请修改后重试')
+      const err = new Error(data.message || translateUi('uiMessages.m41be950b9833'))
       err.code = 'prompt_safety_blocked'
       err.safety = data.safety
       err.payload = data
       err.clientSubmissionId = submission.submissionId
       throw err
     }
-    const err = new Error(resolveExternalMediaErrorMessage(data, '生成失败'))
+    const err = new Error(resolveExternalMediaErrorMessage(data, translateUi('canvas.audioNode.generateFailed')))
     err.payload = data
     err.clientSubmissionId = submission.submissionId
     throw err
@@ -6511,7 +6513,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
     // 清除旧的任务 ID，避免角色创建时使用过期的 ID
     await updateNode(nodeId, {
       status: 'processing',
-      progress: '正在提交任务...',
+      progress: translateUi('uiMessages.mcc403ea1cff2'),
       clientSubmissionId: null,
       processingStartedAt: Date.now(),
       seedanceDraft: capturedState.seedanceDraft === true,
@@ -6549,7 +6551,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
       // 找不到 taskId，节点永远停在"生成中"，直到 120 分钟超时才标失败。
       await updateNode(nodeId, {
         status: 'processing',
-        progress: '排队中...',
+        progress: translateUi('uiMessages.m6c7ddc5a86aa'),
         taskId,
         soraTaskId: taskId,
         taskType: capturedState.isHeygenMode ? 'digital-human-video' : 'video',
@@ -6582,7 +6584,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
       return videoUrl
     }
     
-    throw new Error('未获取到生成结果')
+    throw new Error(translateUi('canvas.imageNode.noResult'))
   } catch (error) {
     console.error(`[VideoNode] 任务 ${taskIndex + 1} 失败:`, error)
     const model = capturedState.model || selectedModel.value
@@ -6606,7 +6608,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
       })
       await updateNode(nodeId, {
         status: 'processing',
-        progress: '生成中...',
+        progress: translateUi('canvas.audioNode.generating'),
         taskId,
         soraTaskId: taskId,
         taskType: capturedState.isHeygenMode ? 'digital-human-video' : 'video',
@@ -6633,7 +6635,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
     if (submissionId && isTransientVideoSubmissionError(error)) {
       await updateNode(nodeId, {
         status: 'processing',
-        progress: '网络异常，正在确认任务状态...',
+        progress: translateUi('uiMessages.mb3708629b7d4'),
         clientSubmissionId: submissionId,
         processingStartedAt: props.data.processingStartedAt || Date.now(),
         error: null
@@ -6676,7 +6678,7 @@ async function pollVideoTaskForNode(taskId, nodeId, isOffPeak = false, taskCreat
         })
         
         if (!response.ok) {
-          reject(new Error('查询任务状态失败'))
+          reject(new Error(translateUi('uiMessages.m935974010ab6')))
           return
         }
         
@@ -6685,7 +6687,7 @@ async function pollVideoTaskForNode(taskId, nodeId, isOffPeak = false, taskCreat
         
         // 更新进度
         canvasStore.updateNodeData(nodeId, { 
-          progress: '生成中...',
+          progress: translateUi('canvas.audioNode.generating'),
           processingStartedAt: props.data.processingStartedAt || startTime
         })
         
@@ -6730,13 +6732,13 @@ async function pollVideoTaskForNode(taskId, nodeId, isOffPeak = false, taskCreat
         
         // 检查失败状态
         if (status === 'failed' || status === 'failure' || status === 'error') {
-          reject(new Error(data.error || data.fail_reason || '视频生成失败'))
+          reject(new Error(data.error || data.fail_reason || translateUi('uiMessages.m5a586025ef2c')))
           return
         }
 
         // 后端查询优先，以确保超时任务进入统一退款链路；这里只保留前端兜底。
         if (Date.now() - startTime > MAX_POLL_TIME) {
-          reject(new Error('生成超时（超过40分钟），已自动退还积分'))
+          reject(new Error(translateUi('uiMessages.maaa706624ce5')))
           return
         }
         
@@ -6757,20 +6759,20 @@ async function ensureReferenceVideoUrlsAccessible(nodeId, targetNodeId, currentR
   if (!hasBlobVideos) return currentRefVideos
 
   console.log('[VideoNode] 检测到参考视频含 blob URL，开始上传到云端...')
-  canvasStore.updateNodeData(targetNodeId, { progress: '正在处理参考视频...' })
+  canvasStore.updateNodeData(targetNodeId, { progress: translateUi('uiMessages.meb23b982fc46') })
 
   const accessibleVideos = [...currentRefVideos]
   for (const [videoIndex, videoUrl] of currentRefVideos.entries()) {
     if (!videoUrl.startsWith('blob:')) continue
     try {
       const resp = await fetch(videoUrl)
-      if (!resp.ok) throw new Error(`获取 blob 视频失败: ${resp.status}`)
+      if (!resp.ok) throw new Error(translateUi('uiMessages.m974f82632605', { value1: (resp.status) }))
       const blob = await resp.blob()
       const file = new File([blob], `ref_video_${Date.now()}.mp4`, { type: blob.type || 'video/mp4' })
 
       const uploadResult = await uploadCanvasMedia(file, 'video')
       if (uploadResult.status !== 'completed' || !uploadResult.url) {
-        throw new Error('媒体上传未完成')
+        throw new Error(translateUi('uiMessages.m909a1763f7f8'))
       }
       accessibleVideos[videoIndex] = uploadResult.url
       console.log('[VideoNode] 参考视频 blob 上传成功:', uploadResult.url)
@@ -6864,10 +6866,10 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     // 确保参考图片可访问（可能耗时：串行 fetch + upload）
     if (finalImages.length > 0) {
       console.log('[VideoNode] 后台处理参考图片 URL，确保可访问性...')
-      await updateNode(targetNodeId, { progress: '正在处理参考图片...' })
+      await updateNode(targetNodeId, { progress: translateUi('uiMessages.m0c010352e01b') })
       finalImages = await ensureAccessibleUrls(finalImages)
       if (finalImages.length === 0) {
-        throw new Error('参考图片未能转换为可访问 URL，请重新上传后重试')
+        throw new Error(translateUi('uiMessages.m141625726a02'))
       }
       console.log('[VideoNode] 处理后的可访问 URLs:', finalImages)
     }
@@ -6895,19 +6897,19 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
       const hasBlobAudios = currentRefAudios.some(url => url.startsWith('blob:'))
       if (hasBlobAudios) {
         console.log('[VideoNode] 检测到参考音频含 blob URL，开始上传到云端...')
-        await updateNode(targetNodeId, { progress: '正在处理参考音频...' })
+        await updateNode(targetNodeId, { progress: translateUi('uiMessages.m26f98c523ba4') })
         for (const [audioIndex, audioUrl] of currentRefAudios.entries()) {
           if (!audioUrl.startsWith('blob:')) continue
           try {
             const resp = await fetch(audioUrl)
-            if (!resp.ok) throw new Error(`获取 blob 音频失败: ${resp.status}`)
+            if (!resp.ok) throw new Error(translateUi('uiMessages.m526cc035dc4d', { value1: (resp.status) }))
             const blob = await resp.blob()
             const ext = blob.type?.includes('wav') ? '.wav' : '.mp3'
             const file = new File([blob], `ref_audio_${Date.now()}${ext}`, { type: blob.type || 'audio/mpeg' })
             
             const uploadResult = await uploadCanvasMedia(file, 'audio')
             if (uploadResult.status !== 'completed' || !uploadResult.url) {
-              throw new Error('媒体上传未完成')
+              throw new Error(translateUi('uiMessages.m909a1763f7f8'))
             }
             currentRefAudios[audioIndex] = uploadResult.url
             console.log('[VideoNode] 参考音频 blob 上传成功:', uploadResult.url)
@@ -6938,7 +6940,7 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
       capturedState.referenceAudios = currentRefAudios
     }
     
-    await updateNode(targetNodeId, { progress: '正在提交任务...' })
+    await updateNode(targetNodeId, { progress: translateUi('uiMessages.mcc403ea1cff2') })
     
     // 提交所有任务
     submissionsStarted = true
@@ -6965,13 +6967,13 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     if (successResults.length === 0) {
       const firstNodeData = submittedNodes.find(n => n.id === allNodeIds[0])?.data
       if (batchSafetyError) {
-        const safetyErr = new Error(batchSafetyError.message || firstNodeData?.error || '提示词未通过安全审核，请修改后重试')
+        const safetyErr = new Error(batchSafetyError.message || firstNodeData?.error || translateUi('uiMessages.m41be950b9833'))
         safetyErr.code = batchSafetyError.code
         safetyErr.safety = batchSafetyError.safety
         safetyErr.payload = batchSafetyError.payload
         throw safetyErr
       }
-      const specificError = firstNodeData?.error || '所有任务提交都失败了'
+      const specificError = firstNodeData?.error || translateUi('uiMessages.m083ec24da189')
       throw new Error(specificError)
     }
     
@@ -6981,7 +6983,7 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     console.error('[VideoNode] 后台生成失败:', error)
     if (!submissionsStarted) {
       const model = capturedState.model || selectedModel.value
-      const batchError = formatVideoNodeErrorMessage(error.message || '生成失败', { model })
+      const batchError = formatVideoNodeErrorMessage(error.message || translateUi('canvas.audioNode.generateFailed'), { model })
       for (const nodeId of allNodeIds) {
         await updateNode(nodeId, {
           status: 'error',
@@ -6991,7 +6993,7 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
       }
     }
     if (error.code === 'concurrent_limit_exceeded') {
-      showAlert(error.message, '并发限制')
+      showAlert(error.message, translateUi('uiMessages.m44c5959863d8'))
       return
     }
     if (isPromptSafetyBlockedError(error)) {
@@ -7005,7 +7007,7 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
       return
     }
     const model = capturedState.model || selectedModel.value
-    errorMessage.value = formatVideoNodeErrorMessage(error.message || '生成失败', { model })
+    errorMessage.value = formatVideoNodeErrorMessage(error.message || translateUi('canvas.audioNode.generateFailed'), { model })
     await updateNode(targetNodeId, {
       status: 'error',
       error: formatVideoNodeErrorMessage(error.message, { model })
@@ -7034,7 +7036,7 @@ watch(currentSeedanceDraftTaskId, async taskId => {
       headers: { ...getTenantHeaders(), ...(token ? { Authorization: `Bearer ${token}` } : {}) }
     })
     const quote = await response.json()
-    if (!response.ok) throw new Error(quote.message || '无法获取正片价格')
+    if (!response.ok) throw new Error(quote.message || translateUi('uiMessages.m4e4a65c2bb2a'))
     if (currentSeedanceDraftTaskId.value === taskId) seedanceDraftQuote.value = quote
   } catch (error) {
     if (currentSeedanceDraftTaskId.value === taskId) seedanceDraftQuoteError.value = error.message
@@ -7051,29 +7053,29 @@ async function setSeedanceDraftEnabled(enabled, resolution = selectedVideoParame
     const data = { seedanceDraftEnabled: enabled, seedanceResolution: resolution, videoResolution: resolution }
     const node = canvasStore.nodes?.find(item => item.id === props.id)
     const baseVersion = Number(node?.version) || Number(canvasStore.getCurrentTab()?.savedNodeVersions?.[props.id]) || Number(props.data?._baseVersion)
-    if (!Number.isSafeInteger(baseVersion) || baseVersion < 1) throw new Error('节点版本未就绪，请刷新画布后重试')
+    if (!Number.isSafeInteger(baseVersion) || baseVersion < 1) throw new Error(translateUi('uiMessages.mb6d8baa52e0f'))
     const result = await patchWorkflowNode(workflowId, props.id, { data }, baseVersion)
     if (canvasStore.getCurrentTab()?.id === tabId) {
       canvasStore.updateNodeData(props.id, data, { silent: true })
       canvasStore.applyWorkflowSaveVersions({ id: workflowId, node_versions: { ...canvasStore.getCurrentTab().savedNodeVersions, [props.id]: result.version } })
       syncGenericVideoResolution(resolution)
     }
-  } catch (error) { showToast(error.message || '样片设置保存失败', 'error') }
+  } catch (error) { showToast(error.message || translateUi('uiMessages.m314feb0fc357'), 'error') }
   finally { savingSeedanceDraft.value = false }
 }
 
 async function handleSeedanceDraftFinal() {
   const quote = seedanceDraftQuote.value
   if (!quote || generatingSeedanceFinal.value || props.data.readonly) return
-  if (Date.now() >= quote.expires_at) { showToast('样片已超过 7 天，请重新生成样片', 'error'); return }
+  if (Date.now() >= quote.expires_at) { showToast(translateUi('uiMessages.m305c6b0af2c7'), 'error'); return }
   if (userPoints.value < quote.points_cost) { await showInsufficientPointsDialog(quote.points_cost, userPoints.value, 1); return }
   generatingSeedanceFinal.value = true
   try {
     const nodeId = createNewOutputNode()
-    if (!nodeId) throw new Error('无法创建正片节点')
+    if (!nodeId) throw new Error(translateUi('uiMessages.mc027186cd34c'))
     canvasStore.updateNodeData(nodeId, { model: quote.model, duration: String(quote.duration), seedanceResolution: '1080p', videoResolution: '1080p', seedanceDraftEnabled: false, seedanceDraft: false, seedanceDraftSourceTaskId: quote.task_id })
     await executeNodeGeneration(nodeId, props.data.prompt || '', [], 0, { model: quote.model, seedanceDraftTaskId: quote.task_id })
-  } catch (error) { showToast(error.message || '生成正片失败', 'error') }
+  } catch (error) { showToast(error.message || translateUi('uiMessages.me7ca49737ed1'), 'error') }
   finally { generatingSeedanceFinal.value = false }
 }
 
@@ -7081,7 +7083,7 @@ async function handleGenerate(options = {}) {
   const { retry = false } = options
   if (isGenerating.value) return
   if (findBlockingCanvasUploads(canvasStore.nodes, canvasStore.edges, props.id).length > 0) {
-    showToast('素材仍在上传，请等待完成后重试', 'warning')
+    showToast(translateUi('uiMessages.m97f1343b0c9b'), 'warning')
     return
   }
   collapseConfigPanel()
@@ -7107,19 +7109,19 @@ async function handleGenerate(options = {}) {
   const isHeygenFlow = isHeygenModelSelected.value || upstreamData.digitalHumans.length > 0
   const isDigitalHumanFlow = upstreamData.digitalHumans.length > 0
   if (isDigitalHumanFlow && upstreamData.digitalHumans.length > 1) {
-    await showAlert('一个视频节点一次只能使用一个数字人', '提示')
+    await showAlert(translateUi('uiMessages.m6c83ab9e8487'), translateUi('common.info'))
     return
   }
   if (isDigitalHumanFlow && upstreamData.audios.length === 0) {
-    await showAlert('数字人口播请连接音频', '提示')
+    await showAlert(translateUi('uiMessages.m9c415b383fa7'), translateUi('common.info'))
     return
   }
   if (!isDigitalHumanFlow && isHeygenFlow && (upstreamData.videos.length === 0 || upstreamData.audios.length === 0)) {
-    await showAlert('HeyGen 需要连接数字人资产和音频，或同时连接视频和音频', '提示')
+    await showAlert(translateUi('uiMessages.m8a726ae40b68'), translateUi('common.info'))
     return
   }
   if (!isDigitalHumanFlow && isHeygenFlow && !props.data?.heygenChannelId) {
-    await showAlert('请选择 HeyGen 渠道后再进行视频换口型', '提示')
+    await showAlert(translateUi('uiMessages.m6251977ab517'), translateUi('common.info'))
     return
   }
   
@@ -7149,7 +7151,7 @@ async function handleGenerate(options = {}) {
       limits: seedance2Limits.value
     })
     if (seedanceReferenceCountMessage) {
-      await showAlert(seedanceReferenceCountMessage, '提示')
+      await showAlert(seedanceReferenceCountMessage, translateUi('common.info'))
       return
     }
     const seedanceValidationMessage = validateSeedanceModeInputs({
@@ -7159,7 +7161,7 @@ async function handleGenerate(options = {}) {
       audioCount: Math.min(referenceAudios.value.length, SEEDANCE_MAX_AUDIOS)
     })
     if (seedanceValidationMessage) {
-      await showAlert(seedanceValidationMessage, '提示')
+      await showAlert(seedanceValidationMessage, translateUi('common.info'))
       return
     }
     const seedance25PromptValidationMessage = validateSeedance25ModePrompt({
@@ -7168,7 +7170,7 @@ async function handleGenerate(options = {}) {
       prompt: finalPrompt
     })
     if (seedance25PromptValidationMessage) {
-      await showAlert(seedance25PromptValidationMessage, '提示')
+      await showAlert(seedance25PromptValidationMessage, translateUi('common.info'))
       return
     }
     if (['multimodal_ref', 'video_edit', 'video_extend'].includes(selectedSeedance2Mode.value)) {
@@ -7181,14 +7183,14 @@ async function handleGenerate(options = {}) {
         const minReferenceVideoDuration = seedance25ModeConstraints.value?.minReferenceVideoDuration || 2
         const maxReferenceVideoDuration = seedance25ModeConstraints.value?.maxReferenceVideoDuration || seedance2Limits.value.maxDuration
         if (dur < minReferenceVideoDuration || dur > maxReferenceVideoDuration) {
-          await showAlert(`参考视频时长需在${minReferenceVideoDuration}到${maxReferenceVideoDuration}秒之间`, '提示')
+          await showAlert(translateUi('uiMessages.m93c2b74af905', { value1: (minReferenceVideoDuration), value2: (maxReferenceVideoDuration) }), translateUi('common.info'))
           return
         }
         totalVideoDuration += dur
       }
       const totalVideoCap = seedance2Limits.value.maxReferenceVideoDuration
       if (totalVideoDuration > totalVideoCap) {
-        await showAlert(`参考视频总时长不能超过${totalVideoCap}秒`, '提示')
+        await showAlert(translateUi('uiMessages.mf222801ef042', { value1: (totalVideoCap) }), translateUi('common.info'))
         return
       }
     }
@@ -7198,15 +7200,15 @@ async function handleGenerate(options = {}) {
   if (!isHeygenFlow && isMinimaxH3Model.value) {
     const h3Mode = selectedMinimaxH3Mode.value || minimaxH3DefaultMode.value
     if (h3Mode === 'image2video_first' && finalImages.length === 0) {
-      await showAlert('H3 首帧模式需要连接或上传1张图片', '提示')
+      await showAlert(translateUi('uiMessages.ma31080a10ece'), translateUi('common.info'))
       return
     }
     if (h3Mode === 'image2video_first_last' && finalImages.length < 2) {
-      await showAlert('H3 首尾帧模式需要连接或上传2张图片', '提示')
+      await showAlert(translateUi('uiMessages.mc75a643193dd'), translateUi('common.info'))
       return
     }
     if (h3Mode === 'multimodal_ref' && finalImages.length === 0 && referenceVideos.value.length === 0 && !(isAtlasCloudVideoModel.value && referenceAudios.value.length > 0)) {
-      await showAlert('H3 多模态参考模式需要至少连接1张图片或1个视频', '提示')
+      await showAlert(translateUi('uiMessages.m945b716e8aa9'), translateUi('common.info'))
       return
     }
     if (h3Mode === 'multimodal_ref') {
@@ -7217,13 +7219,13 @@ async function handleGenerate(options = {}) {
         const dur = Number(sourceNode?.data?.videoDuration)
         if (!Number.isFinite(dur) || dur <= 0) continue
         if (dur < 2 || dur > 15) {
-          await showAlert('H3 参考视频时长需在2到15秒之间', '提示')
+          await showAlert(translateUi('uiMessages.m9876b6ee03c2'), translateUi('common.info'))
           return
         }
         totalH3VideoDuration += dur
       }
       if (totalH3VideoDuration > 15) {
-        await showAlert('H3 参考视频总时长不能超过15秒', '提示')
+        await showAlert(translateUi('uiMessages.me0e1486cb8ba'), translateUi('common.info'))
         return
       }
     }
@@ -7233,39 +7235,39 @@ async function handleGenerate(options = {}) {
     const wanMode = selectedWanMode.value
     const wanReferenceCount = finalImages.length + referenceVideos.value.length
     if (!finalPrompt) {
-      await showAlert('请输入 Wan 视频提示词', '提示')
+      await showAlert(translateUi('uiMessages.ma2e92420541f'), translateUi('common.info'))
       return
     }
     if (wanMode === 'i2v' && finalImages.length === 0) {
-      await showAlert('Wan 图生视频需要连接或上传1张首帧图', '提示')
+      await showAlert(translateUi('uiMessages.mc1e63404bd3f'), translateUi('common.info'))
       return
     }
     if (wanMode === 'i2v' && finalImages.length > 1) {
-      await showAlert('Wan 图生视频最多支持1张首帧图', '提示')
+      await showAlert(translateUi('uiMessages.m2f6912e2ea02'), translateUi('common.info'))
       return
     }
     if (wanMode === 'r2v' && wanReferenceCount === 0) {
-      await showAlert('Wan 多参考需要连接或上传图片/视频参考素材', '提示')
+      await showAlert(translateUi('uiMessages.mb54e4887d7ae'), translateUi('common.info'))
       return
     }
     if (wanMode === 'r2v' && wanReferenceCount > 5) {
-      await showAlert('Wan 多参考的图片/视频参考素材合计最多5个', '提示')
+      await showAlert(translateUi('uiMessages.mb35987fb74a6'), translateUi('common.info'))
       return
     }
     if (wanMode === 'videoedit' && referenceVideos.value.length === 0) {
-      await showAlert('Wan 视频编辑需要连接上游视频节点', '提示')
+      await showAlert(translateUi('uiMessages.m5e80b6b4b36e'), translateUi('common.info'))
       return
     }
     if (wanMode === 'animate_mix' && finalImages.length === 0) {
-      await showAlert('Wan 换人混合需要连接或上传1张人物图片', '提示')
+      await showAlert(translateUi('uiMessages.m305913787abc'), translateUi('common.info'))
       return
     }
     if (wanMode === 'animate_mix' && finalImages.length > 1) {
-      await showAlert('Wan 换人混合最多支持1张人物图片', '提示')
+      await showAlert(translateUi('uiMessages.mb7699c812133'), translateUi('common.info'))
       return
     }
     if (wanMode === 'animate_mix' && referenceVideos.value.length === 0) {
-      await showAlert('Wan 换人混合需要连接上游视频节点', '提示')
+      await showAlert(translateUi('uiMessages.m801e31209673'), translateUi('common.info'))
       return
     }
   }
@@ -7280,30 +7282,30 @@ async function handleGenerate(options = {}) {
     const maxAudios = Math.min(5, Math.max(0, Number(routerbeeConfig.maxAudios) || 5))
 
     if (!finalPrompt) {
-      await showAlert('请输入 RouterBee 视频提示词', '提示')
+      await showAlert(translateUi('uiMessages.m30e5704ac268'), translateUi('common.info'))
       return
     }
     if (routerbeeWan3Mode === 'text2video' && (finalImages.length > 0 || referenceVideoCount > 0 || referenceAudioCount > 0)) {
-      await showAlert('RouterBee 文生视频不能包含参考素材，请切换生成模式', '输入冲突')
+      await showAlert(translateUi('uiMessages.m69cb267061fa'), translateUi('uiMessages.m85c0ccd2f097'))
       return
     }
     if (routerbeeWan3Mode === 'image2video') {
       if (referenceVideoCount > 0 || referenceAudioCount > 0 || finalImages.length !== 1) {
-        await showAlert('RouterBee 图生视频需要且仅支持 1 张首帧图片', '输入不正确')
+        await showAlert(translateUi('uiMessages.mba1cc109503a'), translateUi('uiMessages.ma8ea254180d7'))
         return
       }
     } else if (routerbeeWan3Mode === 'first_last_frame') {
       if (referenceVideoCount > 0 || referenceAudioCount > 0 || finalImages.length !== 2) {
-        await showAlert('RouterBee 首尾帧需要按顺序连接 2 张图片，且不能混用参考素材', '输入不正确')
+        await showAlert(translateUi('uiMessages.m8e00297819a7'), translateUi('uiMessages.ma8ea254180d7'))
         return
       }
     } else if (routerbeeWan3Mode === 'multimodal_ref') {
       if (finalImages.length === 0 && referenceVideoCount === 0 && referenceAudioCount === 0) {
-        await showAlert('RouterBee 多模态参考至少需要 1 个参考素材链接', '缺少参考素材')
+        await showAlert(translateUi('uiMessages.m720df07c5079'), translateUi('uiMessages.m5d20c1abb059'))
         return
       }
       if (finalImages.length > maxImages || referenceVideoCount > maxVideos || referenceAudioCount > maxAudios) {
-        await showAlert('RouterBee 参考素材最多支持 10 张图片、5 个视频和 5 个音频', '参考素材过多')
+        await showAlert(translateUi('uiMessages.m296745e6eccb'), translateUi('uiMessages.mddabc7653cf4'))
         return
       }
     }
@@ -7311,7 +7313,7 @@ async function handleGenerate(options = {}) {
 
   if (!isHeygenFlow && isWan3Model.value) {
     if (wan3FileUploading.value) {
-      await showAlert('参考文件仍在上传，请等待完成后生成', '文件上传中')
+      await showAlert(translateUi('uiMessages.md29c50b9b427'), translateUi('uiMessages.m51f99b84e650'))
       return
     }
 
@@ -7323,17 +7325,17 @@ async function handleGenerate(options = {}) {
     const hasFrameOrReferenceMedia = finalImages.length > 0 || referenceVideoCount > 0 || referenceAudioCount > 0
 
     if (wan3FileUrl && wan3LinkUrl) {
-      await showAlert('万相 3.0 文件和网页链接不能同时使用', '输入冲突')
+      await showAlert(translateUi('uiMessages.m069ddbb2a457'), translateUi('uiMessages.m85c0ccd2f097'))
       return
     }
 
     if (wan3Mode === 'file' || wan3Mode === 'link') {
       if (hasFrameOrReferenceMedia) {
-        await showAlert('万相 3.0 文件或网页链接不能与首尾帧、参考素材同时使用', '输入冲突')
+        await showAlert(translateUi('uiMessages.m7e006a60fd20'), translateUi('uiMessages.m85c0ccd2f097'))
         return
       }
       if (wan3Mode === 'file' && !wan3FileUrl) {
-        await showAlert('请先上传一个参考文件', '缺少参考文件')
+        await showAlert(translateUi('uiMessages.m2b861145fb73'), translateUi('uiMessages.m7fdfd500d486'))
         return
       }
       if (wan3Mode === 'link') {
@@ -7341,35 +7343,35 @@ async function handleGenerate(options = {}) {
           const parsedLink = new URL(wan3LinkUrl)
           if (!['http:', 'https:'].includes(parsedLink.protocol)) throw new Error('unsupported_protocol')
         } catch {
-          await showAlert('请输入一个可公开访问的 HTTP/HTTPS 网页链接', '网页链接无效')
+          await showAlert(translateUi('uiMessages.m6a8a9f9cf3e4'), translateUi('uiMessages.m477a9f299cd6'))
           return
         }
       }
     } else if (wan3Mode === 'image2video_first') {
       if (wan3FileUrl || wan3LinkUrl || referenceVideoCount > 0 || referenceAudioCount > 0) {
-        await showAlert('万相 3.0 首尾帧不能与参考素材、文件或网页链接同时使用', '输入冲突')
+        await showAlert(translateUi('uiMessages.m2f14c75a3c53'), translateUi('uiMessages.m85c0ccd2f097'))
         return
       }
       if (finalImages.length !== 1) {
-        await showAlert('万相 3.0 首帧模式需要且仅支持 1 张图片', '首帧数量不正确')
+        await showAlert(translateUi('uiMessages.ma4e1f711da44'), translateUi('uiMessages.m9a15adfc8f82'))
         return
       }
     } else if (wan3Mode === 'image2video_first_last') {
       if (wan3FileUrl || wan3LinkUrl || referenceVideoCount > 0 || referenceAudioCount > 0) {
-        await showAlert('万相 3.0 首尾帧不能与参考素材、文件或网页链接同时使用', '输入冲突')
+        await showAlert(translateUi('uiMessages.m2f14c75a3c53'), translateUi('uiMessages.m85c0ccd2f097'))
         return
       }
       if (finalImages.length !== 2) {
-        await showAlert('万相 3.0 首尾帧模式需要且仅支持 2 张图片', '首尾帧数量不正确')
+        await showAlert(translateUi('uiMessages.m428f6edfa381'), translateUi('uiMessages.md7402465b654'))
         return
       }
     } else if (['multimodal_ref', 'video_edit', 'video_extend'].includes(wan3Mode)) {
       if (wan3FileUrl || wan3LinkUrl) {
-        await showAlert('万相 3.0 文件或网页链接不能与首尾帧、参考素材同时使用', '输入冲突')
+        await showAlert(translateUi('uiMessages.m7e006a60fd20'), translateUi('uiMessages.m85c0ccd2f097'))
         return
       }
       if (['video_edit', 'video_extend'].includes(wan3Mode) && referenceVideoCount === 0) {
-        await showAlert(`万相 3.0 ${wan3Mode === 'video_edit' ? '视频编辑' : '视频延长'}至少需要一段参考视频`, '缺少参考视频')
+        await showAlert(translateUi('uiMessages.m98815a7f1a3c', { value1: (wan3Mode === 'video_edit' ? translateUi('canvas.nodeConfig.videoEdit.label') : translateUi('canvas.nodeConfig.videoExtend.label')) }), translateUi('uiMessages.m7054a49471b8'))
         return
       }
       const wan3Config = currentModelConfig.value?.wan3Config || {}
@@ -7377,11 +7379,11 @@ async function handleGenerate(options = {}) {
       const maxVideos = currentModelConfig.value?.apiType === 'grsai-wan3' ? 0 : Math.min(5, Math.max(0, Number(wan3Config.maxVideos) || 5))
       const maxAudios = Math.min(5, Math.max(0, Number(wan3Config.maxAudios) || 5))
       if (finalImages.length === 0 && referenceVideoCount === 0 && referenceAudioCount === 0) {
-        await showAlert('万相 3.0 多模态参考模式至少需要一个参考素材', '缺少参考素材')
+        await showAlert(translateUi('uiMessages.mf45306b5c0da'), translateUi('uiMessages.m5d20c1abb059'))
         return
       }
       if (finalImages.length > maxImages || referenceVideoCount > maxVideos || referenceAudioCount > maxAudios) {
-        await showAlert('万相 3.0 参考素材数量超过当前模型配置上限', '参考素材过多')
+        await showAlert(translateUi('uiMessages.md9a7d6356f4b'), translateUi('uiMessages.mddabc7653cf4'))
         return
       }
     }
@@ -7389,38 +7391,38 @@ async function handleGenerate(options = {}) {
 
   if (!isHeygenFlow && isCozeVideoSwapModel.value) {
     if (finalImages.length === 0) {
-      await showAlert('Coze 视频换人需要连接或上传1张人物图片', '提示')
+      await showAlert(translateUi('uiMessages.m13b661495ea7'), translateUi('common.info'))
       return
     }
     if (finalImages.length > 1) {
-      await showAlert('Coze 视频换人最多支持1张人物图片', '提示')
+      await showAlert(translateUi('uiMessages.m84a0c63bd6f4'), translateUi('common.info'))
       return
     }
     if (referenceVideos.value.length === 0) {
-      await showAlert('Coze 视频换人需要连接上游视频节点', '提示')
+      await showAlert(translateUi('uiMessages.m7ce1f075bd2b'), translateUi('common.info'))
       return
     }
   }
 
   if (!isHeygenFlow && isMotionTransferModel.value) {
     if (finalImages.length !== 1 || referenceVideos.value.length !== 1 || referenceAudios.value.length) {
-      await showAlert('动作迁移需要 1 张人物图和 1 个参考视频（100 MB、45 秒以内）', '检查输入素材')
+      await showAlert(translateUi('uiMessages.m571b9e956ead'), translateUi('uiMessages.m235d84d2dfe7'))
       return
     }
     const seconds = Number(motionTransferDuration.value)
     if (upstreamVideoDuration.value > 45 || (motionTransferDuration.value && (!Number.isFinite(seconds) || seconds <= 0 || seconds > 45 || (upstreamVideoDuration.value > 0 && seconds > upstreamVideoDuration.value)))) {
-      await showAlert('输出时长不能超过参考视频时长，参考视频最长 45 秒', '检查时长')
+      await showAlert(translateUi('uiMessages.m08f108c52ff0'), translateUi('uiMessages.me3aa264f738c'))
       return
     }
   }
 
   if (!isHeygenFlow && isLongCatModel.value) {
     if (finalImages.length !== 1 || referenceAudios.value.length !== 1) {
-      await showAlert('LongCat 需要连接 1 张图片和 1 段音频（不超过 45 秒）', '检查输入素材')
+      await showAlert(translateUi('uiMessages.ma78e2e9a16d9'), translateUi('uiMessages.m235d84d2dfe7'))
       return
     }
     if (longCatAudioDuration.value > 45 || (longCatDuration.value && (Number(longCatDuration.value) <= 0 || (longCatAudioDuration.value > 0 && Number(longCatDuration.value) > longCatAudioDuration.value)))) {
-      await showAlert('音频不能超过 45 秒，输出时长不能超过输入音频；留空为智能时长', '检查时长')
+      await showAlert(translateUi('uiMessages.mfe40fcfa3c4c'), translateUi('uiMessages.me3aa264f738c'))
       return
     }
   }
@@ -7429,19 +7431,19 @@ async function handleGenerate(options = {}) {
   if (!isHeygenFlow && isRunningHubAiAppVideoV31Model.value) {
     const requiredImages = v31ModeConfig.value.needsImages
     if (requiredImages > 0 && finalImages.length === 0) {
-      await showAlert(`${v31ModeConfig.value.label}需要连接至少 1 张图片`, '提示')
+      await showAlert(translateUi('uiMessages.m1bb817dc4980', { value1: (v31ModeConfig.value.label) }), translateUi('common.info'))
       return
     }
     if (v31Mode.value === 'first_last_frame' && finalImages.length < 2) {
-      await showAlert('首尾帧生视频需要按顺序连接 2 张图片（首帧→尾帧）', '提示')
+      await showAlert(translateUi('uiMessages.mfe2d66d7c014'), translateUi('common.info'))
       return
     }
     if (v31Mode.value === 'multi_image' && finalImages.length > 3) {
-      await showAlert('多图生视频最多支持 3 张图片', '提示')
+      await showAlert(translateUi('uiMessages.m50b007f83320'), translateUi('common.info'))
       return
     }
     if (v31ModeConfig.value.needsAudio && referenceAudios.value.length === 0) {
-      await showAlert('图像+音频生视频需要连接 1 段音频', '提示')
+      await showAlert(translateUi('uiMessages.m7a4b16b3e07f'), translateUi('common.info'))
       return
     }
   }
@@ -7454,12 +7456,12 @@ async function handleGenerate(options = {}) {
   )
   const hasMotionVideoInput = isCozeVideoSwapModel.value && referenceVideos.value.length > 0
   if (!isHeygenFlow && !finalPrompt && finalImages.length === 0 && !hasSeedanceVideoInput && !hasWanVideoInput && !hasWan3AttachmentInput && !hasMotionVideoInput) {
-    await showAlert('请输入提示词或连接参考图片', '提示')
+    await showAlert(translateUi('canvas.imageNode.enterPromptOrRef'), translateUi('common.info'))
     return
   }
 
   if (!isHeygenFlow && currentModelConfig.value?.usable === false) {
-    await showAlert(currentModelConfig.value.accessMessage || '需要购买对应套餐后使用', '模型权限')
+    await showAlert(currentModelConfig.value.accessMessage || translateUi('uiMessages.m861a77c9f9fb'), translateUi('uiMessages.m220ae4856f14'))
     return
   }
   
@@ -7472,7 +7474,7 @@ async function handleGenerate(options = {}) {
   
   // 检查并发限制
   if (!isHeygenFlow && selectedCount.value > userConcurrentLimit.value) {
-    await showAlert(`您的套餐最大支持 ${userConcurrentLimit.value} 次并发，请升级套餐`, '并发限制')
+    await showAlert(translateUi('uiMessages.me1052afb3c10', { value1: (userConcurrentLimit.value) }), translateUi('uiMessages.m44c5959863d8'))
     return
   }
 
@@ -7512,7 +7514,7 @@ async function handleGenerate(options = {}) {
     })
     const duplicateResult = duplicateSubmitGuard.check(submitFingerprint)
     if (duplicateResult.blocked) {
-      await showAlert(duplicateResult.message, '重复提交')
+      await showAlert(duplicateResult.message, translateUi('uiMessages.m5f0dcd88953e'))
       return
     }
   }
@@ -7630,7 +7632,7 @@ async function handleGenerate(options = {}) {
         allNodeIds.push(stackedNodeId)
       }
 
-      canvasStore.createVisibleGroup(allNodeIds, `视频生成 ×${generateCount}`, {
+      canvasStore.createVisibleGroup(allNodeIds, translateUi('uiMessages.m52b9b6c6d2ca', { value1: (generateCount) }), {
         skipHistory: true,
         defaultWidth: displayWidth,
         defaultHeight: displayHeight
@@ -7646,7 +7648,7 @@ async function handleGenerate(options = {}) {
     output: null,
     videoUrl: null,
     error: null,
-    progress: generateCount > 1 ? `准备提交 ${generateCount} 个视频...` : '准备提交...',
+    progress: generateCount > 1 ? translateUi('uiMessages.m1c3b583a430d', { value1: (generateCount) }) : translateUi('uiMessages.m4b338d249147'),
     clientSubmissionId: null,
     processingStartedAt: Date.now(),
     taskId: null,
@@ -7685,7 +7687,7 @@ async function pollVideoTask(taskId, isOffPeak = false, taskCreatedAt = null) {
       })
       
       if (!response.ok) {
-        throw new Error('查询任务状态失败')
+        throw new Error(translateUi('uiMessages.m935974010ab6'))
       }
       
       const data = await response.json()
@@ -7693,7 +7695,7 @@ async function pollVideoTask(taskId, isOffPeak = false, taskCreatedAt = null) {
       
       // 更新进度
       canvasStore.updateNodeData(props.id, { 
-        progress: '生成中...',
+        progress: translateUi('canvas.audioNode.generating'),
         processingStartedAt: props.data.processingStartedAt || startTime
       })
       
@@ -7736,12 +7738,12 @@ async function pollVideoTask(taskId, isOffPeak = false, taskCreatedAt = null) {
       
       // 检查失败状态
       if (status === 'failed' || status === 'failure' || status === 'error') {
-        throw new Error(data.error || data.fail_reason || '视频生成失败')
+        throw new Error(data.error || data.fail_reason || translateUi('uiMessages.m5a586025ef2c'))
       }
 
       // 后端查询优先，以确保超时任务进入统一退款链路；这里只保留前端兜底。
       if (Date.now() - startTime > MAX_POLL_TIME) {
-        throw new Error('生成超时（超过40分钟），已自动退还积分')
+        throw new Error(translateUi('uiMessages.maaa706624ce5'))
       }
       
       setTimeout(poll, NORMAL_POLL_INTERVAL)
@@ -7749,7 +7751,7 @@ async function pollVideoTask(taskId, isOffPeak = false, taskCreatedAt = null) {
     } catch (error) {
       console.error('[VideoNode] 轮询失败:', error)
       const model = props.data?.model || selectedModel.value
-      errorMessage.value = formatVideoNodeAsyncErrorMessage(error.message || '生成失败', model)
+      errorMessage.value = formatVideoNodeAsyncErrorMessage(error.message || translateUi('canvas.audioNode.generateFailed'), model)
       canvasStore.updateNodeData(props.id, {
         status: 'error',
         ...buildAsyncVideoErrorData(error.message, model)
@@ -7774,26 +7776,26 @@ async function replaceVideoOutput(selection) {
     let assetId = selection?.source === 'asset' ? selection.id : null
     if (selection?.source === 'local') {
       const file = selection.file
-      if (!file?.type?.startsWith('video/')) throw new Error('请选择视频文件')
-      if (file.size > 500 * 1024 * 1024) throw new Error('视频文件不能超过 500 MB')
+      if (!file?.type?.startsWith('video/')) throw new Error(translateUi('uiMessages.m6d5320e8d373'))
+      if (file.size > 500 * 1024 * 1024) throw new Error(translateUi('uiMessages.m21f3cd9d47de'))
       const uploaded = await uploadCanvasMedia(file, 'video', { nodeId: props.id, tabId })
       url = uploaded?.url
       assetId = uploaded?.assetId || null
     }
-    if (typeof url !== 'string' || !url.trim() || /^(blob:|data:)/.test(url)) throw new Error('视频素材地址无效')
-    if (canvasStore.getCurrentTab?.()?.id !== tabId || props.data.output?.url !== originalUrl) throw new Error('画布或源视频已变化，请重新选择')
+    if (typeof url !== 'string' || !url.trim() || /^(blob:|data:)/.test(url)) throw new Error(translateUi('uiMessages.mc61b81a7d1a5'))
+    if (canvasStore.getCurrentTab?.()?.id !== tabId || props.data.output?.url !== originalUrl) throw new Error(translateUi('uiMessages.m179f01c3192b'))
     let context = tab.workflowId ? { workflowId: tab.workflowId } : await ensureCanvasWorkflowForVideoSubmission(props.id)
-    if (canvasStore.getCurrentTab?.()?.id !== tabId || props.data.output?.url !== originalUrl) throw new Error('画布或源视频已变化，请重新选择')
+    if (canvasStore.getCurrentTab?.()?.id !== tabId || props.data.output?.url !== originalUrl) throw new Error(translateUi('uiMessages.m179f01c3192b'))
     let saved = await getWorkflowNodesBatch(context.workflowId, [props.id])
     if (!saved.nodes?.some(node => node.id === props.id)) {
       context = await ensureCanvasWorkflowForVideoSubmission(props.id)
       saved = await getWorkflowNodesBatch(context.workflowId, [props.id])
     }
     const savedNode = saved.nodes?.find(node => node.id === props.id)
-    if (!savedNode) throw new Error('视频节点保存失败，请重试')
-    if (canvasStore.getCurrentTab?.()?.id !== tabId || props.data.output?.url !== originalUrl) throw new Error('画布或源视频已变化，请重新选择')
+    if (!savedNode) throw new Error(translateUi('uiMessages.m605e8e4fccdf'))
+    if (canvasStore.getCurrentTab?.()?.id !== tabId || props.data.output?.url !== originalUrl) throw new Error(translateUi('uiMessages.m179f01c3192b'))
     const savedUrl = savedNode.data?.output?.url
-    if (savedUrl && savedUrl !== originalUrl && !/^(blob:|data:)/.test(originalUrl)) throw new Error('视频节点已在其他位置更新，请刷新画布后重试')
+    if (savedUrl && savedUrl !== originalUrl && !/^(blob:|data:)/.test(originalUrl)) throw new Error(translateUi('uiMessages.me8c14af99200'))
     const poster = selection?.thumbnail_url || selection?.thumbnailUrl || selection?.cover_url || selection?.coverUrl || null
     const duration = Number(selection?.duration) > 0 ? Number(selection.duration) : null
     const data = {
@@ -7817,7 +7819,7 @@ async function replaceVideoOutput(selection) {
         canvasStore.propagateData(edge.source, edge.target, edge.targetHandle)
       }
       showVideoReplacementPicker.value = false
-      showToast('视频素材已替换', 'success')
+      showToast(translateUi('uiMessages.m985f5b8bf39b'), 'success')
     } else if (canvasStore.getCurrentTab?.()?.id !== tabId && tab.nodes?.find(node => node.id === props.id)?.data?.output?.url === originalUrl) {
       canvasStore.commitMediaUpload?.({ nodeId: props.id, tabId, blobUrl: originalUrl, uploaded: { url, assetId, status: 'completed' }, mediaType: 'video' })
       canvasStore.updateNodeDataForTab?.(tabId, props.id, data)
@@ -7826,7 +7828,7 @@ async function replaceVideoOutput(selection) {
       canvasStore.applyWorkflowSaveVersions?.({ id: context.workflowId, node_versions: { ...tab.savedNodeVersions, [props.id]: result.version } })
     }
   } catch (error) {
-    showToast(error?.message || '视频素材替换失败', 'error')
+    showToast(error?.message || translateUi('uiMessages.m94a7ad5f895e'), 'error')
   } finally {
     videoReplacementBusy.value = false
   }
@@ -8060,7 +8062,7 @@ async function uploadVideoFileAsync(file, blobUrl, nodeId) {
       canvasStore.updateNodeData(nodeId, {
         isUploading: false,
         uploadFailed: true,
-        uploadError: '视频文件过大（>500MB）'
+        uploadError: translateUi('uiMessages.m8bd2cd3ef789')
       })
       return
     }
@@ -8096,11 +8098,11 @@ async function handleSourceVideoChange(event) {
   event.target.value = ''
   if (!file || props.data?.readonly || isGenerating.value) return
   if (!file.type.startsWith('video/')) {
-    await showAlert('请选择视频文件', '提示')
+    await showAlert(translateUi('uiMessages.m6d5320e8d373'), translateUi('common.info'))
     return
   }
   if (file.size > 500 * 1024 * 1024) {
-    await showAlert('视频文件不能超过 500 MB', '提示')
+    await showAlert(translateUi('uiMessages.m21f3cd9d47de'), translateUi('common.info'))
     return
   }
 
@@ -8184,7 +8186,7 @@ async function handleFrameFileChange(event) {
     }
   } catch (error) {
     console.error('[VideoNode] 上传失败:', error)
-    await showAlert(error.message || '素材处理失败，请更换文件', '提示')
+    await showAlert(error.message || translateUi('uiMessages.m81f3ce4f42a9'), translateUi('common.info'))
   }
 }
 
@@ -8209,7 +8211,7 @@ function createUpstreamImageNode(imageUrl) {
     type: 'image-input',
     position: newNodePosition,
     data: {
-      title: `参考图 ${existingUpstreamCount + 1}`,
+      title: translateUi('uiMessages.m380b51de95cd', { value1: (existingUpstreamCount + 1) }),
       nodeRole: 'source',
       sourceImages: [imageUrl]
     }
@@ -8255,7 +8257,7 @@ function createUpstreamVideoNode(videoUrl, metadata = {}) {
     type: 'video-input',
     position: newNodePosition,
     data: {
-      title: `参考视频 ${existingUpstreamCount + 1}`,
+      title: translateUi('uiMessages.mbff051614a21', { value1: (existingUpstreamCount + 1) }),
       nodeRole: 'source',
       sourceVideo: videoUrl,
       videoDuration: metadata.videoDuration || null,
@@ -8297,7 +8299,7 @@ function createUpstreamAudioNode(audioUrl, metadata = {}) {
     type: 'audio-input',
     position: newNodePosition,
     data: {
-      title: metadata.fileName || `参考音频 ${existingUpstreamCount + 1}`,
+      title: metadata.fileName || translateUi('uiMessages.m8de0ada7e2ba', { value1: (existingUpstreamCount + 1) }),
       fileName: metadata.fileName || '',
       nodeRole: 'source',
       status: 'success',
@@ -8462,7 +8464,7 @@ async function handleFrameDrop(event) {
     }
   } catch (error) {
     console.error('[VideoNode] 拖拽上传失败:', error)
-    await showAlert(error.message || '素材处理失败，请更换文件', '提示')
+    await showAlert(error.message || translateUi('uiMessages.m81f3ce4f42a9'), translateUi('common.info'))
   }
 }
 
@@ -9246,13 +9248,13 @@ async function confirmFrameCrop() {
     const tab = canvasStore.getCurrentTab?.()
     const source = canvasStore.nodes.find(node => node.id === props.id)
     const sourceUrl = props.data.output?.url
-    if (!tab?.id || !source || !sourceUrl) throw new Error('当前视频不可用')
+    if (!tab?.id || !source || !sourceUrl) throw new Error(translateUi('uiMessages.m1fbcb846bdc1'))
     tabId = tab.id
     let videoUrl = sourceUrl
     if (/^(blob:|data:)/.test(videoUrl)) {
       const blob = await (await fetch(videoUrl)).blob()
       const uploaded = await uploadCanvasMedia(new File([blob], 'video.mp4', { type: blob.type || 'video/mp4' }), 'video')
-      if (!uploaded.url) throw new Error('视频上传失败')
+      if (!uploaded.url) throw new Error(translateUi('uiMessages.m8bc76392a011'))
       videoUrl = uploaded.url
     }
     let context = tab.workflowId ? { workflowId: tab.workflowId } : await ensureCanvasWorkflowForVideoSubmission(props.id)
@@ -9261,30 +9263,30 @@ async function confirmFrameCrop() {
       if (!savedNodes.nodes?.some(node => node.id === props.id)) context = await ensureCanvasWorkflowForVideoSubmission(props.id)
     }
     workflowId = context.workflowId
-    if (canvasStore.getCurrentTab?.()?.id !== tabId || props.data.output?.url !== sourceUrl) throw new Error('画布或源视频已变化，请重新裁切')
+    if (canvasStore.getCurrentTab?.()?.id !== tabId || props.data.output?.url !== sourceUrl) throw new Error(translateUi('uiMessages.m33d94c89951a'))
     nodeId = `video_crop_${globalThis.crypto.randomUUID()}`
     const node = {
       id: nodeId, type: 'video',
       position: { x: source.position.x + (Number(source.data?.width) || 420) + 120, y: source.position.y },
-      data: { label: '画面裁切', title: '画面裁切', status: 'processing', progress: '画面裁切中...', processingStartedAt: Date.now(), sourceNodeId: props.id, videoToolMode: 'frame-crop', output: { type: 'video', url: '' } }
+      data: { label: translateUi('uiMessages.m5c3382d8f846'), title: translateUi('uiMessages.m5c3382d8f846'), status: 'processing', progress: translateUi('uiMessages.m221d87f6ec11'), processingStartedAt: Date.now(), sourceNodeId: props.id, videoToolMode: 'frame-crop', output: { type: 'video', url: '' } }
     }
     const edge = { id: `edge_${globalThis.crypto.randomUUID()}`, source: props.id, target: nodeId, sourceHandle: 'output', targetHandle: 'input' }
     await postWorkflowOps(workflowId, [{ op: 'add', target: 'node', payload: node }, { op: 'add', target: 'edge', payload: edge }])
     if (canvasStore.getCurrentTab?.()?.id === tabId) { canvasStore.addNode(node); canvasStore.addEdge(edge) }
     closeFrameCrop()
     const result = await cropVideoFrame({ videoUrl, crop })
-    if (!result?.url) throw new Error('裁切未返回视频地址')
+    if (!result?.url) throw new Error(translateUi('uiMessages.m08f8eb25371e'))
     const data = { status: 'success', progress: null, output: { type: 'video', url: result.url }, videoWidth: result.width, videoHeight: result.height, duration: result.duration }
     await patchWorkflowNode(workflowId, nodeId, { data })
     if (canvasStore.getCurrentTab?.()?.id === tabId) canvasStore.updateNodeData(nodeId, data)
     window.dispatchEvent(new CustomEvent('canvas-history-invalidate', { detail: { type: 'video', phase: 'tool-completed', sourceNodeId: props.id, nodeId } }))
   } catch (error) {
     if (workflowId && nodeId) {
-      const data = { status: 'error', progress: null, error: error.message || '画面裁切失败' }
+      const data = { status: 'error', progress: null, error: error.message || translateUi('uiMessages.m087f4055ad13') }
       await patchWorkflowNode(workflowId, nodeId, { data }).catch(() => {})
       if (canvasStore.getCurrentTab?.()?.id === tabId) canvasStore.updateNodeData(nodeId, data)
     }
-    showToast(error.message || '画面裁切失败', 'error')
+    showToast(error.message || translateUi('uiMessages.m087f4055ad13'), 'error')
   } finally { frameCropSubmitting.value = false }
 }
 
@@ -9297,21 +9299,21 @@ async function handleCaptureVideoFrame({ mode, time, duration }) {
     const tab = canvasStore.getCurrentTab?.()
     const source = canvasStore.nodes.find(node => node.id === props.id)
     const sourceUrl = props.data.output?.url
-    if (!tab?.id || !source || !sourceUrl) throw new Error('当前视频不可用')
+    if (!tab?.id || !source || !sourceUrl) throw new Error(translateUi('uiMessages.m1fbcb846bdc1'))
     const tabId = tab.id
     let videoUrl = sourceUrl
     if (/^(blob:|data:)/.test(videoUrl)) {
       const blob = await (await fetch(videoUrl)).blob()
       const uploaded = await uploadCanvasMedia(new File([blob], 'video.mp4', { type: blob.type || 'video/mp4' }), 'video')
-      if (!uploaded.url) throw new Error('视频上传失败')
+      if (!uploaded.url) throw new Error(translateUi('uiMessages.m8bc76392a011'))
       videoUrl = uploaded.url
     }
     const context = tab.workflowId ? { workflowId: tab.workflowId } : await ensureCanvasWorkflowForVideoSubmission(props.id)
-    if (canvasStore.getCurrentTab?.()?.id !== tabId || props.data.output?.url !== sourceUrl) throw new Error('画布或源视频已变化，请重新截取')
+    if (canvasStore.getCurrentTab?.()?.id !== tabId || props.data.output?.url !== sourceUrl) throw new Error(translateUi('uiMessages.md1ed3483416f'))
     const captureTime = mode === 'first' ? 0 : mode === 'last' ? Math.max(0, Number(duration) - 0.12) : Math.max(0, Number(time) || 0)
     const result = await extractVideoFrame({ videoUrl, time: captureTime, mode: mode === 'last' ? 'last' : 'time', nodeId: props.id })
-    if (canvasStore.getCurrentTab?.()?.id !== tabId || props.data.output?.url !== sourceUrl) throw new Error('画布或源视频已变化，请重新截取')
-    const label = mode === 'first' ? '视频首帧' : mode === 'last' ? '视频尾帧' : '视频当前帧'
+    if (canvasStore.getCurrentTab?.()?.id !== tabId || props.data.output?.url !== sourceUrl) throw new Error(translateUi('uiMessages.md1ed3483416f'))
+    const label = mode === 'first' ? translateUi('uiMessages.mc433c60f66b9') : mode === 'last' ? translateUi('uiMessages.m677e8e19bb2f') : translateUi('uiMessages.m6bd2def990a3')
     const nodeId = `video_frame_${globalThis.crypto.randomUUID()}`
     const node = {
       id: nodeId,
@@ -9329,7 +9331,7 @@ async function handleCaptureVideoFrame({ mode, time, duration }) {
       canvasStore.addEdge(edge)
     }
   } catch (error) {
-    showToast(error?.message || '视频帧截取失败', 'error')
+    showToast(error?.message || translateUi('uiMessages.m462968fc4169'), 'error')
   } finally {
     frameCaptureBusy.value = false
   }
@@ -9339,17 +9341,17 @@ let videoEditContext = null
 
 async function loadVideoEditDraft() {
   const tab = canvasStore.getCurrentTab?.()
-  if (!tab?.id) throw new Error('当前画布不可用')
+  if (!tab?.id) throw new Error(translateUi('uiMessages.m167d23b2160e'))
   const saved = tab.workflowId ? { workflowId: tab.workflowId } : await ensureCanvasWorkflowForVideoSubmission(props.id)
-  if (canvasStore.getCurrentTab?.()?.id !== tab.id) throw new Error('画布已切换，请重新打开剪辑')
+  if (canvasStore.getCurrentTab?.()?.id !== tab.id) throw new Error(translateUi('uiMessages.m8d896f9bb12f'))
   let result = await getWorkflowNodesBatch(saved.workflowId, [props.id])
   if (!result.nodes?.some(entry => entry.id === props.id)) {
     await ensureCanvasWorkflowForVideoSubmission(props.id)
     result = await getWorkflowNodesBatch(saved.workflowId, [props.id])
   }
   const node = result.nodes?.find(entry => entry.id === props.id)
-  if (!node) throw new Error('源视频节点不存在，请重新加载画布')
-  if (canvasStore.getCurrentTab?.()?.id !== tab.id) throw new Error('画布已切换，请重新打开剪辑')
+  if (!node) throw new Error(translateUi('uiMessages.m7c024673fcba'))
+  if (canvasStore.getCurrentTab?.()?.id !== tab.id) throw new Error(translateUi('uiMessages.m8d896f9bb12f'))
   videoEditContext = { workflowId: saved.workflowId, tabId: tab.id, version: node.version, sourceUrl: videoToolInitialSource.value?.url }
   canvasStore.updateNodeData(props.id, { videoEditDraft: node.data?.videoEditDraft || null, _baseVersion: node.version }, { silent: true })
   return node.data?.videoEditDraft || null
@@ -9358,8 +9360,8 @@ async function loadVideoEditDraft() {
 async function saveVideoEditDraft(draft) {
   const context = videoEditContext
   const tab = canvasStore.getCurrentTab?.()
-  if (!context || tab?.id !== context.tabId) throw new Error('画布已切换，请重新打开剪辑')
-  if (draft.sourceUrl !== context.sourceUrl || videoToolInitialSource.value?.url !== context.sourceUrl) throw new Error('源视频已变化，请重新打开剪辑')
+  if (!context || tab?.id !== context.tabId) throw new Error(translateUi('uiMessages.m8d896f9bb12f'))
+  if (draft.sourceUrl !== context.sourceUrl || videoToolInitialSource.value?.url !== context.sourceUrl) throw new Error(translateUi('uiMessages.m0049c19edf7a'))
   const result = await patchWorkflowNode(context.workflowId, props.id, { data: { videoEditDraft: draft } }, context.version)
   context.version = result.version
   canvasStore.applyWorkflowSaveVersions({ id: context.workflowId, node_versions: { ...tab.savedNodeVersions, [props.id]: result.version } })
@@ -9371,14 +9373,14 @@ async function saveVideoEditDraft(draft) {
 async function exportEditedClipToCanvas(payload) {
   const context = videoEditContext
   const currentNode = canvasStore.nodes.find(entry => entry.id === props.id)
-  if (!context || !currentNode || canvasStore.getCurrentTab?.()?.id !== context.tabId) throw new Error('当前画布不可用')
+  if (!context || !currentNode || canvasStore.getCurrentTab?.()?.id !== context.tabId) throw new Error(translateUi('uiMessages.m167d23b2160e'))
   const nodeId = `video_tool_${globalThis.crypto.randomUUID()}`
   const node = {
     id: nodeId,
     type: 'video',
     position: { x: currentNode.position.x + (Number(currentNode.data?.width) || 420) + 120, y: currentNode.position.y },
     data: {
-      label: '视频剪辑', title: '视频剪辑', status: 'processing', progress: '片段导出中...',
+      label: translateUi('uiMessages.m11ca06291afe'), title: translateUi('uiMessages.m11ca06291afe'), status: 'processing', progress: translateUi('uiMessages.m6a31b7b4c710'),
       processingStartedAt: Date.now(), sourceNodeId: props.id, videoToolMode: 'edit',
       output: { type: 'video', url: '' }
     }
@@ -9395,14 +9397,14 @@ async function exportEditedClipToCanvas(payload) {
   try {
     const result = await exportVideoTimeline({ clips: payload.clips, ...(payload.operation === 'segment' ? { operation: 'segment' } : {}) })
     const url = result?.url || result?.video_url || result?.videoUrl || result?.resultUrl || result?.output?.url
-    if (!url) throw new Error('导出未返回视频地址')
+    if (!url) throw new Error(translateUi('uiMessages.m5664e49b4c43'))
     const data = { status: 'success', progress: null, output: { type: 'video', url }, duration: payload.clips[0].duration }
     await patchWorkflowNode(context.workflowId, nodeId, { data })
     if (canvasStore.getCurrentTab?.()?.id === context.tabId) canvasStore.updateNodeData(nodeId, data)
     window.dispatchEvent(new CustomEvent('canvas-history-invalidate', { detail: { type: 'video', phase: 'tool-completed', sourceNodeId: props.id, nodeId } }))
     return url
   } catch (error) {
-    const data = { status: payload.operation === 'segment' ? 'error' : 'failed', progress: null, error: error.message || '片段导出失败' }
+    const data = { status: payload.operation === 'segment' ? 'error' : 'failed', progress: null, error: error.message || translateUi('uiMessages.m0fa6bd077b1d') }
     await patchWorkflowNode(context.workflowId, nodeId, { data }).catch(() => {})
     if (canvasStore.getCurrentTab?.()?.id === context.tabId) canvasStore.updateNodeData(nodeId, data)
     throw error
@@ -9427,7 +9429,7 @@ async function confirmSegmentClip(range) {
   if (!sourceUrl || segmentClipSubmitting.value) return
   const duration = Math.round((range.end - range.start) * 1000) / 1000
   if (duration <= 0 || duration > 300) {
-    showToast('截取片段时长不能超过5分钟', 'warning')
+    showToast(translateUi('uiMessages.m5a40a3ee11ae'), 'warning')
     return
   }
   segmentClipSubmitting.value = true
@@ -9436,16 +9438,16 @@ async function confirmSegmentClip(range) {
     if (/^(blob:|data:)/.test(url)) {
       const blob = await (await fetch(url)).blob()
       const uploaded = await uploadCanvasMedia(new File([blob], 'video.mp4', { type: blob.type || 'video/mp4' }), 'video')
-      if (!uploaded.url) throw new Error('视频上传失败')
+      if (!uploaded.url) throw new Error(translateUi('uiMessages.m8bc76392a011'))
       url = uploaded.url
     }
     await loadVideoEditDraft()
-    if (videoToolInitialSource.value?.url !== sourceUrl) throw new Error('源视频已变化，请重新打开截取')
+    if (videoToolInitialSource.value?.url !== sourceUrl) throw new Error(translateUi('uiMessages.md950fa6fe8b1'))
     const exporting = exportEditedClipToCanvas({ operation: 'segment', clips: [{ url, startTime: range.start, endTime: range.end, duration }] })
     closeSegmentClip()
     await exporting
   } catch (error) {
-    showToast(error?.message || '片段截取失败', 'error')
+    showToast(error?.message || translateUi('uiMessages.ma25f2ebe2456'), 'error')
   } finally {
     segmentClipSubmitting.value = false
   }
@@ -9468,7 +9470,7 @@ function handleVideoToolCompleted(payload) {
   if (!currentNode) return
 
   const newNodeId = `video_tool_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
-  const label = payload?.mode === 'edit' ? '视频剪辑' : '字幕擦除'
+  const label = payload?.mode === 'edit' ? translateUi('uiMessages.m11ca06291afe') : translateUi('pointsType.subtitle_erase_package')
   const width = Number(props.data.width) || Number(currentNode.data?.width) || 420
 
   canvasStore.addNode({
@@ -9511,7 +9513,7 @@ function handleVideoToolExportStarted(payload) {
 
   const isSubtitleErase = payload?.mode === 'subtitle'
   const newNodeId = `video_tool_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
-  const label = isSubtitleErase ? '字幕擦除' : '视频合成'
+  const label = isSubtitleErase ? translateUi('pointsType.subtitle_erase_package') : translateUi('uiMessages.m1619dcc74871')
   const width = Number(props.data.width) || Number(currentNode.data?.width) || 420
 
   canvasStore.addNode({
@@ -9525,7 +9527,7 @@ function handleVideoToolExportStarted(payload) {
       label,
       title: label,
       status: 'processing',
-      progress: isSubtitleErase ? '字幕擦除中...' : '视频合成中...',
+      progress: isSubtitleErase ? translateUi('uiMessages.m2555c684aa39') : translateUi('uiMessages.mb7a9a402e0dc'),
       processingStartedAt: Date.now(),
       sourceNodeId: props.id,
       videoToolMode: isSubtitleErase ? 'subtitle' : 'edit',
@@ -9552,7 +9554,7 @@ function handleVideoToolExportStarted(payload) {
 
   asyncTask.then(url => {
     if (!url) {
-      canvasStore.updateNodeData(newNodeId, { status: 'failed', error: isSubtitleErase ? '字幕擦除未返回视频地址' : '导出未返回视频地址' })
+      canvasStore.updateNodeData(newNodeId, { status: 'failed', error: isSubtitleErase ? translateUi('uiMessages.m342cdeb93f68') : translateUi('uiMessages.m5664e49b4c43') })
       return
     }
     canvasStore.updateNodeData(newNodeId, {
@@ -9563,7 +9565,7 @@ function handleVideoToolExportStarted(payload) {
       detail: { type: 'video', phase: 'tool-completed', sourceNodeId: props.id, nodeId: newNodeId }
     }))
   }).catch(error => {
-    canvasStore.updateNodeData(newNodeId, { status: 'failed', error: error?.message || (isSubtitleErase ? '字幕擦除失败' : '视频合成失败') })
+    canvasStore.updateNodeData(newNodeId, { status: 'failed', error: error?.message || (isSubtitleErase ? translateUi('uiMessages.m2a69493c0760') : translateUi('uiMessages.me4c6bbb16aec')) })
   })
 }
 
@@ -9577,10 +9579,10 @@ async function submitSubtitleEraseInBackground(payload, nodeId) {
   if (immediateUrl) return immediateUrl
 
   const taskId = task?.taskId || task?.task_id || task?.id
-  if (!taskId) throw new Error('字幕擦除任务未返回任务 ID')
+  if (!taskId) throw new Error(translateUi('uiMessages.m18fd229aa6a2'))
   canvasStore.updateNodeData(nodeId, {
     subtitleEraseTaskId: taskId,
-    progress: '字幕擦除中...'
+    progress: translateUi('uiMessages.m2555c684aa39')
   })
   return pollSubtitleEraseTask(taskId)
 }
@@ -9592,10 +9594,10 @@ async function pollSubtitleEraseTask(taskId) {
     const status = String(task?.status || '').toLowerCase()
     if (url) return url
     if (['completed', 'success', 'succeeded', 'done'].includes(status) && !url) return null
-    if (['failed', 'error', 'cancelled'].includes(status)) throw new Error(task?.message || '字幕擦除任务失败')
+    if (['failed', 'error', 'cancelled'].includes(status)) throw new Error(task?.message || translateUi('uiMessages.m15601226b62e'))
     await new Promise(resolve => setTimeout(resolve, SUBTITLE_ERASE_POLL_INTERVAL_MS))
   }
-  throw new Error('字幕擦除任务超时')
+  throw new Error(translateUi('uiMessages.mf6cf41ff9ee1'))
 }
 
 // 视频裁剪编辑器状态
@@ -9630,7 +9632,7 @@ async function parseHDJsonResponse(response, fallbackMessage) {
   }
 
   if (trimmed.startsWith('<')) {
-    throw new Error(`高清接口返回了页面内容，请检查后端接口或代理配置（HTTP ${response.status}）`)
+    throw new Error(translateUi('uiMessages.m1d46370bb930', { value1: (response.status) }))
   }
 
   throw new Error(trimmed || fallbackMessage)
@@ -9644,36 +9646,36 @@ async function handleToolbarAudioSeparate() {
   try {
     const tab = canvasStore.getCurrentTab?.()
     const source = canvasStore.nodes.find(node => node.id === props.id)
-    if (!tab?.id || !source) throw new Error('当前画布不可用')
+    if (!tab?.id || !source) throw new Error(translateUi('uiMessages.m167d23b2160e'))
     const tabId = tab.id
     const position = { ...source.position }
     const width = Number(source.data?.width) || nodeWidth.value || 420
     const height = Number(source.data?.height) || nodeHeight.value || 280
     let videoUrl = props.data.output?.url || normalizedVideoUrl.value
-    if (!videoUrl) throw new Error('没有可处理的视频')
+    if (!videoUrl) throw new Error(translateUi('uiMessages.ma2cfc7387fcd'))
     if (/^(blob:|data:)/.test(videoUrl)) {
       const blob = await (await fetch(videoUrl)).blob()
       const uploaded = await uploadCanvasMedia(new File([blob], 'video.mp4', { type: blob.type || 'video/mp4' }), 'video')
-      if (!uploaded.url) throw new Error('视频上传失败')
+      if (!uploaded.url) throw new Error(translateUi('uiMessages.m8bc76392a011'))
       videoUrl = uploaded.url
     }
-    if (canvasStore.getCurrentTab?.()?.id !== tabId) throw new Error('画布已切换，请重新操作')
+    if (canvasStore.getCurrentTab?.()?.id !== tabId) throw new Error(translateUi('uiMessages.m6f6b5ff359e7'))
     const context = tab.workflowId ? { workflowId: tab.workflowId } : await ensureCanvasWorkflowForVideoSubmission(props.id)
-    if (canvasStore.getCurrentTab?.()?.id !== tabId) throw new Error('画布已切换，请重新操作')
+    if (canvasStore.getCurrentTab?.()?.id !== tabId) throw new Error(translateUi('uiMessages.m6f6b5ff359e7'))
     const result = await separateVideoAudio({ videoUrl })
-    if (!result?.audioUrl || !result?.videoUrl) throw new Error('音频分离未返回完整结果')
+    if (!result?.audioUrl || !result?.videoUrl) throw new Error(translateUi('uiMessages.mf3d54ede8ad6'))
     const x = position.x + width + 120
     const audio = {
       id: `audio_split_${globalThis.crypto.randomUUID()}`, type: 'audio', position: { x, y: position.y },
       data: {
-        label: '分离音频', title: '分离音频', status: 'success', width: 420, height: 280,
+        label: translateUi('uiMessages.m0560d2d23976'), title: translateUi('uiMessages.m0560d2d23976'), status: 'success', width: 420, height: 280,
         audioUrl: result.audioUrl, output: { type: 'audio', url: result.audioUrl }, duration: result.duration
       }
     }
     const video = {
       id: `video_split_${globalThis.crypto.randomUUID()}`, type: 'video', position: { x, y: position.y + 280 + 100 },
       data: {
-        label: '无声视频', title: '无声视频', status: 'success', width, height,
+        label: translateUi('uiMessages.m95b6c3c10d7a'), title: translateUi('uiMessages.m95b6c3c10d7a'), status: 'success', width, height,
         output: { type: 'video', url: result.videoUrl }, duration: result.duration,
         videoWidth: result.width, videoHeight: result.height
       }
@@ -9687,27 +9689,27 @@ async function handleToolbarAudioSeparate() {
       canvasStore.addNode(audio)
       canvasStore.addNode(video)
     }
-    showToast('音频分离成功', 'success')
+    showToast(translateUi('uiMessages.md51f1bf38c3a'), 'success')
   } catch (error) {
-    showToast(error.message || '音频分离失败', 'error')
+    showToast(error.message || translateUi('uiMessages.m5e64cf4e5b2c'), 'error')
   } finally {
     isAudioSeparating.value = false
   }
 }
 
 const isDepthProcessing = ref(false)
-const depthPriceHint = ref('视频深度提取')
+const depthPriceHint = ref(translateUi('uiMessages.me7a488f4badf'))
 async function refreshDepthPriceHint() {
   try {
     const response = await fetch(getApiUrl('/api/videos/depth/config'), {
       headers: { ...getTenantHeaders(), Authorization: `Bearer ${localStorage.getItem('token')}` }, signal: AbortSignal.timeout(10000)
     })
     const config = await response.json()
-    if (!response.ok || !config.enabled) { depthPriceHint.value = '视频深度提取未配置，请联系管理员'; return }
+    if (!response.ok || !config.enabled) { depthPriceHint.value = translateUi('uiMessages.meef622b34761'); return }
     depthPriceHint.value = config.billing_mode === 'fixed'
-      ? `视频深度提取 · ${formatPoints(config.points_cost)} 积分/次，失败全退`
-      : `视频深度提取 · ${formatPoints(config.points_per_second)} 积分/秒，按实际时长结算`
-  } catch { depthPriceHint.value = '视频深度提取 · 费用暂不可用' }
+      ? translateUi('uiMessages.md516a49b43aa', { value1: (formatPoints(config.points_cost)) })
+      : translateUi('uiMessages.m87a7616e0396', { value1: (formatPoints(config.points_per_second)) })
+  } catch { depthPriceHint.value = translateUi('uiMessages.mcea33acd74c9') }
 }
 async function handleToolbarDepth() {
   if (isDepthProcessing.value) return
@@ -9715,16 +9717,16 @@ async function handleToolbarDepth() {
   let context, nodeId, nodeVersion = 1
   try {
     let videoUrl = props.data.output?.url || normalizedVideoUrl.value
-    if (!videoUrl) throw new Error('没有可处理的视频')
+    if (!videoUrl) throw new Error(translateUi('uiMessages.ma2cfc7387fcd'))
     const token = localStorage.getItem('token')
     const headers = { ...getTenantHeaders(), 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
     const configResponse = await fetch(getApiUrl('/api/videos/depth/config'), { headers })
     const config = await configResponse.json()
-    if (!configResponse.ok || !config.enabled) throw new Error(config.message || '视频深度提取未配置，请联系管理员')
+    if (!configResponse.ok || !config.enabled) throw new Error(config.message || translateUi('uiMessages.meef622b34761'))
     if (/^(blob:|data:)/.test(videoUrl)) {
       const blob = await (await fetch(videoUrl)).blob()
       const uploaded = await uploadCanvasMedia(new File([blob], 'video.mp4', { type: blob.type || 'video/mp4' }), 'video')
-      if (!uploaded.url) throw new Error('视频上传失败')
+      if (!uploaded.url) throw new Error(translateUi('uiMessages.m8bc76392a011'))
       videoUrl = uploaded.url
     }
     context = await ensureCanvasWorkflowForVideoSubmission(props.id)
@@ -9732,7 +9734,7 @@ async function handleToolbarDepth() {
     const requestId = globalThis.crypto.randomUUID()
     nodeId = `depth_node_${globalThis.crypto.randomUUID()}`
     const node = { id: nodeId, type: 'video', position: { x: source.position.x + 500, y: source.position.y }, data: {
-      label: '视频深度提取', title: '视频深度提取', status: 'processing', progress: '正在提交深度提取...',
+      label: translateUi('uiMessages.me7a488f4badf'), title: translateUi('uiMessages.me7a488f4badf'), status: 'processing', progress: translateUi('uiMessages.m5de74b62f0a5'),
       depthRequestId: requestId, depthExtracted: true, taskType: 'video', processingStartedAt: Date.now(), sourceNodeId: props.id,
       output: { type: 'video', url: '' }
     } }
@@ -9744,14 +9746,14 @@ async function handleToolbarDepth() {
     const response = await fetch(getApiUrl('/api/videos/depth/tasks'), { method: 'POST', headers,
       body: JSON.stringify({ videoUrl, requestId, workflowId: context.workflowId, nodeId }) })
     const result = await response.json()
-    if (!response.ok || !result.taskId) throw new Error(result.message || '深度提取提交失败')
-    const data = { taskId: result.taskId, taskType: 'video', progress: '深度提取中...', pointsCost: result.prepaid }
+    if (!response.ok || !result.taskId) throw new Error(result.message || translateUi('uiMessages.m8e1870e1c2ed'))
+    const data = { taskId: result.taskId, taskType: 'video', progress: translateUi('uiMessages.m3f943b78e243'), pointsCost: result.prepaid }
     const patched = await patchWorkflowNode(context.workflowId, nodeId, { data }, nodeVersion)
     nodeVersion = Number(patched?.version) || nodeVersion
     canvasStore.applyWorkflowSaveVersions?.({ id: context.workflowId, node_versions: { ...(canvasStore.getCurrentTab?.()?.savedNodeVersions || {}), [nodeId]: nodeVersion } })
     canvasStore.updateNodeData(nodeId, data, { silent: true })
     registerTask({ taskId: result.taskId, type: 'video', nodeId, tabId: context.currentTab.id, metadata: { sourceNodeId: props.id, workflowId: context.workflowId } })
-    showToast(`深度提取已提交，预扣 ${formatPoints(result.prepaid)} 积分`, 'success')
+    showToast(translateUi('uiMessages.m854c86fc9f91', { value1: (formatPoints(result.prepaid)) }), 'success')
   } catch (error) {
     if (nodeId && context) {
       const data = { status: 'error', progress: null, error: error.message }
@@ -9762,7 +9764,7 @@ async function handleToolbarDepth() {
       }
       canvasStore.updateNodeData(nodeId, data, { silent: true })
     }
-    showToast(error.message || '深度提取失败', 'error')
+    showToast(error.message || translateUi('uiMessages.m4d062471e7f5'), 'error')
   } finally { isDepthProcessing.value = false }
 }
 
@@ -9772,12 +9774,12 @@ async function handleToolbarHD() {
   
   const originalVideoUrl = props.data.output?.url
   if (!originalVideoUrl && !normalizedVideoUrl.value) {
-    showToast('没有可处理的视频', 'error')
+    showToast(translateUi('uiMessages.ma2cfc7387fcd'), 'error')
     return
   }
   
   if (isHDProcessing.value) {
-    showToast('正在处理中，请稍候', 'warning')
+    showToast(translateUi('uiMessages.mbb1ed5e0c6fa'), 'warning')
     return
   }
   
@@ -9794,7 +9796,7 @@ async function handleToolbarHD() {
                          videoUrlForHD.startsWith('/api/')
     
     if (isLocalVideo) {
-      showToast('上传视频到云端...', 'info')
+      showToast(translateUi('uiMessages.m5d0b1bf6d45f'), 'info')
       
       // 本地视频需要先上传到七牛云
       if (videoUrlForHD.startsWith('blob:')) {
@@ -9810,7 +9812,7 @@ async function handleToolbarHD() {
         
         const uploadResult = await uploadCanvasMedia(fileToUpload, 'video')
         if (uploadResult.status !== 'completed' || !uploadResult.url) {
-          throw new Error('媒体上传未完成')
+          throw new Error(translateUi('uiMessages.m909a1763f7f8'))
         }
         videoUrlForHD = uploadResult.url
         console.log('[VideoNode] blob视频上传成功:', videoUrlForHD)
@@ -9831,10 +9833,10 @@ async function handleToolbarHD() {
           },
           body: JSON.stringify({ videoUrl: videoUrlForApi })
         })
-        const uploadResult = await parseHDJsonResponse(uploadResponse, '视频上传失败')
+        const uploadResult = await parseHDJsonResponse(uploadResponse, translateUi('uiMessages.m8bc76392a011'))
         
         if (!uploadResponse.ok) {
-          throw new Error(uploadResult.message || uploadResult.error || '视频上传失败')
+          throw new Error(uploadResult.message || uploadResult.error || translateUi('uiMessages.m8bc76392a011'))
         }
         
         videoUrlForHD = uploadResult.url
@@ -9842,7 +9844,7 @@ async function handleToolbarHD() {
       }
     }
     
-    showToast('提交高清处理任务...', 'info')
+    showToast(translateUi('uiMessages.m81ef03497898'), 'info')
     
     // 提交异步任务（使用七牛云 URL）
     const response = await fetch(getApiUrl('/api/videos/hd-upscale'), {
@@ -9858,15 +9860,15 @@ async function handleToolbarHD() {
       })
     })
     
-    const result = await parseHDJsonResponse(response, '高清处理失败')
+    const result = await parseHDJsonResponse(response, translateUi('uiMessages.m8c799ce57125'))
     
     if (!response.ok) {
       if (result.error === 'insufficient_points') {
-        showToast('当前积分余额不足，任务提交失败', 'error')
+        showToast(translateUi('uiMessages.mf02eb368d929'), 'error')
       } else if (result.error === 'hd_not_configured') {
-        showAlert('功能未配置', result.message || '视频高清功能未配置，请联系管理员')
+        showAlert(translateUi('uiMessages.m102106862edf'), result.message || translateUi('uiMessages.med5a3d770a32'))
       } else {
-        showToast(result.message || '高清处理失败', 'error')
+        showToast(result.message || translateUi('uiMessages.m8c799ce57125'), 'error')
       }
       isHDProcessing.value = false
       return
@@ -9874,12 +9876,12 @@ async function handleToolbarHD() {
     
     const taskId = result.taskId || result.task_id || result.id
     if (!taskId) {
-      throw new Error('高清任务提交成功但未返回任务ID')
+      throw new Error(translateUi('uiMessages.m8e6009f7da62'))
     }
 
     // 获取任务 ID
     console.log('[VideoNode] 高清任务已提交:', taskId)
-    showToast('高清任务已提交，后台处理中...', 'success')
+    showToast(translateUi('uiMessages.m1334c73535ce'), 'success')
     
     // 立即恢复按钮状态（任务在后台处理）
     isHDProcessing.value = false
@@ -9889,7 +9891,7 @@ async function handleToolbarHD() {
     
     // 注册到后台任务管理器
     if (!hdResultNodeId) {
-      throw new Error('高清任务节点创建失败')
+      throw new Error(translateUi('uiMessages.m0f3f5117f0d2'))
     }
 
     const currentTab = canvasStore.getCurrentTab()
@@ -9906,7 +9908,7 @@ async function handleToolbarHD() {
     
   } catch (error) {
     console.error('[VideoNode] 高清处理失败:', error)
-    showToast(error.message || '高清处理失败', 'error')
+    showToast(error.message || translateUi('uiMessages.m8c799ce57125'), 'error')
     isHDProcessing.value = false
   }
 }
@@ -9929,10 +9931,10 @@ function createHDProcessingNode(taskId, sourceUrl = normalizedVideoUrl.value) {
     type: 'video',
     position: newNodePosition,
     data: {
-      label: '高清放大',
-      title: '高清放大',
+      label: translateUi('uiMessages.m825da56855ae'),
+      title: translateUi('uiMessages.m825da56855ae'),
       status: 'processing',
-      progress: '高清处理中...',
+      progress: translateUi('uiMessages.m27f66d065ff4'),
       taskId: taskId,
       taskType: 'video-hd',
       hdUpscaled: true,
@@ -9972,7 +9974,7 @@ function createHDResultNode(outputUrl, pointsCost) {
     type: 'video',
     position: newNodePosition,
     data: {
-      label: '高清放大',
+      label: translateUi('uiMessages.m825da56855ae'),
       output: {
         url: outputUrl,
         sourceUrl: normalizedVideoUrl.value
@@ -9999,13 +10001,13 @@ async function confirmVideoAnalysis(modelId) {
   try {
     const tab = canvasStore.getCurrentTab?.()
     const source = canvasStore.nodes.find(node => node.id === props.id)
-    if (!tab?.id || !source) throw new Error('当前画布不可用')
+    if (!tab?.id || !source) throw new Error(translateUi('uiMessages.m167d23b2160e'))
     tabId = tab.id
     const requestId = crypto.randomUUID()
     analysisNode = {
       id: `analysis_${requestId}`, type: 'text-input',
       position: { x: source.position.x + (Number(source.data.width) || 420) + 120, y: source.position.y },
-      data: { label: '视频解析', title: '视频解析', width: 520, height: 340, text: '', llmResponse: '', status: 'processing', processingText: '正在解析...', processingStartedAt: Date.now(), processingCompletedAt: null, analysisRequestId: requestId, analysisTaskId: null, sourceNodeId: props.id }
+      data: { label: translateUi('uiMessages.mc3d51f9bfa05'), title: translateUi('uiMessages.mc3d51f9bfa05'), width: 520, height: 340, text: '', llmResponse: '', status: 'processing', processingText: translateUi('uiMessages.m7f6bc8aec3c9'), processingStartedAt: Date.now(), processingCompletedAt: null, analysisRequestId: requestId, analysisTaskId: null, sourceNodeId: props.id }
     }
     analysisEdge = { id: `analysis_edge_${requestId}`, source: props.id, target: analysisNode.id, sourceHandle: 'output', targetHandle: 'input' }
     canvasStore.closeNodeSelector()
@@ -10015,38 +10017,38 @@ async function confirmVideoAnalysis(modelId) {
     const existingWorkflowId = tab.workflowId
     const context = existingWorkflowId ? { workflowId: existingWorkflowId } : await ensureCanvasWorkflowForVideoSubmission(props.id)
     workflowId = context.workflowId
-    if (canvasStore.getCurrentTab?.()?.id !== tabId) throw new Error('画布已切换，请重新操作')
+    if (canvasStore.getCurrentTab?.()?.id !== tabId) throw new Error(translateUi('uiMessages.m6f6b5ff359e7'))
     // Persist the visible placeholder while source preparation runs, using the same IDs as the task.
     if (existingWorkflowId) persistence = postWorkflowOps(workflowId, [{ op: 'add', target: 'node', payload: analysisNode }, { op: 'add', target: 'edge', payload: analysisEdge }])
     const [loaded] = await Promise.all([getWorkflowNodesBatch(workflowId, [props.id]), persistence])
     let remote = loaded.nodes?.find(node => node.id === props.id)
-    if (canvasStore.getCurrentTab?.()?.id !== tabId) throw new Error('画布已切换，请重新操作')
+    if (canvasStore.getCurrentTab?.()?.id !== tabId) throw new Error(translateUi('uiMessages.m6f6b5ff359e7'))
     const localUrl = props.data.output?.url || normalizedVideoUrl.value
     let videoUrl = /^(blob:|data:)/.test(localUrl || '') ? localUrl : remote?.data.output?.url || remote?.data.videoUrl || remote?.data.url || localUrl
-    if (!videoUrl) throw new Error('没有可解析的视频')
+    if (!videoUrl) throw new Error(translateUi('uiMessages.m6bf531b419cc'))
     if (/^(blob:|data:)/.test(videoUrl)) {
       const blob = await (await fetch(videoUrl)).blob()
       const uploaded = await uploadCanvasMedia(new File([blob], 'video.mp4', { type: blob.type || 'video/mp4' }), 'video')
-      if (!uploaded.url) throw new Error('视频上传失败')
+      if (!uploaded.url) throw new Error(translateUi('uiMessages.m8bc76392a011'))
       videoUrl = uploaded.url
-      if (canvasStore.getCurrentTab?.()?.id !== tabId) throw new Error('画布已切换，请重新操作')
+      if (canvasStore.getCurrentTab?.()?.id !== tabId) throw new Error(translateUi('uiMessages.m6f6b5ff359e7'))
       remote = (await getWorkflowNodesBatch(context.workflowId, [props.id])).nodes?.find(node => node.id === props.id)
     }
-    if (canvasStore.getCurrentTab?.()?.id !== tabId) throw new Error('画布已切换，请重新操作')
+    if (canvasStore.getCurrentTab?.()?.id !== tabId) throw new Error(translateUi('uiMessages.m6f6b5ff359e7'))
     if (!remote) {
       await postWorkflowOps(context.workflowId, [{ op: 'add', target: 'node', payload: {
         ...source, data: { ...source.data, output: { ...source.data.output, type: 'video', url: videoUrl } }
       } }])
       remote = (await getWorkflowNodesBatch(context.workflowId, [props.id])).nodes?.find(node => node.id === props.id)
-      if (!remote) throw new Error('源视频节点保存失败')
+      if (!remote) throw new Error(translateUi('uiMessages.m15e9e9ba5a42'))
     } else if ((remote.data.output?.url || remote.data.videoUrl || remote.data.url) !== videoUrl) {
       await patchWorkflowNode(context.workflowId, props.id, {
         data: { output: { ...remote.data.output, type: 'video', url: videoUrl } }
       }, remote.version)
       remote = (await getWorkflowNodesBatch(context.workflowId, [props.id])).nodes?.find(node => node.id === props.id)
-      if (!remote) throw new Error('源视频节点不存在')
+      if (!remote) throw new Error(translateUi('uiMessages.m9e0251dbbd6d'))
     }
-    if (canvasStore.getCurrentTab?.()?.id !== tabId) throw new Error('画布已切换，请重新操作')
+    if (canvasStore.getCurrentTab?.()?.id !== tabId) throw new Error(translateUi('uiMessages.m6f6b5ff359e7'))
     canvasStore.applyIncrementalNode(remote)
     const applyAnalysisState = state => {
       if (state.taskId) accepted = true
@@ -10057,15 +10059,15 @@ async function confirmVideoAnalysis(modelId) {
     const result = await analyzeVideoNode({ workflowId, sourceNodeId: props.id, requestId, modelId, resultNodeId: analysisNode.id, resultEdgeId: analysisEdge.id, startedAt: analysisNode.data.processingStartedAt }, { onUpdate: applyAnalysisState })
     applyAnalysisState(result)
     window.dispatchEvent(new CustomEvent('user-info-updated'))
-    showToast(`视频解析成功，消耗 ${formatPoints(result.cost)} 积分`, 'success')
+    showToast(translateUi('uiMessages.m1c88570bc342', { value1: (formatPoints(result.cost)) }), 'success')
   } catch (error) {
     if (analysisNode && !accepted) {
-      const data = { status: 'error', processingText: null, error: error.message || '视频解析失败', processingCompletedAt: Date.now() }
+      const data = { status: 'error', processingText: null, error: error.message || translateUi('uiMessages.m66de99e87520'), processingCompletedAt: Date.now() }
       if (canvasStore.getCurrentTab?.()?.id === tabId) canvasStore.updateNodeData(analysisNode.id, data)
       await persistence?.catch(() => {})
       if (workflowId) await patchWorkflowNode(workflowId, analysisNode.id, { data }).catch(() => {})
     }
-    showToast(error.message || '视频解析失败', 'error')
+    showToast(error.message || translateUi('uiMessages.m66de99e87520'), 'error')
   }
   finally { isVideoAnalyzing.value = false }
 }
@@ -10118,8 +10120,8 @@ function handleConfirmKeyframes(data) {
       type: 'image',
       position: newNodePosition,
       data: {
-        label: `关键帧 ${index + 1}`,
-        title: `关键帧 ${index + 1}`,
+        get label() { return translateUi('uiMessages.m47382bac4b22', { value1: (index + 1) }) },
+        get title() { return translateUi('uiMessages.m47382bac4b22', { value1: (index + 1) }) },
         time: kf.time,
         urls: [kf.image],
         output: {
@@ -10247,12 +10249,12 @@ async function executeCharacterCreation(clipData) {
         }
         
         if (!fileToUpload) {
-          throw new Error('无法获取本地视频文件')
+          throw new Error(translateUi('uiMessages.m85f87538a825'))
         }
         
         const uploadResult = await uploadCanvasMedia(fileToUpload, 'video')
         if (uploadResult.status !== 'completed' || !uploadResult.url) {
-          throw new Error('媒体上传未完成')
+          throw new Error(translateUi('uiMessages.m909a1763f7f8'))
         }
         qiniuVideoUrl = uploadResult.url
         console.log('[VideoNode] 本地视频上传成功:', qiniuVideoUrl)
@@ -10279,7 +10281,7 @@ async function executeCharacterCreation(clipData) {
         
         if (!uploadResponse.ok) {
           const errorData = await uploadResponse.json()
-          throw new Error(errorData.message || '视频上传失败')
+          throw new Error(errorData.message || translateUi('uiMessages.m8bc76392a011'))
         }
         
         const uploadResult = await uploadResponse.json()
@@ -10292,7 +10294,7 @@ async function executeCharacterCreation(clipData) {
     console.log('[VideoNode] 调用角色创建 API...')
     
     // 获取角色名称（用户输入或默认值）
-    const characterName = clipData.characterName || '角色创建1'
+    const characterName = clipData.characterName || translateUi('uiMessages.mf56cdef56d26')
     
     // 构建请求体 - 使用角色名称作为 prompt
     const requestBody = {
@@ -10327,7 +10329,7 @@ async function executeCharacterCreation(clipData) {
     
     if (!createResponse.ok) {
       const errorData = await createResponse.json()
-      throw new Error(errorData.message || '角色创建失败')
+      throw new Error(errorData.message || translateUi('uiMessages.m775c811763c4'))
     }
     
     const createResult = await createResponse.json()
@@ -10340,7 +10342,7 @@ async function executeCharacterCreation(clipData) {
     createCharacterOutputNode(characterId, displayVideoUrl, updatedClipData, createResult)
     
     // 5. 显示创建中提示
-    showToast('Sora角色创建中，预计需要1-3分钟...', 'info', 5000)
+    showToast(translateUi('uiMessages.m15f35a64a892'), 'info', 5000)
     
     // 6. 延迟后开始轮询（角色训练需要时间，立即查询会失败）
     setTimeout(() => {
@@ -10350,7 +10352,7 @@ async function executeCharacterCreation(clipData) {
   } catch (error) {
     console.error('[VideoNode] 角色创建失败:', error)
     // 显示错误 Toast 通知
-    showToast(error.message || '角色创建失败', 'error', 3000)
+    showToast(error.message || translateUi('uiMessages.m775c811763c4'), 'error', 3000)
   }
 }
 
@@ -10372,7 +10374,7 @@ function createCharacterOutputNode(characterId, videoUrl, clipData, apiResult) {
   const clippedVideoUrl = clipData.clippedVideoUrl || videoUrl
   
   // 获取角色名称
-  const characterName = clipData.characterName || '角色创建1'
+  const characterName = clipData.characterName || translateUi('uiMessages.mf56cdef56d26')
   
   // 创建新的视频节点，显示裁剪后的视频片段
   // 节点标题使用角色名称
@@ -10444,13 +10446,13 @@ async function pollCharacterStatus(characterId, displayVideoUrl, clipData) {
       if (result.status === 'completed') {
         // 角色创建完成，添加到资产库（传递裁剪信息）
         await addCharacterToAssets(characterId, displayVideoUrl, result, clipData)
-        showToast('Sora角色已创建成功，请前往资产库查看', 'success', 3000)
+        showToast(translateUi('uiMessages.me003a24efc2f'), 'success', 3000)
         return
       } else if (result.status === 'failed') {
         // 角色创建失败，也添加到资产库（记录失败状态）
-        const failReason = result.fail_reason || result.error || '未知错误'
+        const failReason = result.fail_reason || result.error || translateUi('canvas.unknownError')
         await addCharacterToAssets(characterId, displayVideoUrl, { ...result, fail_reason: failReason }, clipData)
-        showToast('角色创建失败: ' + failReason, 'error', 5000)
+        showToast(translateUi('uiMessages.mdbf58c44b9e0') + failReason, 'error', 5000)
         return
       }
       
@@ -10464,7 +10466,7 @@ async function pollCharacterStatus(characterId, displayVideoUrl, clipData) {
   }
   
   // 超时 - 但角色可能仍在创建中
-  showToast('角色创建超时，请稍后在资产库查看', 'warning', 3000)
+  showToast(translateUi('uiMessages.m630a1dc71b03'), 'warning', 3000)
 }
 
 // 添加角色到资产库
@@ -10473,7 +10475,7 @@ async function addCharacterToAssets(characterId, videoUrl, apiResult, clipData) 
     const token = localStorage.getItem('token')
     
     // 角色名称：优先使用用户输入的名称，其次使用 API 返回的 name
-    const characterName = clipData?.characterName || apiResult.name || '角色创建1'
+    const characterName = clipData?.characterName || apiResult.name || translateUi('uiMessages.mf56cdef56d26')
     // 角色 ID (username)：优先使用 API 返回的 username，其次使用 characterId
     const characterUsername = apiResult.username || characterId
     const avatarUrl = apiResult.avatar_url || videoUrl
@@ -10595,7 +10597,7 @@ function toggleFullscreenPlayback() {
       <button 
         class="toolbar-btn" 
         :class="{ 'processing': isHDProcessing }"
-        title="高清放大" 
+        :title="translateUi('uiMessages.m825da56855ae')"
         @mousedown.stop.prevent
         @click.stop.prevent="open"
         :disabled="isHDProcessing || busy"
@@ -10608,31 +10610,31 @@ function toggleFullscreenPlayback() {
           <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
           <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
         </svg>
-        <span>{{ isHDProcessing ? '处理中...' : '高清' }}</span>
+        <span>{{ isHDProcessing ? translateUi('common.processing') : translateUi('videoGen.hd') }}</span>
       </button>
       </VideoUpscaleButton>
       <button class="toolbar-btn" :title="depthPriceHint" :disabled="isDepthProcessing" @mouseenter="refreshDepthPriceHint" @focus="refreshDepthPriceHint" @mousedown.stop.prevent="handleToolbarDepth" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3L2 8l10 5 10-5-10-5zM2 12l10 5 10-5M2 16l10 5 10-5" /></svg>
-        <span>{{ isDepthProcessing ? '提交中...' : '深度提取' }}</span>
+        <span>{{ isDepthProcessing ? translateUi('uiMessages.m2fb1db2875cb') : translateUi('uiMessages.mb82a2aca43d5') }}</span>
       </button>
-      <button class="toolbar-btn" title="解析" :disabled="isVideoAnalyzing" :aria-busy="isVideoAnalyzing" @mousedown.stop.prevent @click.stop.prevent="handleToolbarAnalyze">
+      <button class="toolbar-btn" :title="translateUi('uiMessages.mfbff7b5046d9')" :disabled="isVideoAnalyzing" :aria-busy="isVideoAnalyzing" @mousedown.stop.prevent @click.stop.prevent="handleToolbarAnalyze">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="3" y="3" width="7" height="7" rx="1" stroke-linecap="round" stroke-linejoin="round"/>
           <rect x="14" y="3" width="7" height="7" rx="1" stroke-linecap="round" stroke-linejoin="round"/>
           <rect x="3" y="14" width="7" height="7" rx="1" stroke-linecap="round" stroke-linejoin="round"/>
           <rect x="14" y="14" width="7" height="7" rx="1" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <span>{{ isVideoAnalyzing ? '解析中…' : '解析' }}</span>
+        <span>{{ isVideoAnalyzing ? translateUi('uiMessages.m49972f2c9ee3') : translateUi('uiMessages.mfbff7b5046d9') }}</span>
       </button>
-      <button v-if="showCreateCharacterToolbarAction" class="toolbar-btn" title="角色创建" @mousedown.stop.prevent="handleToolbarCreateCharacter" @click.stop.prevent>
+      <button v-if="showCreateCharacterToolbarAction" class="toolbar-btn" :title="translateUi('uiMessages.me8f3c544759a')" @mousedown.stop.prevent="handleToolbarCreateCharacter" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="12" cy="8" r="4" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M6 21v-2a4 4 0 014-4h4a4 4 0 014 4v2" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M16 3l2 2-2 2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <span>角色创建</span>
+        <span>{{ translateUi('uiMessages.me8f3c544759a') }}</span>
       </button>
-      <button class="toolbar-btn" title="音频分离" :disabled="isAudioSeparating" :aria-busy="isAudioSeparating" @mousedown.stop.prevent @click.stop.prevent="handleToolbarAudioSeparate">
+      <button class="toolbar-btn" :title="translateUi('uiMessages.m9269c5ff2cc0')" :disabled="isAudioSeparating" :aria-busy="isAudioSeparating" @mousedown.stop.prevent @click.stop.prevent="handleToolbarAudioSeparate">
         <svg v-if="!isAudioSeparating" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M9 18V5l12-2v13M9 9l12-2" stroke-linecap="round" stroke-linejoin="round"/>
           <ellipse cx="6" cy="18" rx="3" ry="3"/><ellipse cx="18" cy="16" rx="3" ry="3"/>
@@ -10640,9 +10642,9 @@ function toggleFullscreenPlayback() {
         <svg v-else class="animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
         </svg>
-        <span>{{ isAudioSeparating ? '分离中...' : '音频分离' }}</span>
+        <span>{{ isAudioSeparating ? translateUi('uiMessages.mdf51abb9f5ee') : translateUi('uiMessages.m9269c5ff2cc0') }}</span>
       </button>
-      <button class="toolbar-btn" title="关键帧" @mousedown.stop.prevent="handleToolbarKeyframe" @click.stop.prevent>
+      <button class="toolbar-btn" :title="translateUi('uiMessages.m178fd037ae24')" @mousedown.stop.prevent="handleToolbarKeyframe" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="2" y="6" width="20" height="12" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M12 6v12" stroke-linecap="round" stroke-linejoin="round"/>
@@ -10650,26 +10652,26 @@ function toggleFullscreenPlayback() {
           <path d="M17 9v6" stroke-linecap="round" stroke-linejoin="round"/>
           <circle cx="12" cy="12" r="2" fill="currentColor"/>
         </svg>
-        <span>关键帧</span>
+        <span>{{ translateUi('uiMessages.m178fd037ae24') }}</span>
       </button>
-      <button class="toolbar-btn" title="片段截取" @mousedown.stop.prevent="openSegmentClip" @click.stop.prevent>
+      <button class="toolbar-btn" :title="translateUi('uiMessages.m33a2543df255')" @mousedown.stop.prevent="openSegmentClip" @click.stop.prevent>
         <Scissors :size="16" />
-        <span>片段截取</span>
+        <span>{{ translateUi('uiMessages.m33a2543df255') }}</span>
       </button>
-      <button class="toolbar-btn" title="画面裁切" :disabled="frameCropSubmitting" @mousedown.stop.prevent="openFrameCrop" @click.stop.prevent>
+      <button class="toolbar-btn" :title="translateUi('uiMessages.m5c3382d8f846')" :disabled="frameCropSubmitting" @mousedown.stop.prevent="openFrameCrop" @click.stop.prevent>
         <Crop :size="16" />
-        <span>画面裁切</span>
+        <span>{{ translateUi('uiMessages.m5c3382d8f846') }}</span>
       </button>
-      <button class="toolbar-btn" title="剪辑" @mousedown.stop.prevent="openVideoToolModal('edit')" @click.stop.prevent>
+      <button class="toolbar-btn" :title="translateUi('uiMessages.m6d997bfb2e1d')" @mousedown.stop.prevent="openVideoToolModal('edit')" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="6" cy="6" r="2.5" stroke-linecap="round" stroke-linejoin="round"/>
           <circle cx="6" cy="18" r="2.5" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M8 7.5l11 8" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M8 16.5l11-8" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <span>剪辑</span>
+        <span>{{ translateUi('uiMessages.m6d997bfb2e1d') }}</span>
       </button>
-      <button v-if="showSubtitleEraseToolbarAction" class="toolbar-btn" title="字幕擦除" @mousedown.stop.prevent="openVideoToolModal('subtitle')" @click.stop.prevent>
+      <button v-if="showSubtitleEraseToolbarAction" class="toolbar-btn" :title="translateUi('user.ledgerType.subtitle_erase')" @mousedown.stop.prevent="openVideoToolModal('subtitle')" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="3" y="5" width="18" height="14" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M7 15h4" stroke-linecap="round" stroke-linejoin="round"/>
@@ -10677,15 +10679,15 @@ function toggleFullscreenPlayback() {
           <path d="M15 9l4 4" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M19 9l-4 4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <span>字幕擦除</span>
+        <span>{{ translateUi('user.ledgerType.subtitle_erase') }}</span>
       </button>
       <div class="toolbar-divider"></div>
-      <button class="toolbar-btn icon-only" title="下载" @mousedown.stop.prevent @click.stop.prevent="handleToolbarDownload">
+      <button class="toolbar-btn icon-only" :title="translateUi('common.download')" @mousedown.stop.prevent @click.stop.prevent="handleToolbarDownload">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
-      <button class="toolbar-btn icon-only" title="全屏预览" @mousedown.stop.prevent="handleToolbarPreview" @click.stop.prevent>
+      <button class="toolbar-btn icon-only" :title="translateUi('canvas.contextMenu.fullscreenPreview')" @mousedown.stop.prevent="handleToolbarPreview" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
@@ -10729,7 +10731,7 @@ function toggleFullscreenPlayback() {
         ref="addLeftBtnRef"
         class="node-add-btn node-add-btn-left nodrag"
         @mousedown.stop="handleAddLeftMouseDown"
-        title="添加参考图片（首帧/尾帧）"
+        :title="translateUi('uiMessages.mbc42ca6eac63')"
         @click="handleAddLeftClick"
       >
         +
@@ -10797,7 +10799,7 @@ function toggleFullscreenPlayback() {
             v-if="videoPosterUrl && !videoPosterFailed"
             :src="videoPosterUrl"
             class="video-poster-output"
-            alt="视频封面"
+            :alt="translateUi('uiMessages.mcd088db2247a')"
             loading="eager"
             decoding="async"
             @load="handleVideoPosterLoad"
@@ -10842,28 +10844,28 @@ function toggleFullscreenPlayback() {
             v-if="currentSeedanceDraftTaskId && !data.readonly"
             class="seedance-draft-final-button nodrag nopan"
             :disabled="generatingSeedanceFinal || !seedanceDraftQuote"
-            :title="seedanceDraftQuoteError || '复用样片生成 1080P 正片，按 1080P 价格单独扣费'"
+            :title="seedanceDraftQuoteError || translateUi('uiMessages.m1ae306ca7ac0')"
             @pointerdown.stop
             @click.stop="handleSeedanceDraftFinal"
           >
-            {{ generatingSeedanceFinal ? '提交中…' : '生成正片 1080P' }}
+            {{ generatingSeedanceFinal ? translateUi('uiMessages.m18931020ad52') : translateUi('uiMessages.m5551f8aecc6a') }}
             <span v-if="seedanceDraftQuote">⚡ {{ seedanceDraftQuote.points_cost }}</span>
-            <span v-else>{{ seedanceDraftQuoteError ? '暂不可用' : '获取价格…' }}</span>
+            <span v-else>{{ seedanceDraftQuoteError ? translateUi('uiMessages.mf36cac96220b') : translateUi('uiMessages.m13ef46e2b1ea') }}</span>
           </button>
           <!-- 播放指示器已移除：首帧不显示播放按钮 -->
           <div v-if="!showFrameCrop" class="video-overlay-actions">
-            <button class="overlay-action-btn" @click.stop="openFullscreenPreview" title="全屏预览">
+            <button class="overlay-action-btn" @click.stop="openFullscreenPreview" :title="translateUi('canvas.contextMenu.fullscreenPreview')">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
               </svg>
             </button>
             <div v-if="!data.readonly" class="video-replace-anchor nodrag nopan" @mousedown.stop @focusout="handleVideoReplaceMenuFocusout" @keydown.esc.stop.prevent="showVideoReplaceMenu = false">
-              <button type="button" class="overlay-action-btn" title="替换素材" aria-label="替换素材" :aria-expanded="showVideoReplaceMenu" :disabled="videoReplacementBusy || isGenerating || data.status === 'processing'" @click.stop="showVideoReplaceMenu = !showVideoReplaceMenu">
+              <button type="button" class="overlay-action-btn" :title="translateUi('uiMessages.m1ac0acab457b')" :aria-label="translateUi('uiMessages.m1ac0acab457b')" :aria-expanded="showVideoReplaceMenu" :disabled="videoReplacementBusy || isGenerating || data.status === 'processing'" @click.stop="showVideoReplaceMenu = !showVideoReplaceMenu">
                 <ArrowLeftRight :size="16" />
               </button>
               <div v-if="showVideoReplaceMenu" class="video-replace-menu" role="menu" @click.stop>
-                <button type="button" role="menuitem" @click.stop="showVideoReplaceMenu = false; replacementVideoInputRef?.click()"><Upload :size="16" />本地上传</button>
-                <button type="button" role="menuitem" @click.stop="showVideoReplaceMenu = false; showVideoReplacementPicker = true"><Library :size="16" />选择素材</button>
+                <button type="button" role="menuitem" @click.stop="showVideoReplaceMenu = false; replacementVideoInputRef?.click()"><Upload :size="16" />{{ translateUi('uiMessages.m02413a69d5ca') }}</button>
+                <button type="button" role="menuitem" @click.stop="showVideoReplaceMenu = false; showVideoReplacementPicker = true"><Library :size="16" />{{ translateUi('uiMessages.m1ec8b306f4c8') }}</button>
               </div>
             </div>
           </div>
@@ -10871,7 +10873,7 @@ function toggleFullscreenPlayback() {
 
         <div v-else-if="hasOutput && props.data?.readonly" class="video-output-wrapper" :style="videoWrapperStyle">
           <div class="flex h-full w-full items-center justify-center bg-black/40 text-xs text-white/60">
-            预览视频暂不可直接播放
+            {{ translateUi('uiMessages.m83403f0b2c66') }}
           </div>
         </div>
 
@@ -10880,18 +10882,18 @@ function toggleFullscreenPlayback() {
           <!-- 加载中状态 -->
           <div v-if="data.status === 'processing'" class="preview-loading">
             <div class="loading-spinner"></div>
-            <span class="loading-title">{{ data.depthExtracted ? '深度提取中...' : data.taskType === 'video-hd' ? '高清处理中...' : '视频生成中...' }}</span>
+            <span class="loading-title">{{ data.depthExtracted ? translateUi('uiMessages.m3f943b78e243') : data.taskType === 'video-hd' ? translateUi('uiMessages.m27f66d065ff4') : translateUi('uiMessages.m4d608da5021e') }}</span>
             <!-- 生成中即显示请求比例（AI 助手/手动生图提交的参数），全部生成完成后结果按实际比例展示 -->
             <span v-if="processingAspectRatio" class="loading-aspect-ratio">{{ processingAspectRatio }}</span>
             <span v-if="data.taskType !== 'video-hd'" class="progress-text">{{ processingProgressText(data) }}</span>
             <span class="loading-hint">
-              {{ data.taskType === 'video-hd' ? '高清处理耗时较长，请耐心等待' : '视频生成需要一定时间，请耐心等待' }}
+              {{ data.taskType === 'video-hd' ? translateUi('uiMessages.mdbb3d607379c') : translateUi('uiMessages.m62b91048673b') }}
             </span>
             <span v-if="showProcessingTimeoutHint(data)" class="loading-timeout-hint">
-              当前任务可能超时失败，可尝试重新提交任务
+              {{ translateUi('uiMessages.m8f3563f204fe') }}
             </span>
             <!-- 卡住时显示手动获取按钮：普通任务进度100%卡住时显示，高清任务不显示（由后台任务管理器自动轮询） -->
-            <button v-if="data.taskType !== 'video-hd' && progressPercent >= 100 && (data.taskId || data.soraTaskId)" class="retry-fetch-btn" @click.stop="handleManualRetryFetch">重新获取视频</button>
+            <button v-if="data.taskType !== 'video-hd' && progressPercent >= 100 && (data.taskId || data.soraTaskId)" class="retry-fetch-btn" @click.stop="handleManualRetryFetch">{{ translateUi('uiMessages.mbfe69c13a97f') }}</button>
           </div>
           
           <!-- 错误状态 -->
@@ -10900,7 +10902,7 @@ function toggleFullscreenPlayback() {
             <div class="error-text">{{ getDisplayErrorMessage(data.error || errorMessage) }}</div>
             <div v-if="getErrorHint(data.error || errorMessage)" class="error-hint">{{ getErrorHint(data.error || errorMessage) }}</div>
             <div class="error-actions">
-              <button v-if="data._failedTaskId || data.taskId || data.soraTaskId" class="retry-btn" @click.stop="handleManualRetryFetch">重新获取</button>
+              <button v-if="data._failedTaskId || data.taskId || data.soraTaskId" class="retry-btn" @click.stop="handleManualRetryFetch">{{ translateUi('uiMessages.m1d2a90550a9d') }}</button>
             </div>
           </div>
           
@@ -10918,19 +10920,19 @@ function toggleFullscreenPlayback() {
                 <span class="prompt-preview">{{ inheritedPrompt.slice(0, 50) }}{{ inheritedPrompt.length > 50 ? '...' : '' }}</span>
               </template>
               <template v-else-if="hasReferenceVideos && referenceImages.length > 0">
-                已连接参考视频和图片
+                {{ translateUi('uiMessages.m00333d38f0a2') }}
               </template>
               <template v-else-if="hasReferenceVideos">
-                已连接参考视频
+                {{ translateUi('uiMessages.m982798c61148') }}
               </template>
               <template v-else-if="referenceImages.length > 0">
-                已连接参考图片
+                {{ translateUi('uiMessages.m56fa8741b0b2') }}
               </template>
               <template v-else>
-                已连接，点击选中配置参数
+                {{ translateUi('uiMessages.mbf7cffcbc40d') }}
               </template>
             </div>
-            <div class="ready-hint">选中节点后在下方配置并生成</div>
+            <div class="ready-hint">{{ translateUi('uiMessages.m6272949db761') }}</div>
           </div>
           
           <!-- 空状态 - 快捷操作 -->
@@ -10971,16 +10973,16 @@ function toggleFullscreenPlayback() {
       </div>
 
       <div v-if="showFrameCrop" class="frame-crop-controls nodrag nopan" @pointerdown.stop @mousedown.stop @click.stop @wheel.stop>
-        <button type="button" class="frame-crop-cancel" title="退出裁剪" aria-label="退出裁剪" :disabled="frameCropSubmitting" @click="closeFrameCrop"><X :size="18" /></button>
+        <button type="button" class="frame-crop-cancel" :title="translateUi('uiMessages.mc292c2d938f6')" :aria-label="translateUi('uiMessages.mc292c2d938f6')" :disabled="frameCropSubmitting" @click="closeFrameCrop"><X :size="18" /></button>
         <div class="frame-crop-ratio-selector">
-          <button type="button" class="frame-crop-ratio-trigger" :aria-expanded="frameCropRatioMenuOpen" aria-haspopup="menu" title="选择裁切比例" @click.stop="toggleFrameCropRatioMenu">
+          <button type="button" class="frame-crop-ratio-trigger" :aria-expanded="frameCropRatioMenuOpen" aria-haspopup="menu" :title="translateUi('uiMessages.m6c6353a345da')" @click.stop="toggleFrameCropRatioMenu">
             <span class="frame-crop-ratio-icon" :class="`ratio-icon-${frameCropAspectRatio ? frameCropAspectRatio.replace(':', '-') : 'default'}`" aria-hidden="true"></span>
-            <span class="frame-crop-ratio-value">{{ frameCropAspectRatio || '比例' }}</span>
+            <span class="frame-crop-ratio-value">{{ frameCropAspectRatio || translateUi('directorStudio.inspector.aspect') }}</span>
             <span class="frame-crop-ratio-arrow" :class="{ 'arrow-up': frameCropRatioMenuOpen }" aria-hidden="true">⌃</span>
           </button>
           <Transition name="dropdown-fade">
             <div v-if="frameCropRatioMenuOpen" class="frame-crop-ratio-menu" :class="{ 'dropdown-up': frameCropRatioDirection === 'up' }" role="menu" @click.stop @wheel.stop>
-              <div class="frame-crop-ratio-title">比例</div>
+              <div class="frame-crop-ratio-title">{{ translateUi('directorStudio.inspector.aspect') }}</div>
               <button
                 v-for="option in frameCropRatioOptions"
                 :key="option.value"
@@ -10996,8 +10998,8 @@ function toggleFullscreenPlayback() {
             </div>
           </Transition>
         </div>
-        <span class="frame-crop-size">{{ frameCropSelection ? `${frameCropSelection.width} × ${frameCropSelection.height}` : '视频加载中…' }}</span>
-        <button type="button" class="frame-crop-confirm" title="生成裁剪" aria-label="生成裁剪" :disabled="!frameCropSelection || frameCropSubmitting" @click="confirmFrameCrop"><Loader2 v-if="frameCropSubmitting" :size="18" class="animate-spin" /><ArrowUp v-else :size="18" /></button>
+        <span class="frame-crop-size">{{ frameCropSelection ? `${frameCropSelection.width} × ${frameCropSelection.height}` : translateUi('uiMessages.m77e8d12080b6') }}</span>
+        <button type="button" class="frame-crop-confirm" :title="translateUi('uiMessages.m92aac30ee81e')" :aria-label="translateUi('uiMessages.m92aac30ee81e')" :disabled="!frameCropSelection || frameCropSubmitting" @click="confirmFrameCrop"><Loader2 v-if="frameCropSubmitting" :size="18" class="animate-spin" /><ArrowUp v-else :size="18" /></button>
       </div>
       
       <!-- 右侧输出端口 -->
@@ -11013,7 +11015,7 @@ function toggleFullscreenPlayback() {
       <button 
         ref="addRightBtnRef"
         class="node-add-btn node-add-btn-right nodrag"
-        title="单击：添加节点 | 长按/拖拽：连接到其他节点"
+        :title="translateUi('canvas.imageNode.clickAddLongDrag')"
         @mousedown="handleAddRightMouseDown"
       >
         +
@@ -11056,8 +11058,8 @@ function toggleFullscreenPlayback() {
     <Teleport to="body">
       <div v-if="isFullscreenPreview" class="fullscreen-preview-overlay">
         <div class="fullscreen-preview-header">
-          <span>{{ data.title || data.label || '视频' }}</span>
-          <button class="fullscreen-close-btn" aria-label="关闭预览" title="关闭（Esc）" @click="closeFullscreenPreview">
+          <span>{{ data.title || data.label || translateUi('canvas.nodes.video') }}</span>
+          <button class="fullscreen-close-btn" :aria-label="translateUi('uiMessages.m1eb05d311508')" :title="translateUi('uiMessages.m240d2127ad8d')" @click="closeFullscreenPreview">
             <X :size="20" />
           </button>
         </div>
@@ -11143,8 +11145,8 @@ function toggleFullscreenPlayback() {
       <button
         class="config-expand-btn"
         type="button"
-        :title="isConfigPanelExpanded ? '缩小输入面板' : '放大输入面板'"
-        :aria-label="isConfigPanelExpanded ? '缩小输入面板' : '放大输入面板'"
+        :title="isConfigPanelExpanded ? translateUi('uiMessages.m49a90c53c3d5') : translateUi('uiMessages.mbe61c8937aa2')"
+        :aria-label="isConfigPanelExpanded ? translateUi('uiMessages.m49a90c53c3d5') : translateUi('uiMessages.mbe61c8937aa2')"
         @click.stop="toggleConfigPanelExpanded"
       >
         <svg v-if="!isConfigPanelExpanded" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -11172,8 +11174,8 @@ function toggleFullscreenPlayback() {
         @drop="handleFrameDrop"
       >
         <div class="panel-frames-header">
-          <button type="button" class="panel-frames-label" title="从画布或资产管理选择参考" @click.stop="openReferencePicker(id)">＋参考</button>
-          <span class="panel-frames-hint">{{ hasReferenceAudios ? '参考视频/图片/音频' : hasReferenceVideos ? '参考视频/图片' : '参考图片' }} · 拖拽素材到此处 · 拖动调整顺序</span>
+          <button type="button" class="panel-frames-label" :title="translateUi('uiMessages.m2053725df835')" @click.stop="openReferencePicker(id)">{{ translateUi('uiMessages.md329f1d67585') }}</button>
+          <span class="panel-frames-hint">{{ translateUi('uiMessages.m05344bf94bf6', { value1: (hasReferenceAudios ? translateUi('uiMessages.mf791f0067d45') : hasReferenceVideos ? translateUi('uiMessages.m146d993274a9') : translateUi('canvas.templates.nodeTitle.referenceImage')) }) }}</span>
         </div>
         <div class="panel-frames-list">
           <!-- 参考视频（来自上游视频节点）- 点击插入 @视频 标记 -->
@@ -11187,7 +11189,7 @@ function toggleFullscreenPlayback() {
               'dragging': dragSortType === 'video' && dragSortIndex === index
             }"
             draggable="true"
-            :title="supportsMediaTags ? `点击插入 @视频${index + 1}` : ''"
+            :title="supportsMediaTags ? translateUi('uiMessages.m1308d5c1eec5', { value1: (index + 1) }) : ''"
             @mousedown="handleVideoMouseDown"
             @click="supportsMediaTags && insertMediaTag({ type: 'video', index: index + 1, label: `视频${index + 1}` })"
             @dragstart="handleVideoDragStart($event, index)"
@@ -11202,7 +11204,7 @@ function toggleFullscreenPlayback() {
               v-if="shouldShowReferenceVideoImage(video)"
               :src="getReferenceVideoPreviewSrc(video)"
               class="video-thumb"
-              alt="参考视频封面"
+              :alt="translateUi('uiMessages.m78361d0df713')"
               loading="lazy"
               decoding="async"
               @error="handleReferenceVideoPreviewError(video)"
@@ -11217,7 +11219,7 @@ function toggleFullscreenPlayback() {
             ></video>
             <span class="panel-frame-label">{{ index + 1 }}</span>
             <span class="panel-frame-play-icon">▶</span>
-            <span v-if="supportsMediaTags" class="panel-frame-tag-badge">@视频{{ index + 1 }}</span>
+            <span v-if="supportsMediaTags" class="panel-frame-tag-badge">{{ translateUi('uiMessages.m174e46585c47', { value1: (index + 1) }) }}</span>
             <button class="panel-frame-remove" @click.stop="removeReferenceVideo(index)">×</button>
           </div>
           <!-- 现有图片（支持拖拽排序）- 点击插入 @图片N 标记 -->
@@ -11231,7 +11233,7 @@ function toggleFullscreenPlayback() {
               'panel-frame-clickable': supportsMediaTags
             }"
             draggable="true"
-            :title="supportsMediaTags ? `点击插入 @图片${index + 1}` : ''"
+            :title="supportsMediaTags ? translateUi('uiMessages.m5b7e1aef10ce', { value1: (index + 1) }) : ''"
             @mousedown="handleImageMouseDown"
             @click="supportsMediaTags && insertMediaTag({ type: 'image', index: index + 1, label: `图片${index + 1}` })"
             @dragstart="handleImageDragStart($event, index)"
@@ -11242,9 +11244,9 @@ function toggleFullscreenPlayback() {
             @mouseenter="onHoverStart(img, $event)"
             @mouseleave="onHoverEnd"
           >
-            <CanvasNodeImage v-if="isNodeVisible" :src="getNodePreviewImageUrl(img)" :alt="`图片 ${index + 1}`" loading="lazy" decoding="async" fetchpriority="low" />
+            <CanvasNodeImage v-if="isNodeVisible" :src="getNodePreviewImageUrl(img)" :alt="translateUi('uiMessages.m6af55e777c95', { value1: (index + 1) })" loading="lazy" decoding="async" fetchpriority="low" />
             <span class="panel-frame-label">{{ index + 1 }}</span>
-            <span v-if="supportsMediaTags" class="panel-frame-tag-badge">@图片{{ index + 1 }}</span>
+            <span v-if="supportsMediaTags" class="panel-frame-tag-badge">{{ translateUi('uiMessages.m4ce477e5a322', { value1: (index + 1) }) }}</span>
             <button class="panel-frame-remove" @click.stop="removeReferenceImage(index)">×</button>
           </div>
           <!-- 参考音频（来自上游音频节点）- 支持拖拽排序，点击插入 @音频N 标记 -->
@@ -11258,7 +11260,7 @@ function toggleFullscreenPlayback() {
               'dragging': dragSortType === 'audio' && dragSortIndex === index
             }"
             draggable="true"
-            :title="supportsMediaTags ? `点击插入 @音频${index + 1}` : ''"
+            :title="supportsMediaTags ? translateUi('uiMessages.mde8a8270283c', { value1: (index + 1) }) : ''"
             @mousedown="handleAudioMouseDown"
             @click="supportsMediaTags && insertMediaTag({ type: 'audio', index: index + 1, label: `音频${index + 1}` })"
             @dragstart="handleAudioDragStart($event, index)"
@@ -11273,7 +11275,7 @@ function toggleFullscreenPlayback() {
               <span class="audio-thumb-icon">♪</span>
             </div>
             <span class="panel-frame-label">{{ index + 1 }}</span>
-            <span v-if="supportsMediaTags" class="panel-frame-tag-badge">@音频{{ index + 1 }}</span>
+            <span v-if="supportsMediaTags" class="panel-frame-tag-badge">{{ translateUi('uiMessages.m713981fddc17', { value1: (index + 1) }) }}</span>
             <button class="panel-frame-remove" @click.stop="removeReferenceAudio(index)">×</button>
           </div>
           <!-- 添加按钮 -->
@@ -11283,12 +11285,12 @@ function toggleFullscreenPlayback() {
             @click.stop="triggerFrameUpload"
           >
             <span class="add-icon">+</span>
-            <span class="add-text">添加</span>
+            <span class="add-text">{{ translateUi('common.add') }}</span>
           </div>
         </div>
         <!-- 拖拽覆盖层 -->
         <div v-if="isDragOver" class="panel-drag-overlay">
-          <span>释放以添加图片/视频/音频</span>
+          <span>{{ translateUi('uiMessages.m1284f46aba73') }}</span>
         </div>
       </div>
       
@@ -11296,8 +11298,8 @@ function toggleFullscreenPlayback() {
       <div v-if="hasUpstreamText" class="context-reference-section">
         <div class="context-reference-header">
           <span class="context-reference-icon">📝</span>
-          <span class="context-reference-label">上下文文字参考</span>
-          <span class="context-reference-hint">来自上游节点</span>
+          <span class="context-reference-label">{{ translateUi('uiMessages.m2898d852616e') }}</span>
+          <span class="context-reference-hint">{{ translateUi('uiMessages.m0f9b47568bb5') }}</span>
         </div>
         <div class="context-reference-content">
           {{ upstreamTextContent }}
@@ -11322,7 +11324,7 @@ function toggleFullscreenPlayback() {
             @click="toggleWan3AttachmentPanel('file')"
           >
             <span aria-hidden="true">▧</span>
-            {{ wan3FileUploading ? '上传中…' : '文档' }}
+            {{ wan3FileUploading ? translateUi('uiMessages.mce1c9d61565f') : translateUi('uiMessages.m2687ccdbb1d2') }}
           </button>
           <button
             type="button"
@@ -11331,7 +11333,7 @@ function toggleFullscreenPlayback() {
             @click="toggleWan3AttachmentPanel('link')"
           >
             <span aria-hidden="true">↗</span>
-            链接
+            {{ translateUi('uiMessages.m305378ddd2b8') }}
           </button>
           <div
             v-if="isWan3Model && wan3AttachmentPanel === 'file'"
@@ -11347,8 +11349,8 @@ function toggleFullscreenPlayback() {
                 <span class="wan3-attachment-file-size">{{ (Number(wan3File.size || 0) / 1024 / 1024).toFixed(1) }}MB</span>
               </div>
               <div class="wan3-document-uploaded-actions">
-                <button type="button" class="wan3-document-action" @click="triggerWan3DocumentPicker">重新上传</button>
-                <button type="button" class="wan3-attachment-remove" @click="clearWan3Document">移除</button>
+                <button type="button" class="wan3-document-action" @click="triggerWan3DocumentPicker">{{ translateUi('uiMessages.m11b7c7173da2') }}</button>
+                <button type="button" class="wan3-attachment-remove" @click="clearWan3Document">{{ translateUi('user.removeCoupon') }}</button>
               </div>
             </div>
             <div
@@ -11366,8 +11368,8 @@ function toggleFullscreenPlayback() {
                 <path d="m7 8 5-5 5 5" />
                 <path d="M20 16.5v2A2.5 2.5 0 0 1 17.5 21h-11A2.5 2.5 0 0 1 4 18.5v-2" />
               </svg>
-              <span class="wan3-document-upload-title">{{ wan3FileUploading ? '正在上传文档…' : '点击上传或拖拽文档至此处' }}</span>
-              <span class="wan3-document-upload-hint">支持 DOCX / DOC / XLSX / XLS / PPTX / PPT / PDF / TXT / MD / KEY / PAGES / NUMBERS，最大 100MB</span>
+              <span class="wan3-document-upload-title">{{ wan3FileUploading ? translateUi('uiMessages.m3764c59cdaf7') : translateUi('uiMessages.mf5f89a1f77c0') }}</span>
+              <span class="wan3-document-upload-hint">{{ translateUi('uiMessages.m3245461c1401') }}</span>
             </div>
           </div>
 
@@ -11375,7 +11377,7 @@ function toggleFullscreenPlayback() {
             v-if="isWan3Model && wan3AttachmentPanel === 'link'"
             class="wan3-attachment-popover wan3-link-upload-popover"
           >
-            <label class="wan3-link-upload-label" :for="`wan3-link-input-${props.id}`">粘贴链接地址</label>
+            <label class="wan3-link-upload-label" :for="`wan3-link-input-${props.id}`">{{ translateUi('uiMessages.m2dc71cc5380b') }}</label>
             <div class="wan3-link-upload-form">
               <input
                 :id="`wan3-link-input-${props.id}`"
@@ -11385,7 +11387,7 @@ function toggleFullscreenPlayback() {
                 placeholder="https://example.com/article"
                 @keydown.enter.prevent="addWan3Link"
               />
-              <button type="button" class="wan3-link-add" :disabled="!wan3LinkDraft.trim()" @click="addWan3Link">添加</button>
+              <button type="button" class="wan3-link-add" :disabled="!wan3LinkDraft.trim()" @click="addWan3Link">{{ translateUi('common.add') }}</button>
             </div>
           </div>
         </div>
@@ -11431,7 +11433,7 @@ function toggleFullscreenPlayback() {
           </div>
         </div>
         <div v-if="supportsMediaTags && (referenceVideos.length > 0 || referenceImages.length > 0 || referenceAudios.length > 0)" class="prompt-tag-hint">
-          💡 点击上方参考素材可快速插入引用标记
+          {{ translateUi('uiMessages.m8e89c3ff8b77') }}
         </div>
         <PromptMentionPopup
           :visible="showMentionPopup"
@@ -11482,7 +11484,7 @@ function toggleFullscreenPlayback() {
                         <img v-if="group.logo" :src="group.logo" class="vendor-logo-img" />
                         <span v-else class="vendor-logo-text">{{ group.name ? group.name.charAt(0) : '?' }}</span>
                       </div>
-                      <span class="vendor-name">{{ group.name || '其他' }}</span>
+                      <span class="vendor-name">{{ group.name || translateUi('uiMessages.md2909f1647e7') }}</span>
                     </div>
                   </div>
                   <!-- 右栏：当前厂商的模型 -->
@@ -11517,7 +11519,7 @@ function toggleFullscreenPlayback() {
                               {{ formatModelAvgDuration(m.value) }}
                             </span>
                           </div>
-                          <span v-if="m.points" class="model-item-points">{{ m.points }}点</span>
+                          <span v-if="m.points" class="model-item-points">{{ translateUi('uiMessages.mce34bc46d6b9', { value1: (m.points) }) }}</span>
                         </div>
                       </div>
                     </div>
@@ -11558,7 +11560,7 @@ function toggleFullscreenPlayback() {
                             {{ formatModelAvgDuration(m.value) }}
                           </span>
                         </div>
-                        <span v-if="m.points" class="model-item-points">{{ m.points }}点</span>
+                        <span v-if="m.points" class="model-item-points">{{ translateUi('uiMessages.mce34bc46d6b9', { value1: (m.points) }) }}</span>
                       </div>
                     </div>
                   </div>
@@ -11570,8 +11572,8 @@ function toggleFullscreenPlayback() {
           <div v-if="isHeygenMode" class="heygen-flow-control">
             <div class="heygen-channel-stack">
               <div class="heygen-channel-row">
-                <span class="heygen-field-label">渠道</span>
-                <span v-if="isDigitalHumanMode" class="heygen-flow-channel">已随数字人资产绑定</span>
+                <span class="heygen-field-label">{{ translateUi('uiMessages.mc35ffb529d5d') }}</span>
+                <span v-if="isDigitalHumanMode" class="heygen-flow-channel">{{ translateUi('uiMessages.ma3c43225385e') }}</span>
                 <div v-else class="heygen-channel-selector" @mousedown.stop @click.stop>
                   <button
                     type="button"
@@ -11587,7 +11589,7 @@ function toggleFullscreenPlayback() {
                       class="video-mode-dropdown-panel heygen-channel-dropdown-panel"
                       :class="{ 'dropdown-up': videoModeDropdownDirection === 'up' }"
                     >
-                      <div class="video-mode-dropdown-title">选择渠道</div>
+                      <div class="video-mode-dropdown-title">{{ translateUi('uiMessages.m2693c140595d') }}</div>
                       <button
                         v-for="channel in heygenChannels"
                         :key="channel.id"
@@ -11596,7 +11598,7 @@ function toggleFullscreenPlayback() {
                         :class="{ active: channel.id === heygenChannelId }"
                         @click="canvasStore.updateNodeData(id, { heygenChannelId: channel.id }); videoModeDropdownOpen = null"
                       >
-                        <span>{{ heygenChannels.length === 1 ? '默认渠道' : channel.name }}</span>
+                        <span>{{ heygenChannels.length === 1 ? translateUi('uiMessages.m86c05a5bbfdc') : channel.name }}</span>
                       </button>
                       <div class="heygen-channel-input-hint">{{ heygenInputHint }}</div>
                     </div>
@@ -11714,27 +11716,27 @@ function toggleFullscreenPlayback() {
             >
               <template #before-duration>
                 <section v-if="isMotionTransferModel" class="video-parameters-section longcat-duration-field">
-                  <div class="longcat-duration-labels"><h3>输出时长（秒）</h3><span>{{ motionTransferDuration ? `${motionTransferDuration}秒` : '参考视频时长' }}</span></div>
-                  <input :value="Number(motionTransferDuration) || 0" @input="motionTransferDuration = Number($event.target.value) === 0 ? '' : $event.target.value" type="range" min="0" :max="Math.min(upstreamVideoDuration || 45, 45)" step="0.01" class="nodrag nowheel" aria-label="动作迁移输出时长（秒）" :aria-valuetext="motionTransferDuration ? `${motionTransferDuration}秒` : '参考视频时长'" />
-                  <div class="longcat-duration-labels longcat-duration-bounds"><span>默认参考视频时长</span><span>{{ upstreamVideoDuration ? `${formatVideoNodePoints(upstreamVideoDuration)}秒` : '待检测' }}</span></div>
-                  <p class="longcat-duration-bounds">1 张人物图 + 1 个参考视频，视频不超过 100 MB、45 秒</p>
+                  <div class="longcat-duration-labels"><h3>{{ translateUi('uiMessages.md478e54659bd') }}</h3><span>{{ motionTransferDuration ? translateUi('uiMessages.mf1530240cab6', { value1: (motionTransferDuration) }) : translateUi('uiMessages.mfb00a884a7b0') }}</span></div>
+                  <input :value="Number(motionTransferDuration) || 0" @input="motionTransferDuration = Number($event.target.value) === 0 ? '' : $event.target.value" type="range" min="0" :max="Math.min(upstreamVideoDuration || 45, 45)" step="0.01" class="nodrag nowheel" :aria-label="translateUi('uiMessages.m3de8af2b7643')" :aria-valuetext="motionTransferDuration ? `${motionTransferDuration}秒` : '参考视频时长'" />
+                  <div class="longcat-duration-labels longcat-duration-bounds"><span>{{ translateUi('uiMessages.m363d21acf46a') }}</span><span>{{ upstreamVideoDuration ? translateUi('uiMessages.mf1530240cab6', { value1: (formatVideoNodePoints(upstreamVideoDuration)) }) : translateUi('uiMessages.md80109d7decd') }}</span></div>
+                  <p class="longcat-duration-bounds">{{ translateUi('uiMessages.m5b5a35d6af4d') }}</p>
                 </section>
                 <section v-if="isLongCatModel" class="video-parameters-section longcat-duration-field">
                   <div class="longcat-duration-labels">
-                    <h3>视频时长（秒）</h3>
-                    <span>{{ longCatDuration ? `${formatVideoNodePoints(longCatDuration)}秒` : '智能时长' }}</span>
+                    <h3>{{ translateUi('uiMessages.mf31965ea0789') }}</h3>
+                    <span>{{ longCatDuration ? translateUi('uiMessages.mf1530240cab6', { value1: (formatVideoNodePoints(longCatDuration)) }) : translateUi('uiMessages.m929ef3eb0315') }}</span>
                   </div>
-                  <input :value="Number(longCatDuration) || 0" @input="longCatDuration = Number($event.target.value) === 0 ? '' : $event.target.value" type="range" min="0" :max="Math.min(longCatAudioDuration || 45, 45)" step="0.01" :disabled="!longCatAudioDuration" class="nodrag nowheel" aria-label="LongCat 输出时长（秒）" :aria-valuetext="longCatDuration ? `${longCatDuration}秒` : '智能时长'" />
+                  <input :value="Number(longCatDuration) || 0" @input="longCatDuration = Number($event.target.value) === 0 ? '' : $event.target.value" type="range" min="0" :max="Math.min(longCatAudioDuration || 45, 45)" step="0.01" :disabled="!longCatAudioDuration" class="nodrag nowheel" :aria-label="translateUi('uiMessages.md565a45e3de5')" :aria-valuetext="longCatDuration ? `${longCatDuration}秒` : '智能时长'" />
                   <div class="longcat-duration-labels longcat-duration-bounds">
-                    <span>智能时长</span>
-                    <span>{{ longCatAudioDuration ? `${formatVideoNodePoints(Math.min(longCatAudioDuration, 45))}秒` : '未连接音频' }}</span>
+                    <span>{{ translateUi('uiMessages.m929ef3eb0315') }}</span>
+                    <span>{{ longCatAudioDuration ? translateUi('uiMessages.mf1530240cab6', { value1: (formatVideoNodePoints(Math.min(longCatAudioDuration, 45))) }) : translateUi('uiMessages.m1e1507f2a282') }}</span>
                   </div>
                 </section>
                 <section v-if="supportsSeedanceDraft" class="video-parameters-section seedance-draft-card">
-                  <h3>样片模式</h3>
-                  <div class="seedance-draft-options" role="group" aria-label="样片模式">
-                    <button type="button" :class="{ active: seedanceDraftEnabled }" :aria-pressed="seedanceDraftEnabled" :disabled="selectedVideoParameterResolution !== '480p' || savingSeedanceDraft || isGenerating" :title="selectedVideoParameterResolution !== '480p' ? '请选择 480P 后开启样片模式' : ''" @click="setSeedanceDraftEnabled(true)">开启</button>
-                    <button type="button" :class="{ active: !seedanceDraftEnabled }" :aria-pressed="!seedanceDraftEnabled" :disabled="savingSeedanceDraft || isGenerating" @click="setSeedanceDraftEnabled(false)">关闭</button>
+                  <h3>{{ translateUi('uiMessages.m23c6a5e65a3c') }}</h3>
+                  <div class="seedance-draft-options" role="group" :aria-label="translateUi('uiMessages.m23c6a5e65a3c')">
+                    <button type="button" :class="{ active: seedanceDraftEnabled }" :aria-pressed="seedanceDraftEnabled" :disabled="selectedVideoParameterResolution !== '480p' || savingSeedanceDraft || isGenerating" :title="selectedVideoParameterResolution !== '480p' ? translateUi('uiMessages.m906946de4320') : ''" @click="setSeedanceDraftEnabled(true)">{{ translateUi('uiMessages.m8da97ddda990') }}</button>
+                    <button type="button" :class="{ active: !seedanceDraftEnabled }" :aria-pressed="!seedanceDraftEnabled" :disabled="savingSeedanceDraft || isGenerating" @click="setSeedanceDraftEnabled(false)">{{ translateUi('common.close') }}</button>
                   </div>
                 </section>
               </template>
@@ -11746,11 +11748,11 @@ function toggleFullscreenPlayback() {
             v-if="isViduModel" 
             class="off-peak-toggle" 
             :class="{ active: viduOffPeak }"
-            title="开启后享受折扣，但生成时间会有所延长，高峰时需要等位"
+            :title="translateUi('uiMessages.m5f8707519085')"
           >
             <input type="checkbox" v-model="viduOffPeak" />
             <span class="toggle-icon">🌙</span>
-            <span class="toggle-text">错峰</span>
+            <span class="toggle-text">{{ translateUi('uiMessages.m5f477f1c7f7b') }}</span>
           </label>
           
         </div>
@@ -11760,7 +11762,7 @@ function toggleFullscreenPlayback() {
           <span 
             class="count-display clickable" 
             @click="toggleCount"
-            :title="`点击切换：1x → 2x → 4x（当前套餐最大 ${userConcurrentLimit}x）`"
+            :title="translateUi('uiMessages.mbc225e577103', { value1: (userConcurrentLimit) })"
           >
             {{ selectedCount }}x
           </span>
@@ -11770,13 +11772,13 @@ function toggleFullscreenPlayback() {
           <!-- 积分消耗显示 -->
           <span class="points-cost-display">
             <template v-if="isHeygenMode">
-              {{ heygenPointsPerSecond > 0 ? `${formatVideoNodePoints(heygenPointsPerSecond)}积分/秒 · 预计${formatVideoNodePoints(heygenPointsCost)}积分` : 'HeyGen 渠道计费' }}
+              {{ heygenPointsPerSecond > 0 ? translateUi('uiMessages.m1726ba143a76', { value1: (formatVideoNodePoints(heygenPointsPerSecond)), value2: (formatVideoNodePoints(heygenPointsCost)) }) : translateUi('uiMessages.m58dd5407384d') }}
             </template>
             <template v-else-if="isKlingMotionControl">
-              {{ formatVideoNodePoints(motionCostPerSecond) }}积分/s
+              {{ translateUi('uiMessages.m6e91e6e164b7', { value1: (formatVideoNodePoints(motionCostPerSecond)) }) }}
             </template>
             <template v-else-if="isWanModel && selectedWanMode === 'animate_mix'">
-              {{ formatVideoNodePoints(wanAnimateCostPerSecond) }}积分/s
+              {{ translateUi('uiMessages.m6e91e6e164b7', { value1: (formatVideoNodePoints(wanAnimateCostPerSecond)) }) }}
             </template>
             <template v-else-if="isLongCatModel || isMotionTransferModel">
               {{ formatVideoNodePoints(pointsCost * selectedCount) }} {{ t('imageGen.points') }}
@@ -11785,13 +11787,13 @@ function toggleFullscreenPlayback() {
               {{ runningHubV31CostText }}
             </template>
             <template v-else-if="isSeedance2Model && isSeedancePrePaidBilling && seedanceCostPerSecond > 0">
-              {{ formatVideoNodePoints(pointsCost * selectedCount) }}积分
+              {{ translateUi('uiMessages.m0b5bba8d3d7b', { value1: (formatVideoNodePoints(pointsCost * selectedCount)) }) }}
               <span v-if="shouldApplyVideoInputMultiplier" class="points-multiplier-chip">
                 {{ formatVideoInputMultiplier(videoInputMultiplier) }}
               </span>
             </template>
             <template v-else-if="isPerSecondBilling">
-              {{ formatVideoNodePoints(perSecondBillingCostPerSecond) }}积分/s
+              {{ translateUi('uiMessages.m6e91e6e164b7', { value1: (formatVideoNodePoints(perSecondBillingCostPerSecond)) }) }}
             </template>
             <template v-else-if="isKlingOfficialDurationModel(currentModelConfig)">
               {{ klingOfficialSelectedDurationCostText }}
@@ -11873,7 +11875,7 @@ function toggleFullscreenPlayback() {
         <!-- 展开/收起按钮 -->
         <button class="sora2-collapse-trigger" @click="showKlingAdvancedOptions = !showKlingAdvancedOptions">
           <span class="sora2-collapse-icon" :class="{ 'expanded': showKlingAdvancedOptions }">∧</span>
-          <span>{{ showKlingAdvancedOptions ? '收起' : '扩展' }}</span>
+          <span>{{ showKlingAdvancedOptions ? translateUi('common.less') : translateUi('uiMessages.m99a4e1e59743') }}</span>
         </button>
         
         <!-- 高级选项内容 -->
@@ -11882,20 +11884,20 @@ function toggleFullscreenPlayback() {
             <!-- Kling 2.6+ 声音开关 -->
             <template v-if="isKling26Plus">
               <div class="sora2-option-row">
-                <span class="sora2-option-label">🔊 生成声音 <span v-if="klingSoundEnabled" class="kling-sound-multiplier">(2x)</span></span>
+                <span class="sora2-option-label">{{ translateUi('uiMessages.meb75ddae67b5') }} <span v-if="klingSoundEnabled" class="kling-sound-multiplier">(2x)</span></span>
                 <label class="sora2-toggle-switch">
                   <input type="checkbox" v-model="klingSoundEnabled" />
                   <span class="sora2-toggle-slider"></span>
                 </label>
               </div>
               <div class="seedance-sound-hint">
-                💡 开启后将同时生成视频音频，积分消耗翻倍
+                {{ translateUi('uiMessages.m675c3df64e33') }}
               </div>
             </template>
             
             <!-- 摄像机控制开关 -->
             <div class="sora2-option-row">
-              <span class="sora2-option-label">🎥 摄像机控制</span>
+              <span class="sora2-option-label">{{ translateUi('uiMessages.m75fe05344f99') }}</span>
               <label class="sora2-toggle-switch">
                 <input type="checkbox" v-model="klingCameraEnabled" />
                 <span class="sora2-toggle-slider"></span>
@@ -11906,7 +11908,7 @@ function toggleFullscreenPlayback() {
             <template v-if="klingCameraEnabled">
               <!-- 运镜类型选择 -->
               <div class="sora2-option-row vertical">
-                <span class="sora2-option-label">运镜类型</span>
+                <span class="sora2-option-label">{{ translateUi('uiMessages.m282052c40bc7') }}</span>
                 <div class="kling-camera-types">
                   <button
                     v-for="type in KLING_CAMERA_TYPES"
@@ -11924,7 +11926,7 @@ function toggleFullscreenPlayback() {
               <template v-if="klingCameraType === 'simple'">
                 <!-- 配置类型选择（6选1）-->
                 <div class="sora2-option-row vertical">
-                  <span class="sora2-option-label">运镜方向</span>
+                  <span class="sora2-option-label">{{ translateUi('uiMessages.ma895bf919c83') }}</span>
                   <div class="kling-camera-configs">
                     <button
                       v-for="cfg in KLING_CAMERA_CONFIGS"
@@ -11941,7 +11943,7 @@ function toggleFullscreenPlayback() {
                 <!-- 数值滑块 -->
                 <div class="sora2-option-row vertical">
                   <div class="kling-slider-header">
-                    <span class="sora2-option-label">运镜强度</span>
+                    <span class="sora2-option-label">{{ translateUi('uiMessages.m1109e4bad9d6') }}</span>
                     <span class="kling-slider-value">{{ klingCameraValue }}</span>
                   </div>
                   <div class="kling-slider-container">
@@ -11973,20 +11975,20 @@ function toggleFullscreenPlayback() {
               <div class="kling-section-divider"></div>
               
               <div class="kling-motion-section">
-                <div class="kling-motion-title">🎬 {{ isCozeVideoSwapModel ? 'Coze 视频换人配置' : '动作迁移配置' }}</div>
+                <div class="kling-motion-title">🎬 {{ isCozeVideoSwapModel ? translateUi('uiMessages.ma92ac2d23c3a') : translateUi('uiMessages.m98abfcfbf56e') }}</div>
                 
                 <!-- 参考视频来源提示 -->
                 <div class="sora2-option-row vertical">
                   <div class="kling-motion-label-row">
-                    <span class="sora2-option-label">参考视频</span>
-                    <span v-if="hasUpstreamVideo" class="kling-motion-duration">✅ 已连接</span>
-                    <span v-else class="kling-motion-error-tag">❌ 未连接</span>
+                    <span class="sora2-option-label">{{ translateUi('canvas.videoNode.refVideo') }}</span>
+                    <span v-if="hasUpstreamVideo" class="kling-motion-duration">{{ translateUi('uiMessages.m5ded56dff880') }}</span>
+                    <span v-else class="kling-motion-error-tag">{{ translateUi('uiMessages.m5293c29bd79c') }}</span>
                   </div>
                   <div v-if="hasUpstreamVideo" class="kling-motion-hint">
-                    ✅ 参考视频来自上游视频节点，{{ isCozeVideoSwapModel ? '预扣10秒，完成后按源视频实际秒数结算' : '按实际秒数计费（最长30秒）' }}
+                    {{ translateUi('uiMessages.m4adfa01964ca', { value1: (isCozeVideoSwapModel ? translateUi('uiMessages.me6b525fdda62') : translateUi('uiMessages.ma4c24b25a248')) }) }}
                   </div>
                   <div v-else class="kling-motion-error">
-                    ⚠️ 请连接一个视频节点作为参考视频来源
+                    {{ translateUi('uiMessages.m409271211b64') }}
                   </div>
                 </div>
               </div>
@@ -11997,20 +11999,20 @@ function toggleFullscreenPlayback() {
       
       <details v-if="assetReviewProvider" class="asset-review-settings nodrag nowheel">
         <summary class="sora2-collapse-trigger" @keydown.stop @keyup.stop>
-          <span>高级设置</span>
+          <span>{{ translateUi('uiMessages.m44455611b910') }}</span>
           <svg class="sora2-collapse-icon" aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="m9 5 7 7-7 7" />
           </svg>
         </summary>
         <div class="sora2-advanced-options seedance-advanced">
           <div class="sora2-option-row">
-            <span class="sora2-option-label" title="生成前校验连入的图片、视频和音频；生成完成后 5 分钟内可复用，之后重新校验。">自动校验素材 ⓘ</span>
+            <span class="sora2-option-label" :title="translateUi('uiMessages.m8a465977c656')">{{ translateUi('uiMessages.mcec51ac3d2cf') }}</span>
             <label class="sora2-toggle-switch">
-              <input type="checkbox" aria-label="自动校验素材" :checked="autoReviewMaterials" :disabled="savingAutoReview || isGenerating || !autoReviewConnected" @change="setAutoReviewMaterials" />
+              <input type="checkbox" :aria-label="translateUi('uiMessages.m4bff72acd766')" :checked="autoReviewMaterials" :disabled="savingAutoReview || isGenerating || !autoReviewConnected" @change="setAutoReviewMaterials" />
               <span class="sora2-toggle-slider"></span>
             </label>
           </div>
-          <div v-if="assetReviewProvider && !autoReviewConnected" class="seedance-sound-hint">已绑定素材渠道，自动校验待接通</div>
+          <div v-if="assetReviewProvider && !autoReviewConnected" class="seedance-sound-hint">{{ translateUi('uiMessages.mfe12b6f70c5c') }}</div>
         </div>
       </details>
 
@@ -12019,7 +12021,7 @@ function toggleFullscreenPlayback() {
         <!-- 展开/收起按钮 -->
         <button class="sora2-collapse-trigger" @click="showSeedanceAdvancedOptions = !showSeedanceAdvancedOptions">
           <span class="sora2-collapse-icon" :class="{ 'expanded': showSeedanceAdvancedOptions }">∧</span>
-          <span>{{ showSeedanceAdvancedOptions ? '收起' : '扩展' }}</span>
+          <span>{{ showSeedanceAdvancedOptions ? translateUi('common.less') : translateUi('uiMessages.m99a4e1e59743') }}</span>
         </button>
         
         <!-- 高级选项内容 -->
@@ -12027,7 +12029,7 @@ function toggleFullscreenPlayback() {
           <div v-if="showSeedanceAdvancedOptions" class="sora2-advanced-options seedance-advanced">
             <!-- 生成声音开关 -->
             <div class="sora2-option-row">
-              <span class="sora2-option-label">🔊 生成声音 <span v-if="seedanceSoundEnabled" class="kling-sound-multiplier">(2x)</span></span>
+              <span class="sora2-option-label">{{ translateUi('uiMessages.meb75ddae67b5') }} <span v-if="seedanceSoundEnabled" class="kling-sound-multiplier">(2x)</span></span>
               <label class="sora2-toggle-switch">
                 <input type="checkbox" v-model="seedanceSoundEnabled" />
                 <span class="sora2-toggle-slider"></span>
@@ -12035,7 +12037,7 @@ function toggleFullscreenPlayback() {
             </div>
             
             <div class="seedance-sound-hint">
-              💡 开启后将同时生成视频音频，积分消耗翻倍
+              {{ translateUi('uiMessages.m675c3df64e33') }}
             </div>
           </div>
         </Transition>
@@ -12045,20 +12047,20 @@ function toggleFullscreenPlayback() {
       <template v-if="isOfficialWan3Model">
         <button class="sora2-collapse-trigger" @click="showWan3AdvancedOptions = !showWan3AdvancedOptions">
           <span class="sora2-collapse-icon" :class="{ 'expanded': showWan3AdvancedOptions }">∧</span>
-          <span>{{ showWan3AdvancedOptions ? '收起' : '扩展' }}</span>
+          <span>{{ showWan3AdvancedOptions ? translateUi('common.less') : translateUi('uiMessages.m99a4e1e59743') }}</span>
         </button>
 
         <Transition name="slide-down">
           <div v-if="showWan3AdvancedOptions" class="sora2-advanced-options seedance-advanced">
             <div class="sora2-option-row">
-              <span class="sora2-option-label">智能扩写提示词</span>
+              <span class="sora2-option-label">{{ translateUi('uiMessages.mad47a10ae688') }}</span>
               <label class="sora2-toggle-switch">
                 <input type="checkbox" v-model="wan3PromptExtend" />
                 <span class="sora2-toggle-slider"></span>
               </label>
             </div>
             <div class="seedance-sound-hint">
-              开启后由万相自动扩写提示词，默认关闭。
+              {{ translateUi('uiMessages.mfda78ceae01f') }}
             </div>
           </div>
         </Transition>
@@ -12069,17 +12071,17 @@ function toggleFullscreenPlayback() {
         <div class="vidu-mode-section">
           <!-- 模式说明提示 -->
           <div v-if="viduMode === 'start-end'" class="vidu-mode-tip blue">
-            💡 首尾帧模式：第1张图为视频起始帧，第2张图为结束帧
+            {{ translateUi('uiMessages.m84c9a5992c33') }}
           </div>
           <div v-else-if="viduMode === 'reference'" class="vidu-mode-tip purple">
-            💡 多图参考：AI 综合参考所有图片的风格、角色、场景创作
+            {{ translateUi('uiMessages.mf624f1211284') }}
           </div>
           <!-- 图片数量验证提示 -->
           <div v-if="viduMode === 'i2v' && referenceImages.length > 1" class="vidu-mode-tip warning">
-            ⚠️ 首帧驱动模式只支持1张图，将使用第1张图
+            {{ translateUi('uiMessages.m68d6321329fc') }}
           </div>
           <div v-if="viduMode === 'start-end' && referenceImages.length !== 2" class="vidu-mode-tip warning">
-            ⚠️ 首尾帧模式需要恰好2张图片
+            {{ translateUi('uiMessages.mc2e688dbf566') }}
           </div>
         </div>
       </template>
@@ -12089,7 +12091,7 @@ function toggleFullscreenPlayback() {
         <div class="veo-mode-section">
           <!-- VEO 清晰度切换（根据模式动态显示可用选项） -->
           <div class="veo-resolution-section" v-if="availableVeoResolutions.length > 1">
-            <span class="veo-resolution-label">清晰度</span>
+            <span class="veo-resolution-label">{{ translateUi('uiMessages.m0e22652107f5') }}</span>
             <div class="veo-resolution-options">
               <button
                 v-for="res in availableVeoResolutions"
@@ -12104,17 +12106,17 @@ function toggleFullscreenPlayback() {
           </div>
           <!-- 模式说明提示 -->
           <div v-if="veoMode === 'fast'" class="veo-mode-tip blue">
-            ⚡ Fast模式：快速生成，适合预览和测试
+            {{ translateUi('uiMessages.m798e99b92b64') }}
           </div>
           <div v-else-if="veoMode === 'components'" class="veo-mode-tip purple">
-            💡 多图参考：最多3张图，AI综合参考创作
+            {{ translateUi('uiMessages.mdd753f8a36ed') }}
           </div>
           <div v-else-if="veoMode === 'pro'" class="veo-mode-tip gold">
-            🌟 Pro模式：最高画质，适合正式作品
+            {{ translateUi('uiMessages.m3dfc993db8d0') }}
           </div>
           <!-- 图片数量验证提示 -->
           <div v-if="referenceImages.length > 0 && referenceImages.length > currentVeoModeConfig.maxImages" class="veo-mode-tip warning">
-            ⚠️ {{ currentVeoModeConfig.label }}最多支持{{ currentVeoModeConfig.maxImages }}张图
+            {{ translateUi('uiMessages.m432c5d01218b', { value1: (currentVeoModeConfig.label), value2: (currentVeoModeConfig.maxImages) }) }}
           </div>
         </div>
       </template>
@@ -12124,18 +12126,18 @@ function toggleFullscreenPlayback() {
         <div class="sd2-mode-section">
           <!-- 视频编辑模式：保留原声开关 -->
           <div v-if="selectedKlingO1Mode === 'video_edit'" class="sd2-o1-option-row">
-            <span class="sd2-o1-option-label">原声</span>
+            <span class="sd2-o1-option-label">{{ translateUi('uiMessages.mb9e7bdd429d0') }}</span>
             <div class="sd2-o1-option-btns">
-              <button @click="omniKeepSound = 'yes'" :class="['sd2-mode-btn sd2-mode-btn-sm', { active: omniKeepSound === 'yes' }]">保留</button>
-              <button @click="omniKeepSound = 'no'" :class="['sd2-mode-btn sd2-mode-btn-sm', { active: omniKeepSound === 'no' }]">不保留</button>
+              <button @click="omniKeepSound = 'yes'" :class="['sd2-mode-btn sd2-mode-btn-sm', { active: omniKeepSound === 'yes' }]">{{ translateUi('uiMessages.m670ec25af841') }}</button>
+              <button @click="omniKeepSound = 'no'" :class="['sd2-mode-btn sd2-mode-btn-sm', { active: omniKeepSound === 'no' }]">{{ translateUi('uiMessages.m06323337cbd9') }}</button>
             </div>
           </div>
           <div class="sd2-mode-desc">{{ currentKlingO1ModeConfig.desc || '' }}</div>
           <div v-if="selectedKlingO1Mode === 'video_edit' && !hasUpstreamVideo" class="sd2-mode-warn">
-            ⚠ 视频编辑需要连接上游视频节点
+            {{ translateUi('uiMessages.m7fcf61ad4cdb') }}
           </div>
           <div v-if="referenceImages.length > 0 && referenceImages.length > currentKlingO1ModeConfig.maxImages && currentKlingO1ModeConfig.maxImages > 0" class="sd2-mode-warn">
-            ⚠ {{ currentKlingO1ModeConfig.label }}最多支持{{ currentKlingO1ModeConfig.maxImages }}张图
+            {{ translateUi('uiMessages.medcccdab7140', { value1: (currentKlingO1ModeConfig.label), value2: (currentKlingO1ModeConfig.maxImages) }) }}
           </div>
         </div>
       </template>
@@ -12145,10 +12147,10 @@ function toggleFullscreenPlayback() {
         <div class="sd2-mode-section">
           <div class="sd2-mode-desc">{{ currentKlingV3OmniModeConfig.description || '' }}</div>
           <div v-if="selectedKlingV3OmniMode === 'video_reference' && !hasUpstreamVideo" class="sd2-mode-warn">
-            ⚠ 视频参考需要连接上游视频节点
+            {{ translateUi('uiMessages.ma2c8080b1a17') }}
           </div>
           <div v-if="referenceImages.length > 0 && referenceImages.length > currentKlingV3OmniModeConfig.maxImages && currentKlingV3OmniModeConfig.maxImages > 0" class="sd2-mode-warn">
-            ⚠ {{ currentKlingV3OmniModeConfig.label }}最多支持{{ currentKlingV3OmniModeConfig.maxImages }}张图
+            {{ translateUi('uiMessages.medcccdab7140', { value1: (currentKlingV3OmniModeConfig.label), value2: (currentKlingV3OmniModeConfig.maxImages) }) }}
           </div>
         </div>
       </template>
@@ -12156,26 +12158,26 @@ function toggleFullscreenPlayback() {
       <!-- RunningHub 全能视频 V3.1 六种模式提示 -->
       <template v-if="isRunningHubAiAppVideoV31Model">
         <div class="sd2-mode-section">
-          <div class="sd2-mode-desc">时长 3-15 秒，输出 480p，按秒计费</div>
+          <div class="sd2-mode-desc">{{ translateUi('uiMessages.mf869688c681d') }}</div>
           <div v-if="v31ModeConfig.needsImages > 0 && referenceImages.length === 0" class="sd2-mode-warn">
-            ⚠ {{ v31ModeConfig.label }}需要连接至少 1 张图片
+            {{ translateUi('uiMessages.m2911c393c1fa', { value1: (v31ModeConfig.label) }) }}
           </div>
           <div v-if="v31Mode === 'first_last_frame' && referenceImages.length > 0 && referenceImages.length < 2" class="sd2-mode-warn">
-            ⚠ 首尾帧生视频需要按顺序连接 2 张图片（首帧→尾帧）
+            {{ translateUi('uiMessages.mcec980481ed4') }}
           </div>
           <div v-if="v31Mode === 'multi_image' && referenceImages.length > 3" class="sd2-mode-warn">
-            ⚠ 多图生视频最多支持 3 张图片
+            {{ translateUi('uiMessages.m16743f2436a1') }}
           </div>
           <div v-if="v31Mode === 'image_audio' && !hasReferenceAudios" class="sd2-mode-warn">
-            ⚠ 图像+音频生视频需要连接 1 段音频
+            {{ translateUi('uiMessages.mabc4f1810ef5') }}
           </div>
         </div>
       </template>
 
       <div v-if="currentModelConfig?.apiType === 'grsai-wan3'" class="sd2-mode-section">
-        <div class="sd2-mode-desc">多模态参考支持最多 10 张图片和 5 段音频；首尾帧与参考素材互斥。</div>
-        <label class="sd2-mode-desc">随机种子（可选）
-          <input v-model="grsaiSeed" type="number" step="1" placeholder="留空则随机" class="nodrag nowheel" style="width: 100%; color: inherit; background: transparent; border: 1px solid var(--canvas-border, #8884); border-radius: 6px; padding: 4px 6px;" @mousedown.stop @keydown.stop />
+        <div class="sd2-mode-desc">{{ translateUi('uiMessages.m51e9e97b21b1') }}</div>
+        <label class="sd2-mode-desc">{{ translateUi('uiMessages.m4afb147a0424') }}
+          <input v-model="grsaiSeed" type="number" step="1" :placeholder="translateUi('uiMessages.m4920f0881182')" class="nodrag nowheel" style="width: 100%; color: inherit; background: transparent; border: 1px solid var(--canvas-border, #8884); border-radius: 6px; padding: 4px 6px;" @mousedown.stop @keydown.stop />
         </label>
       </div>
 
@@ -12184,13 +12186,13 @@ function toggleFullscreenPlayback() {
         <div class="sd2-mode-section">
           <div class="sd2-mode-desc">{{ currentRouterBeeWan3ModeConfig.desc }}</div>
           <div v-if="selectedRouterBeeWan3Mode === 'multimodal_ref'" class="sd2-mode-desc">
-            提示词请按数组顺序使用 Image 1、Video 1 或 Audio 1 引用素材；仅发送公开链接，不发送文件。
+            {{ translateUi('uiMessages.me602dda6d507') }}
           </div>
           <div v-if="selectedRouterBeeWan3Mode === 'image2video' && referenceImages.length !== 1" class="sd2-mode-warn">
-            ⚠ 图生视频需要且仅支持 1 张首帧图片
+            {{ translateUi('uiMessages.md355c2c8127d') }}
           </div>
           <div v-if="selectedRouterBeeWan3Mode === 'first_last_frame' && referenceImages.length !== 2" class="sd2-mode-warn">
-            ⚠ 首尾帧需要按顺序连接 2 张图片（首帧→尾帧）
+            {{ translateUi('uiMessages.m1f07222334a2') }}
           </div>
         </div>
       </template>
@@ -12200,28 +12202,28 @@ function toggleFullscreenPlayback() {
         <div class="sd2-mode-section">
           <div class="sd2-mode-desc">{{ currentWanModeConfig.desc }}</div>
           <div v-if="selectedWanMode === 'i2v' && referenceImages.length === 0" class="sd2-mode-warn">
-            ⚠ 图生视频需要连接或上传1张首帧图
+            {{ translateUi('uiMessages.mbd0480448293') }}
           </div>
           <div v-if="selectedWanMode === 'i2v' && referenceImages.length > 1" class="sd2-mode-warn">
-            ⚠ 图生视频最多支持1张首帧图
+            {{ translateUi('uiMessages.m616fd0394177') }}
           </div>
           <div v-if="selectedWanMode === 'r2v' && referenceImages.length + referenceVideos.length === 0" class="sd2-mode-warn">
-            ⚠ 多参考需要连接或上传图片/视频参考素材
+            {{ translateUi('uiMessages.m870b3a4c22cd') }}
           </div>
           <div v-if="selectedWanMode === 'r2v' && referenceImages.length + referenceVideos.length > 5" class="sd2-mode-warn">
-            ⚠ 多参考的图片/视频参考素材合计最多5个
+            {{ translateUi('uiMessages.m5c974d2e898a') }}
           </div>
           <div v-if="selectedWanMode === 'videoedit' && !hasUpstreamVideo" class="sd2-mode-warn">
-            ⚠ 视频编辑需要连接上游视频节点
+            {{ translateUi('uiMessages.m7fcf61ad4cdb') }}
           </div>
           <div v-if="selectedWanMode === 'animate_mix' && referenceImages.length === 0" class="sd2-mode-warn">
-            ⚠ 换人混合需要连接或上传1张人物图片
+            {{ translateUi('uiMessages.m5615bbf910eb') }}
           </div>
           <div v-if="selectedWanMode === 'animate_mix' && referenceImages.length > 1" class="sd2-mode-warn">
-            ⚠ 换人混合最多支持1张人物图片
+            {{ translateUi('uiMessages.m0b409f81d367') }}
           </div>
           <div v-if="selectedWanMode === 'animate_mix' && !hasUpstreamVideo" class="sd2-mode-warn">
-            ⚠ 换人混合需要连接上游视频节点
+            {{ translateUi('uiMessages.m8e9ce2d888da') }}
           </div>
         </div>
       </template>
@@ -12231,13 +12233,13 @@ function toggleFullscreenPlayback() {
         <div class="sd2-mode-section">
           <div class="sd2-mode-desc">{{ currentSeedance2ModeConfig.desc }}</div>
           <div v-if="currentSeedance2ModeConfig.needsVideo && !hasUpstreamVideo" class="sd2-mode-warn">
-            ⚠ {{ currentSeedance2ModeConfig.label }}需要连接上游视频节点
+            {{ translateUi('uiMessages.m9e180d8b6525', { value1: (currentSeedance2ModeConfig.label) }) }}
           </div>
           <div v-if="currentSeedance2ModeConfig.needsImage && referenceImages.length === 0 && selectedSeedance2Mode !== 'text2video'" class="sd2-mode-warn">
-            ⚠ {{ currentSeedance2ModeConfig.label }}需要连接上游图片节点
+            {{ translateUi('uiMessages.m95b9c4351e49', { value1: (currentSeedance2ModeConfig.label) }) }}
           </div>
           <div v-if="isSeedancePrePaidBilling && seedanceCostPerSecond > 0" class="sd2-mode-billing-note">
-            按分辨率每秒计费 · 预扣10s · 完成后多退少补{{ shouldApplyVideoInputMultiplier ? ' · 含输入视频倍率' : '' }}
+            {{ translateUi('uiMessages.mb6155fc5098a', { value1: (shouldApplyVideoInputMultiplier ? translateUi('uiMessages.m2c7d6d752643') : '') }) }}
           </div>
         </div>
       </template>
@@ -12247,7 +12249,7 @@ function toggleFullscreenPlayback() {
         <div class="sd2-mode-section">
           <div class="sd2-mode-desc">{{ currentMinimaxH3ModeConfig.desc }}</div>
           <div v-if="currentMinimaxH3ModeConfig.needsImage && referenceImages.length === 0 && (selectedMinimaxH3Mode || minimaxH3DefaultMode) !== 'text2video'" class="sd2-mode-warn">
-            ⚠ {{ currentMinimaxH3ModeConfig.label }}需要连接上游图片节点
+            {{ translateUi('uiMessages.m95b9c4351e49', { value1: (currentMinimaxH3ModeConfig.label) }) }}
           </div>
         </div>
       </template>

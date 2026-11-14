@@ -1,5 +1,6 @@
-export const assetLabels = { character: '角色', scene: '场景', prop: '道具' }
-export function blankScript() { return { title: '未命名脚本', entry: 'story', sourceText: '', requirements: '', referenceImages: [], style: '', confirmed: false, assets: [], shots: [] } }
+import { t as translateUi } from '../i18n/index.js'
+export const assetLabels = { get character() { return translateUi('user.role') }, get scene() { return translateUi('directorStudio.modelLibrary.categories.scenes') }, get prop() { return translateUi('directorStudio.modelLibrary.categories.props') } }
+export function blankScript() { return { get title() { return translateUi('uiMessages.m89548c93c7ee') }, entry: 'story', sourceText: '', requirements: '', referenceImages: [], style: '', confirmed: false, assets: [], shots: [] } }
 export function newShot(id) { return { id, duration: 10, description: '', scale: '中景', lighting: '', camera: '', audio: '', dialogue: [], assetIds: [], color: '', imagePrompt: '', videoPrompt: '', imageUrl: '', videoUrl: '', imageNodeId: '', videoNodeId: '' } }
 export function completion(doc) {
   if (!doc?.shots?.length || !doc.confirmed) return 0

@@ -160,7 +160,7 @@ test('Canvas manual save updates local recovery snapshots after the server save 
   const quickSaveIndex = source.indexOf('async function quickSaveWorkflow()')
   const quickMarkSavedIndex = source.indexOf('canvasStore.markCurrentTabSaved()', quickSaveIndex)
   const quickPersistIndex = source.indexOf('persistManualSaveRecoverySnapshot()', quickSaveIndex)
-  const quickSuccessToastIndex = source.indexOf("displayToast(`「${currentTab.name}」已保存`", quickSaveIndex)
+  const quickSuccessToastIndex = source.indexOf("displayToast(translateUi('uiMessages.mdda64dc2bbe2', { value1: (currentTab.name) })", quickSaveIndex)
   assert.notEqual(quickSaveIndex, -1, 'Canvas should define quickSaveWorkflow')
   assert.notEqual(quickMarkSavedIndex, -1, 'quick save should mark the current tab saved')
   assert.notEqual(quickPersistIndex, -1, 'quick save should refresh local recovery snapshots')

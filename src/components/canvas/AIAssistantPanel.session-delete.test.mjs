@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 /**
  * 会话删除（AC-P2-04 / AC-P1-05）测试：
  * 删除按钮不依赖 modelPickerTypes.length；删除前确认；说明不会取消已提交媒体任务；
@@ -22,13 +23,13 @@ test('删除按钮不依赖 modelPickerTypes.length（AC-P2-04）', () => {
 })
 
 test('删除前确认且文案说明不会取消已提交媒体任务', () => {
-  assert.match(panel, /删除对话不会取消已经提交的图片或视频任务/)
-  assert.match(panel, /正在执行的 AI 回复会先停止；确认停止后再删除/)
+  assert.match(panel, localizedPattern(/删除对话不会取消已经提交的图片或视频任务/))
+  assert.match(panel, localizedPattern(/正在执行的 AI 回复会先停止；确认停止后再删除/))
   assert.match(panel, /showAlert\(/)
 })
 
 test('delete_waiting_for_cancel 保留会话并显示进度；网络失败页面可见', () => {
-  assert.match(panel, /error\?\.code === 'delete_waiting_for_cancel' \|\| \/正在停止\/\.test\(error\?\.message \|\| ''\)/)
-  assert.match(panel, /上一轮 AI 回复仍在停止中，请稍后重试删除/)
-  assert.match(panel, /showAlert\(`删除会话失败：\$\{error\?\.message \|\| '未知错误'\}`, '删除失败'\)/)
+  assert.match(panel, localizedPattern(/error\?\.code === 'delete_waiting_for_cancel' \|\| \/正在停止\/\.test\(error\?\.message \|\| ''\)/))
+  assert.match(panel, localizedPattern(/上一轮 AI 回复仍在停止中，请稍后重试删除/))
+  assert.match(panel, /showAlert\(translateUi\('uiMessages\.me982b9824e1a', \{ value1: \(error\?\.message \|\| translateUi\('canvas\.unknownError'\)\) \}\), translateUi\('errors\.deleteFailed'\)\)/)
 })

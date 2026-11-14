@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { streamVideo as vStreamVideo } from '@/directives/streamVideo'
 import { computed, onUnmounted, ref, watch } from 'vue'
 import CachedImage from '@/components/CachedImage.vue'
@@ -237,7 +239,7 @@ onUnmounted(destroyAudioVisualizer)
               <path d="M19 12H5"/>
               <path d="M12 19l-7-7 7-7"/>
             </svg>
-            <span>返回</span>
+            <span>{{ translateUi('common.back') }}</span>
           </button>
 
           <button class="preview-close-btn" @click="emit('close')">
@@ -271,7 +273,7 @@ onUnmounted(destroyAudioVisualizer)
             <div v-else-if="asset.type === 'audio'" class="preview-audio">
               <div v-if="audioError" class="audio-error-container">
                 <div class="audio-error-icon">!</div>
-                <div class="audio-error-text">音频文件不可用，源文件可能已被删除</div>
+                <div class="audio-error-text">{{ translateUi('uiMessages.m458aa1ae8e73') }}</div>
               </div>
               <template v-else>
                 <div class="audio-visualizer-container">
@@ -318,28 +320,28 @@ onUnmounted(destroyAudioVisualizer)
 
           <div class="preview-info">
             <div class="info-row">
-              <span class="info-label">名称</span>
+              <span class="info-label">{{ translateUi('directorStudio.inspector.name') }}</span>
               <span class="info-value">{{ asset.name }}</span>
             </div>
             <div class="info-row">
-              <span class="info-label">类型</span>
+              <span class="info-label">{{ translateUi('canvas.assetPanel.type') }}</span>
               <span class="info-value">{{ typeLabel }}</span>
             </div>
             <div class="info-row">
-              <span class="info-label">大小</span>
+              <span class="info-label">{{ translateUi('canvas.assetPanel.size') }}</span>
               <span class="info-value">{{ formatFileSize(asset.size) }}</span>
             </div>
             <div class="info-row">
-              <span class="info-label">创建时间</span>
+              <span class="info-label">{{ translateUi('canvas.assetPanel.createdAt') }}</span>
               <span class="info-value">{{ formatDate(asset.created_at) }}</span>
             </div>
           </div>
 
           <div class="preview-toolbar">
-            <button class="toolbar-btn primary" @click="emit('apply', asset)">添加到画布</button>
-            <button class="toolbar-btn" @click="emit('manage-tags', asset)">管理标签</button>
-            <button class="toolbar-btn" @click="emit('download', asset)">下载</button>
-            <button class="toolbar-btn danger" @click="emit('delete', asset)">删除</button>
+            <button class="toolbar-btn primary" @click="emit('apply', asset)">{{ translateUi('canvas.assetPanel.addToCanvas') }}</button>
+            <button class="toolbar-btn" @click="emit('manage-tags', asset)">{{ translateUi('canvas.assetPanel.manageTags') }}</button>
+            <button class="toolbar-btn" @click="emit('download', asset)">{{ translateUi('common.download') }}</button>
+            <button class="toolbar-btn danger" @click="emit('delete', asset)">{{ translateUi('common.delete') }}</button>
           </div>
         </div>
       </div>

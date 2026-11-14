@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 
 // 获取带租户标识和认证的请求头
@@ -29,7 +30,7 @@ export async function getTickets(params = {}) {
   })
 
   if (!response.ok) {
-    const error = new Error('获取工单列表失败')
+    const error = new Error(translateUi('uiMessages.m79e60d4bdb6a'))
     error.status = response.status
     try {
       error.data = await response.json()
@@ -54,7 +55,7 @@ export async function getTicketDetail(ticketId) {
   })
 
   if (!response.ok) {
-    const error = new Error('获取工单详情失败')
+    const error = new Error(translateUi('uiMessages.m8c88bc20040e'))
     error.status = response.status
     try {
       error.data = await response.json()
@@ -85,7 +86,7 @@ export async function createTicket(data) {
   })
 
   if (!response.ok) {
-    const error = new Error('创建工单失败')
+    const error = new Error(translateUi('uiMessages.mf4949885a1e4'))
     error.status = response.status
     try {
       error.data = await response.json()
@@ -115,7 +116,7 @@ export async function replyTicket(ticketId, data) {
   })
 
   if (!response.ok) {
-    const error = new Error('回复工单失败')
+    const error = new Error(translateUi('uiMessages.md2b92695d009'))
     error.status = response.status
     try {
       error.data = await response.json()
@@ -141,7 +142,7 @@ export async function confirmResolve(ticketId) {
   })
 
   if (!response.ok) {
-    const error = new Error('确认解决失败')
+    const error = new Error(translateUi('uiMessages.mfad40fcf3099'))
     error.status = response.status
     try {
       error.data = await response.json()
@@ -171,7 +172,7 @@ export async function rateTicket(ticketId, data) {
   })
 
   if (!response.ok) {
-    const error = new Error('评价失败')
+    const error = new Error(translateUi('uiMessages.m66c95dd753a0'))
     error.status = response.status
     try {
       error.data = await response.json()
@@ -205,7 +206,7 @@ export async function uploadAttachment(file) {
   })
 
   if (!response.ok) {
-    const error = new Error('上传附件失败')
+    const error = new Error(translateUi('uiMessages.mbe82800ae6d3'))
     error.status = response.status
     try {
       error.data = await response.json()

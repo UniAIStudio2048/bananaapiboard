@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 defineOptions({
   inheritAttrs: false
 })
@@ -675,11 +677,11 @@ function normalizeSelectedLlmModel(models = llmConfig.value.models, defaultModel
 }
 
 const llmCapabilityOptions = [
-  { key: 'image', label: '图片理解', icon: '' },
-  { key: 'video', label: '视频理解', icon: '' },
-  { key: 'audio', label: '音频理解', icon: '' },
-  { key: 'webSearch', label: '联网搜索', icon: '⌕' },
-  { key: 'file', label: '文件理解', icon: '□' }
+  { key: 'image', get label() { return translateUi('uiMessages.mce1ca0a2d377') }, icon: '' },
+  { key: 'video', get label() { return translateUi('uiMessages.m2c7cdc65109a') }, icon: '' },
+  { key: 'audio', get label() { return translateUi('uiMessages.mcedd745b43f0') }, icon: '' },
+  { key: 'webSearch', get label() { return translateUi('uiMessages.mf30b4fa151f2') }, icon: '⌕' },
+  { key: 'file', get label() { return translateUi('uiMessages.m9002ed6fc84c') }, icon: '□' }
 ]
 
 function getEnabledLlmCapabilities(model = {}) {
@@ -760,7 +762,7 @@ async function handlePresetSubmit(data) {
     showCustomPresetDialog.value = false
   } catch (error) {
     console.error('[TextNode] 保存预设失败:', error)
-    alert(error.message || '保存失败，请重试')
+    alert(error.message || translateUi('user.saveFailed'))
   }
 }
 
@@ -769,7 +771,7 @@ function handleTempUse(data) {
   tempCustomPrompt.value = data.systemPrompt
   persistSelectedPreset('temp-custom', {
     id: 'temp-custom',
-    name: '📌 临时自定义',
+    name: translateUi('uiMessages.m7246cd862503'),
     systemPrompt: tempCustomPrompt.value,
     type: 'temp-custom'
   })
@@ -942,7 +944,7 @@ const availablePresets = computed(() => {
     }
     presets.push({
       id: 'temp-custom',
-      name: '📌 临时自定义',
+      get name() { return translateUi('uiMessages.m7246cd862503') },
       type: 'temp-custom'
     })
   }
@@ -953,12 +955,12 @@ const availablePresets = computed(() => {
   }
   presets.push({
     id: 'action-new',
-    name: '+ 新建自定义预设',
+    get name() { return translateUi('uiMessages.mfa4e084ee8e7') },
     type: 'action'
   })
   presets.push({
     id: 'action-manage',
-    name: '⚙️ 管理我的预设',
+    get name() { return translateUi('uiMessages.mcdb34b83fb97') },
     type: 'action'
   })
 
@@ -967,7 +969,7 @@ const availablePresets = computed(() => {
 
 // 当前选中预设的名称
 const selectedPresetLabel = computed(() => {
-  if (!selectedPreset.value) return '通用对话'
+  if (!selectedPreset.value) return translateUi('uiMessages.m94671ed95dcf')
 
   // 检查是否是用户自定义预设
   if (selectedPreset.value.startsWith('user-')) {
@@ -977,13 +979,13 @@ const selectedPresetLabel = computed(() => {
 
   // 检查是否是临时自定义
   if (selectedPreset.value === 'temp-custom') {
-    return '📌 临时自定义'
+    return translateUi('uiMessages.m7246cd862503')
   }
 
   // 查找租户预设
   const preset = llmConfig.value.presets?.find(p => p.id === selectedPreset.value)
   if (preset) return preset.name
-  return props.data?.selectedPresetName || '通用对话'
+  return props.data?.selectedPresetName || translateUi('uiMessages.m94671ed95dcf')
 })
 
 function buildSelectedPresetDataPatch(preset = null) {
@@ -1002,7 +1004,7 @@ function buildSelectedPresetDataPatch(preset = null) {
     ? tempCustomPrompt.value
     : (resolvedPreset?.systemPrompt || resolvedPreset?.prompt || props.data?.selectedPresetPrompt || '')
   const presetName = selectedPreset.value === 'temp-custom'
-    ? '📌 临时自定义'
+    ? translateUi('uiMessages.m7246cd862503')
     : (resolvedPreset?.name || props.data?.selectedPresetName || '')
   const presetType = selectedPreset.value === 'temp-custom'
     ? 'temp-custom'
@@ -1065,7 +1067,7 @@ const availableLanguages = computed(() => {
     return llmConfig.value.languages
   }
   return [
-    { code: 'zh', name: '中文' },
+    { code: 'zh', get name() { return translateUi('uiMessages.m72726d8818f6') } },
     { code: 'en', name: 'English' }
   ]
 })
@@ -1073,7 +1075,7 @@ const availableLanguages = computed(() => {
 // 当前选中语言的名称
 const selectedLanguageLabel = computed(() => {
   const language = availableLanguages.value.find(l => l.code === selectedLanguage.value)
-  return language ? language.name : '中文'
+  return language ? language.name : translateUi('uiMessages.m72726d8818f6')
 })
 
 // 切换语言下拉菜单
@@ -1302,11 +1304,11 @@ const upstreamMediaType = computed(() => {
 // 参考区域标签文本
 const referenceLabel = computed(() => {
   switch (upstreamMediaType.value) {
-    case 'video': return '参考视频'
-    case 'image': return '参考图片'
-    case 'audio': return '参考音频'
-    case 'mixed': return '参考文件'
-    default: return '参考图片'
+    case 'video': return translateUi('canvas.videoNode.refVideo')
+    case 'image': return translateUi('canvas.templates.nodeTitle.referenceImage')
+    case 'audio': return translateUi('canvas.audioNode.refAudio')
+    case 'mixed': return translateUi('uiMessages.m14fbb41e2e68')
+    default: return translateUi('canvas.templates.nodeTitle.referenceImage')
   }
 })
 
@@ -1752,7 +1754,7 @@ const hasUpstreamInput = computed(() => inheritedText.value || totalMediaCount.v
 // 处理 LLM 对话
 async function handleLLMGenerate() {
   if (findBlockingCanvasUploads(canvasStore.nodes, canvasStore.edges, props.id).length > 0) {
-    alert('素材仍在上传，请等待完成后重试')
+    alert(translateUi('uiMessages.m97f1343b0c9b'))
     return
   }
   // 获取当前节点上方显示的文本内容（作为上轮对话）
@@ -1830,7 +1832,7 @@ async function handleLLMGenerate() {
       } catch (uploadError) {
         if (uploadError?.name === 'AbortError') throw uploadError
         console.error('[TextNode] 媒体处理失败:', uploadError)
-        throw new Error('媒体处理失败，请重试')
+        throw new Error(translateUi('uiMessages.m61fdf595b62b'))
       }
     }
     
@@ -1892,9 +1894,9 @@ async function handleLLMGenerate() {
       }
       canvasStore.updateNodeDataForTab(requestTabId, targetNodeId, {
         status: 'error',
-        error: llmError.message || 'LLM 对话失败'
+        error: llmError.message || translateUi('uiMessages.mbc2d78d3d58b')
       })
-      alert(llmError.message || 'LLM 对话失败，请重试')
+      alert(llmError.message || translateUi('uiMessages.mcecb392bcfb1'))
     } finally {
       isGenerating.value = false
     }
@@ -1917,9 +1919,9 @@ async function handleLLMGenerate() {
     }
     canvasStore.updateNodeDataForTab(requestTabId, targetNodeId, {
       status: 'error',
-      error: error.message || 'LLM 对话失败'
+      error: error.message || translateUi('uiMessages.mbc2d78d3d58b')
     })
-    alert(error.message || 'LLM 对话失败，请重试')
+    alert(error.message || translateUi('uiMessages.mcecb392bcfb1'))
     isGenerating.value = false
   } finally {
     releaseLlmRequest?.()
@@ -1932,7 +1934,7 @@ async function uploadTextNodeLlmMediaItems(items) {
   for (const item of items) {
     try {
       const response = await fetch(item.url)
-      if (!response.ok) throw new Error(`获取本地媒体失败: ${response.status}`)
+      if (!response.ok) throw new Error(translateUi('uiMessages.me87eb593e3c6', { value1: (response.status) }))
 
       const blob = await response.blob()
       const mimeType = blob.type || getTextNodeLlmMediaDefaultMimeType(item.type)
@@ -1944,7 +1946,7 @@ async function uploadTextNodeLlmMediaItems(items) {
       const file = new File([blob], fileName, { type: mimeType })
       const uploadResult = await uploadCanvasMedia(file, item.type, { nodeId: props.id, tabId: canvasStore.activeTabId })
       if (uploadResult.status !== 'completed' || !uploadResult.url) {
-        throw new Error('媒体上传未完成')
+        throw new Error(translateUi('uiMessages.m909a1763f7f8'))
       }
 
       uploadedItems.push({
@@ -2350,7 +2352,7 @@ function handleImageDescribe() {
     type: 'image-input',
     position: imageNodePosition,
     data: {
-      title: '参考图片',
+      title: translateUi('canvas.templates.nodeTitle.referenceImage'),
       sourceImages: [defaultImage], // 默认显示网站 logo
       status: 'success' // 标记为已有图片
     }
@@ -2715,7 +2717,7 @@ function sendSelectionToImage() {
     type: 'text-input',
     position: textNodePosition,
     data: {
-      label: '文生图提示词',
+      label: translateUi('uiMessages.mb8c729e7f95f'),
       text: selectedText.value,
       status: 'idle'
     }
@@ -2733,7 +2735,7 @@ function sendSelectionToImage() {
     type: 'image-input',
     position: imageNodePosition,
     data: {
-      label: '图像生成',
+      label: translateUi('uiMessages.m481acc2c1413'),
       status: 'idle'
     }
   })
@@ -2776,7 +2778,7 @@ function sendSelectionToVideo() {
     type: 'text-input',
     position: textNodePosition,
     data: {
-      label: '文生视频提示词',
+      label: translateUi('uiMessages.mfc9a617c393e'),
       text: selectedText.value,
       status: 'idle'
     }
@@ -2794,7 +2796,7 @@ function sendSelectionToVideo() {
     type: 'video-input',
     position: videoNodePosition,
     data: {
-      label: '视频生成',
+      label: translateUi('nav.videoGenerate'),
       status: 'idle'
     }
   })
@@ -3026,7 +3028,7 @@ function splitSceneNodes() {
   const text = extractPlainText(rawText)
 
   if (!text.trim()) {
-    alert('当前节点没有内容，无法拆分')
+    alert(translateUi('uiMessages.m859e7351826b'))
     return
   }
 
@@ -3138,7 +3140,7 @@ function splitSceneNodes() {
       type: 'text-input',  // 使用正确的节点类型
       position: newNodePosition,
       data: {
-        label: `分镜${scene.number}`,
+        get label() { return translateUi('uiMessages.m903775806da9', { value1: (scene.number) }) },
         text: scene.content,
         status: 'idle'
       }
@@ -3349,7 +3351,7 @@ onUnmounted(() => {
             'fullscreen-active': btn.isFullscreenBtn && isFullscreen
           }"
           :style="btn.style"
-          :title="btn.isFullscreenBtn ? (isFullscreen ? '退出全屏' : t(btn.titleKey)) : t(btn.titleKey)"
+          :title="btn.isFullscreenBtn ? (isFullscreen ? translateUi('uiMessages.m0f1505b6ad3f') : t(btn.titleKey)) : t(btn.titleKey)"
           @mousedown.prevent="btn.action"
         >
           {{ btn.isFullscreenBtn ? (isFullscreen ? '⛶' : '⛶') : btn.icon }}
@@ -3385,7 +3387,7 @@ onUnmounted(() => {
         ref="addLeftBtnRef"
         class="node-add-btn node-add-btn-left nodrag"
         @mousedown.stop="handleAddLeftMouseDown"
-        title="添加上游输入"
+        :title="translateUi('canvas.addUpstream')"
         @click="handleAddLeftClick"
       >
         +
@@ -3450,7 +3452,7 @@ onUnmounted(() => {
           ref="textareaRef"
           class="editor-content"
           contenteditable="true"
-          placeholder="请输入文本内容..."
+          :placeholder="translateUi('uiMessages.m712fe5d4fd0f')"
           @blur="handleBlur"
           @input="handleInput"
           @mousedown.stop
@@ -3469,15 +3471,15 @@ onUnmounted(() => {
           <!-- 错误状态 -->
           <div v-if="props.data.status === 'error'" class="text-node-error">
             <div class="error-icon">!</div>
-            <div class="error-text">{{ props.data.error || (props.data.analysisTaskId || props.data.analysisRequestId ? '解析失败' : '生成失败') }}</div>
-            <p v-if="props.data.analysisTaskId || props.data.analysisRequestId" class="text-sm text-gray-400">请在源视频节点重新解析</p>
-            <button v-else class="retry-btn" @click.stop="handleLLMGenerate">重试</button>
-            <span v-if="analysisElapsedText" class="analysis-duration">解析用时 {{ analysisElapsedText }}</span>
+            <div class="error-text">{{ props.data.error || (props.data.analysisTaskId || props.data.analysisRequestId ? translateUi('uiMessages.m0b38a5f4597a') : translateUi('imageGen.failed')) }}</div>
+            <p v-if="props.data.analysisTaskId || props.data.analysisRequestId" class="text-sm text-gray-400">{{ translateUi('uiMessages.m23ffe4286cb3') }}</p>
+            <button v-else class="retry-btn" @click.stop="handleLLMGenerate">{{ translateUi('common.retry') }}</button>
+            <span v-if="analysisElapsedText" class="analysis-duration">{{ translateUi('uiMessages.mf76dc8ca6877', { value1: (analysisElapsedText) }) }}</span>
           </div>
           
           <!-- LLM 响应显示（生成中或已完成） -->
           <div v-else-if="props.data.llmResponse" class="text-node-llm-response" :class="{ 'is-streaming': isGenerating || props.data.status === 'processing' }" @wheel.stop>
-            <div v-if="analysisElapsedText" class="analysis-duration">解析用时 {{ analysisElapsedText }}</div>
+            <div v-if="analysisElapsedText" class="analysis-duration">{{ translateUi('uiMessages.mf76dc8ca6877', { value1: (analysisElapsedText) }) }}</div>
             <div class="llm-response-content">
               {{ props.data.llmResponse }}
               <span v-if="isGenerating || props.data.status === 'processing'" class="streaming-cursor">▊</span>
@@ -3486,8 +3488,8 @@ onUnmounted(() => {
           
           <!-- 加载中状态（还没有任何内容时） -->
           <div v-else-if="isGenerating || props.data.status === 'processing'" class="text-node-loading">
-            <span class="processing-text">{{ props.data.processingText || '正在生成...' }}</span>
-            <span v-if="analysisElapsedText" class="analysis-duration">已用时 {{ analysisElapsedText }}</span>
+            <span class="processing-text">{{ props.data.processingText || translateUi('uiMessages.m709a8bcbb1ff') }}</span>
+            <span v-if="analysisElapsedText" class="analysis-duration">{{ translateUi('uiMessages.m8c47069472bf', { value1: (analysisElapsedText) }) }}</span>
           </div>
           
           <!-- 有内容且非编辑模式：显示文本内容 -->
@@ -3508,7 +3510,7 @@ onUnmounted(() => {
             @click.stop="handleReadyEditTap"
             @dblclick.stop="handleEdit"
           >
-          <div class="ready-hint">双击开始编辑...</div>
+          <div class="ready-hint">{{ translateUi('uiMessages.m4f2b4705739d') }}</div>
         </div>
         
           <!-- 空状态：显示快捷操作 -->
@@ -3561,7 +3563,7 @@ onUnmounted(() => {
       <button 
         ref="addRightBtnRef"
         class="node-add-btn node-add-btn-right nodrag"
-        title="单击：添加节点 | 长按/拖拽：连接到其他节点"
+        :title="translateUi('canvas.imageNode.clickAddLongDrag')"
         @mousedown="handleAddRightMouseDown"
       >
         +
@@ -3579,20 +3581,20 @@ onUnmounted(() => {
         }"
         @click.stop
       >
-        <div class="selection-menu-title">发送选中文字到</div>
+        <div class="selection-menu-title">{{ translateUi('uiMessages.m86d7febc2241') }}</div>
         <div class="selection-menu-item" @click="sendSelectionToImage">
           <span class="menu-icon">🖼️</span>
-          <span class="menu-label">文生图</span>
-          <span class="menu-desc">创建图像生成节点</span>
+          <span class="menu-label">{{ translateUi('imageGen.textToImage') }}</span>
+          <span class="menu-desc">{{ translateUi('uiMessages.m2a16cdae0f78') }}</span>
         </div>
         <div class="selection-menu-item" @click="sendSelectionToVideo">
           <span class="menu-icon">🎬</span>
-          <span class="menu-label">文生视频</span>
-          <span class="menu-desc">创建视频生成节点</span>
+          <span class="menu-label">{{ translateUi('canvas.nodeTypes.textToVideo') }}</span>
+          <span class="menu-desc">{{ translateUi('uiMessages.m3aca29f123f4') }}</span>
         </div>
         <div class="selection-menu-divider"></div>
         <div class="selection-menu-preview">
-          <div class="preview-label">选中内容：</div>
+          <div class="preview-label">{{ translateUi('uiMessages.mc080fd4ebfd6') }}</div>
           <div class="preview-text">{{ selectedText.length > 100 ? selectedText.substring(0, 100) + '...' : selectedText }}</div>
         </div>
       </div>
@@ -3616,8 +3618,8 @@ onUnmounted(() => {
       <button
         class="llm-config-expand-btn"
         type="button"
-        :title="isConfigPanelExpanded ? '缩小输入面板' : '放大输入面板'"
-        :aria-label="isConfigPanelExpanded ? '缩小输入面板' : '放大输入面板'"
+        :title="isConfigPanelExpanded ? translateUi('uiMessages.m49a90c53c3d5') : translateUi('uiMessages.mbe61c8937aa2')"
+        :aria-label="isConfigPanelExpanded ? translateUi('uiMessages.m49a90c53c3d5') : translateUi('uiMessages.mbe61c8937aa2')"
         @click.stop="toggleConfigPanelExpanded"
         @mousedown.stop
       >
@@ -3637,20 +3639,20 @@ onUnmounted(() => {
       <!-- 参考媒体区域（视频/图片/音频/混合） -->
       <div class="reference-section">
         <div class="reference-header">
-          <button type="button" class="reference-label" title="从画布或资产管理选择参考" @click.stop="openReferencePicker(id)">＋参考</button>
+          <button type="button" class="reference-label" :title="translateUi('uiMessages.m2053725df835')" @click.stop="openReferencePicker(id)">{{ translateUi('uiMessages.md329f1d67585') }}</button>
           <span class="reference-hint">
-            {{ referenceMediaList.length > 0 ? `${referenceLabel} · 点击插入引用 · 拖动调整顺序 · 共${totalMediaCount}${upstreamMediaType === 'image' ? '张' : '个'}` : '连接图片、视频或音频节点作为参考' }}
+            {{ referenceMediaList.length > 0 ? translateUi('uiMessages.m503bd2c14679', { value1: (referenceLabel), value2: (totalMediaCount), value3: (upstreamMediaType === 'image' ? translateUi('uiMessages.mf56a049fcc23') : translateUi('uiMessages.m3a116815bc9d')) }) : translateUi('uiMessages.mc2ebc3e1c13e') }}
           </span>
         </div>
         <div class="reference-images">
           <div
             v-if="referenceMediaList.length === 0"
             class="reference-empty-item"
-            title="连接图片、视频或音频节点作为参考"
-            aria-label="暂无参考素材"
+            :title="translateUi('uiMessages.mc2ebc3e1c13e')"
+            :aria-label="translateUi('uiMessages.mf358ea6ddd9b')"
           >
             <span class="reference-empty-icon">+</span>
-            <span class="reference-empty-text">添加</span>
+            <span class="reference-empty-text">{{ translateUi('common.add') }}</span>
           </div>
           <div
             v-for="(media, idx) in referenceMediaList"
@@ -3663,7 +3665,7 @@ onUnmounted(() => {
               'dragging': dragSortType === media.type && dragSortIndex === media.index - 1
             }"
             draggable="true"
-            :title="`点击插入 @${media.label}`"
+            :title="translateUi('uiMessages.m7167cd255b5f', { value1: (media.label) })"
             @mousedown="handleReferenceMediaMouseDown"
             @click="insertMediaTag(media)"
             @dragstart="handleRefMediaDragStart($event, media.index - 1, media.type)"
@@ -3679,7 +3681,7 @@ onUnmounted(() => {
                 v-if="shouldShowReferenceVideoImage(media)"
                 :src="getReferenceVideoPreviewSrc(media)"
                 class="reference-video-thumb"
-                alt="参考视频封面"
+                :alt="translateUi('uiMessages.m78361d0df713')"
                 loading="lazy"
                 decoding="async"
                 @error="handleReferenceVideoPreviewError(media)"
@@ -3693,15 +3695,15 @@ onUnmounted(() => {
                 @loadeddata="$event.target.currentTime = 0.1"
               ></video>
             </template>
-            <img v-else-if="media.type === 'image'" :src="media.url" :alt="`参考图 ${media.index}`" />
+            <img v-else-if="media.type === 'image'" :src="media.url" :alt="translateUi('uiMessages.m380b51de95cd', { value1: (media.index) })" />
             <span v-else class="audio-icon-large">♪</span>
             <span class="reference-index-badge">{{ media.index }}</span>
             <span class="reference-tag-badge">@{{ media.label }}</span>
             <button
               class="reference-media-remove"
               type="button"
-              :title="`删除 @${media.label}`"
-              aria-label="删除参考素材"
+              :title="translateUi('uiMessages.mfd0c1b223325', { value1: (media.label) })"
+              :aria-label="translateUi('uiMessages.m4bc9876c0f59')"
               @click.stop="removeReferenceMedia(media)"
               @mousedown.stop
             >×</button>
@@ -3713,7 +3715,7 @@ onUnmounted(() => {
       <div v-if="inheritedText" class="upstream-text-section">
         <div class="upstream-label">
           <span class="upstream-icon">💬</span>
-          <span>上下文</span>
+          <span>{{ translateUi('uiMessages.m6fc38ef3602f') }}</span>
         </div>
         <div class="upstream-text-content">{{ inheritedText.slice(0, 200) }}{{ inheritedText.length > 200 ? '...' : '' }}</div>
       </div>
@@ -3833,7 +3835,7 @@ onUnmounted(() => {
                 :class="{ active: !selectedPreset }"
                 @click.stop="selectPreset('')"
               >
-                <span class="preset-option-name">通用对话</span>
+                <span class="preset-option-name">{{ translateUi('uiMessages.m94671ed95dcf') }}</span>
               </div>
               <template v-for="preset in availablePresets" :key="preset.id">
                 <!-- 分隔线 -->
@@ -3890,7 +3892,7 @@ onUnmounted(() => {
           <button 
             class="generate-btn"
             :disabled="isGenerating"
-            title="开始生成 (Enter)"
+            :title="translateUi('uiMessages.madc724059d32')"
             @click="handleLLMGenerate"
           >
             <span v-if="isGenerating">...</span>

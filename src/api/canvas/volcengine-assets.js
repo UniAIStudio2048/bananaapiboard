@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../i18n/index.js'
 /**
  * 火山引擎 Asset API - Seedance 角色资产管理
  * 管理角色组和角色资产的 CRUD 操作
@@ -25,7 +26,7 @@ async function fetchAssetApi(url, options, timeout = ASSET_REQUEST_TIMEOUT_MS) {
     return await fetch(url, { ...options, signal: controller.signal })
   } catch (error) {
     if (controller.signal.aborted) {
-      const timeoutError = new Error('请求超时，请检查网络或素材渠道后重试')
+      const timeoutError = new Error(translateUi('uiMessages.mdbcc9d79382f'))
       timeoutError.code = 'TIMEOUT'
       throw timeoutError
     }
@@ -42,7 +43,7 @@ async function parseAssetResponse(response, fallbackMessage) {
     try {
       data = JSON.parse(text)
     } catch (error) {
-      const err = new Error(`后端返回了非 JSON 响应（HTTP ${response.status}），可能是网关超时或服务异常`)
+      const err = new Error(translateUi('uiMessages.m6be56893eafb', { value1: (response.status) }))
       err.category = 'non_json_response'
       err.statusCode = response.status
       err.upstreamBodySnippet = text.replace(/\s+/g, ' ').trim().slice(0, 300)
@@ -123,7 +124,7 @@ export async function listAssetGroups(params = {}) {
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '获取角色组列表失败')
+    throw new Error(error.error || translateUi('uiMessages.mbef4f31c388a'))
   }
   return response.json()
 }
@@ -139,7 +140,7 @@ export async function getAssetGroup(id) {
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '获取角色组失败')
+    throw new Error(error.error || translateUi('uiMessages.m6620909deac1'))
   }
   return response.json()
 }
@@ -156,7 +157,7 @@ export async function updateAssetGroup(id, data) {
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '更新角色组失败')
+    throw new Error(error.error || translateUi('uiMessages.mbc800fcf891e'))
   }
   return response.json()
 }
@@ -173,7 +174,7 @@ export async function createLivenessSession(data = {}) {
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '创建认证会话失败')
+    throw new Error(error.error || translateUi('uiMessages.m113b5690417f'))
   }
   return response.json()
 }
@@ -190,7 +191,7 @@ export async function getLivenessResult(data) {
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '查询认证结果失败')
+    throw new Error(error.error || translateUi('uiMessages.m7ffae6ec22b0'))
   }
   return response.json()
 }
@@ -247,7 +248,7 @@ export async function listAssets(params = {}) {
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '获取角色资产列表失败')
+    throw new Error(error.error || translateUi('uiMessages.m96a7fae86027'))
   }
   return response.json()
 }
@@ -267,7 +268,7 @@ export async function getAsset(id, params = {}) {
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '获取角色资产失败')
+    throw new Error(error.error || translateUi('uiMessages.me7f126b71842'))
   }
   return response.json()
 }
@@ -288,7 +289,7 @@ export async function updateAsset(id, data, params = {}) {
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '更新角色资产失败')
+    throw new Error(error.error || translateUi('uiMessages.m319c40cdce43'))
   }
   return response.json()
 }
@@ -308,7 +309,7 @@ export async function deleteAsset(id, params = {}) {
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '删除角色资产失败')
+    throw new Error(error.error || translateUi('uiMessages.mcc8481ae6b57'))
   }
   return response.json()
 }
@@ -324,7 +325,7 @@ export async function deleteAssetGroup(id) {
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '删除角色组失败')
+    throw new Error(error.error || translateUi('uiMessages.md830479ee985'))
   }
   return response.json()
 }
@@ -361,11 +362,11 @@ export function pollAssetStatus(assetId, { interval = 5000, timeout = 2700000, o
           return
         }
         if (status === 'Failed') {
-          reject(new Error(normalizedAsset.FailMessage || '角色资产审核失败'))
+          reject(new Error(normalizedAsset.FailMessage || translateUi('uiMessages.m0bf3a86f1148')))
           return
         }
         if (Date.now() - startTime > timeout) {
-          reject(new Error('轮询超时'))
+          reject(new Error(translateUi('uiMessages.m94d25296dccf')))
           return
         }
         // Progressive backoff: 5s for first 2min, then 15s until 10min, then 30s

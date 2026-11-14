@@ -2,14 +2,16 @@
   <Teleport to="body">
     <div ref="host" />
     <div v-if="loading || status !== 'saved' || error" class="editor-save-status" role="status">
-      {{ error || (loading ? '正在加载剪辑…' : '正在保存剪辑…') }}
-      <button v-if="error && !loadFailed" type="button" @click="retrySave">重试保存</button>
-      <button v-if="loadFailed" type="button" @click="close">关闭剪辑</button>
+      {{ error || (loading ? translateUi('uiMessages.m9eec72624e59') : translateUi('uiMessages.m06daacb46018')) }}
+      <button v-if="error && !loadFailed" type="button" @click="retrySave">{{ translateUi('uiMessages.m917e75040547') }}</button>
+      <button v-if="loadFailed" type="button" @click="close">{{ translateUi('uiMessages.m02a3bc31b217') }}</button>
     </div>
   </Teleport>
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useCanvasStore } from '@/stores/canvas/canvasStore'
 import { postWorkflowOps, uploadCanvasMedia } from '@/api/canvas/workflow'
@@ -39,17 +41,17 @@ async function retrySave() {
 }
 
 async function close() {
-  try { await writer.flush(); emit('close') } catch (failure) { error.value = `${failure.message}；保存成功后才能关闭` }
+  try { await writer.flush(); emit('close') } catch (failure) { error.value = translateUi('uiMessages.m4d6f2f4eeeba', { value1: (failure.message) }) }
 }
 
 async function createResult(request) {
-  if (store.getCurrentTab()?.id !== activeTab.id) throw new Error('画布已切换，请重新打开剪辑')
+  if (store.getCurrentTab()?.id !== activeTab.id) throw new Error(translateUi('uiMessages.m8d896f9bb12f'))
   const source = store.nodes.find(node => node.id === props.nodeId)
-  if (!source) throw new Error('源节点不存在')
+  if (!source) throw new Error(translateUi('uiMessages.me46fe3c110bb'))
   const uploaded = await uploadCanvasMedia(request.file, request.modality)
-  if (disposed || store.getCurrentTab()?.id !== activeTab.id) throw new Error('画布已切换，请重新打开剪辑')
+  if (disposed || store.getCurrentTab()?.id !== activeTab.id) throw new Error(translateUi('uiMessages.m8d896f9bb12f'))
   const url = uploaded.url || uploaded.data?.url
-  if (!url) throw new Error('结果上传失败')
+  if (!url) throw new Error(translateUi('uiMessages.m38f195f4cf18'))
   const id = `video_edit_${crypto.randomUUID()}`
   const node = {
     id, type: request.modality, position: { x: source.position.x + (Number(source.data?.width) || 420) + 120, y: source.position.y + request.offset.y },
@@ -70,13 +72,13 @@ onMounted(async () => {
     api = createBananaEditorApi()
     const [saved, preferences] = await Promise.all([props.loadDraft(), api.preferences()])
     if (disposed) return
-    if (store.getCurrentTab()?.id !== tabId) throw new Error('画布已切换，请重新打开剪辑')
+    if (store.getCurrentTab()?.id !== tabId) throw new Error(translateUi('uiMessages.m8d896f9bb12f'))
     activeTab = { ...store.getCurrentTab() }
-    if (!activeTab.workflowId) throw new Error('当前画布尚未保存，请重新打开剪辑')
+    if (!activeTab.workflowId) throw new Error(translateUi('uiMessages.m4ea74629cc27'))
     const resource = props.initialSource.url
     const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${activeTab.workflowId}:${props.nodeId}`))
     if (disposed) return
-    if (store.getCurrentTab()?.id !== tabId) throw new Error('画布已切换，请重新打开剪辑')
+    if (store.getCurrentTab()?.id !== tabId) throw new Error(translateUi('uiMessages.m8d896f9bb12f'))
     const identity = [...new Uint8Array(hash)].map(value => value.toString(16).padStart(2, '0')).join('')
     const project = activeTab.workflowId
     const previousKey = `media-video-draft:${project}:${resource}:identity:${identity}`
@@ -103,7 +105,7 @@ onMounted(async () => {
     }
     const [config, { mountVideoEditor }] = await Promise.all([api.config(), import('./editor/mount')])
     if (disposed) return
-    if (store.getCurrentTab()?.id !== tabId) throw new Error('画布已切换，请重新打开剪辑')
+    if (store.getCurrentTab()?.id !== tabId) throw new Error(translateUi('uiMessages.m8d896f9bb12f'))
     dispose = mountVideoEditor(host.value, {
       api, project, clipboardNamespace: preferences.namespace, preferenceNamespace: `media-canvas-preferences:v1:${preferences.namespace}`,
       sources: sources.video, audioSources: sources.audio, imageSources: sources.image,

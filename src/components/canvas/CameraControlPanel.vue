@@ -5,12 +5,12 @@
         <div class="camera-control-panel" @click.stop>
           <!-- 标题栏 -->
           <div class="panel-header">
-            <span class="panel-title">摄影机控制</span>
+            <span class="panel-title">{{ translateUi('uiMessages.m604d28e39142') }}</span>
             <div class="header-actions">
               <!-- 预设选择器 -->
               <div class="preset-selector" ref="presetDropdownRef">
                 <button class="preset-trigger" @click="togglePresetDropdown">
-                  <span class="preset-current-name">{{ activePreset ? activePreset.name : '默认' }}</span>
+                  <span class="preset-current-name">{{ activePreset ? activePreset.name : translateUi('uiMessages.m844b8cc8dff7') }}</span>
                   <svg class="preset-arrow" :class="{ open: showPresetDropdown }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                     <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
@@ -19,14 +19,14 @@
                 <Transition name="dropdown-fade">
                   <div v-if="showPresetDropdown" class="preset-dropdown">
                     <div class="preset-dropdown-header">
-                      <span>镜头预设 ({{ presets.length }}/{{ MAX_PRESETS }})</span>
+                      <span>{{ translateUi('uiMessages.mb40f68248d1c', { value1: (presets.length), value2: (MAX_PRESETS) }) }}</span>
                     </div>
                     <!-- 默认（重置）选项 -->
                     <div class="preset-list">
                       <div :class="['preset-item preset-item-default', { active: !activePresetId }]">
                         <div class="preset-item-main" @click="resetToDefault">
-                          <span class="preset-item-name">默认</span>
-                          <span class="preset-item-desc">恢复初始设置</span>
+                          <span class="preset-item-name">{{ translateUi('uiMessages.m844b8cc8dff7') }}</span>
+                          <span class="preset-item-desc">{{ translateUi('uiMessages.m7b6d070ee50d') }}</span>
                         </div>
                       </div>
                     </div>
@@ -47,8 +47,8 @@
                             @keydown.escape="cancelRename"
                             @click.stop
                           />
-                          <button class="preset-action-btn confirm" @click.stop="confirmRename(preset.id)" title="确认">✓</button>
-                          <button class="preset-action-btn cancel" @click.stop="cancelRename" title="取消">✕</button>
+                          <button class="preset-action-btn confirm" @click.stop="confirmRename(preset.id)" :title="translateUi('common.confirm')">✓</button>
+                          <button class="preset-action-btn cancel" @click.stop="cancelRename" :title="translateUi('common.cancel')">✕</button>
                         </div>
                         <template v-else>
                           <div class="preset-item-main" @click="loadPreset(preset.id)">
@@ -56,10 +56,10 @@
                             <span class="preset-item-desc">{{ preset.summary }}</span>
                           </div>
                           <div class="preset-item-actions">
-                            <button class="preset-action-btn" @click.stop="startRename(preset)" title="重命名">
+                            <button class="preset-action-btn" @click.stop="startRename(preset)" :title="translateUi('canvas.assetPanel.directory.rename')">
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                             </button>
-                            <button class="preset-action-btn delete" @click.stop="deletePreset(preset.id)" title="删除">
+                            <button class="preset-action-btn delete" @click.stop="deletePreset(preset.id)" :title="translateUi('common.delete')">
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                             </button>
                           </div>
@@ -67,7 +67,7 @@
                       </div>
                     </div>
                     <!-- 加载状态 -->
-                    <div v-if="presetsLoading" class="preset-empty">加载中...</div>
+                    <div v-if="presetsLoading" class="preset-empty">{{ translateUi('common.loading') }}</div>
                     <!-- 保存为新预设 -->
                     <div class="preset-save-section">
                       <div v-if="showSaveInput" class="preset-save-row">
@@ -75,12 +75,12 @@
                           ref="saveInputRef"
                           v-model="newPresetName"
                           class="preset-save-input"
-                          placeholder="输入预设名称"
+                          :placeholder="translateUi('uiMessages.m72276fd79e72')"
                           maxlength="20"
                           @keydown.enter="saveAsPreset"
                           @keydown.escape="showSaveInput = false"
                         />
-                        <button class="preset-save-confirm" @click="saveAsPreset">保存</button>
+                        <button class="preset-save-confirm" @click="saveAsPreset">{{ translateUi('common.save') }}</button>
                       </div>
                       <button
                         v-else
@@ -88,13 +88,13 @@
                         :disabled="presets.length >= MAX_PRESETS"
                         @click="openSaveInput"
                       >
-                        + 保存当前配置为预设
+                        {{ translateUi('uiMessages.mbbb7aad4d8b9') }}
                       </button>
                     </div>
                   </div>
                 </Transition>
               </div>
-              <button class="save-btn" @click="handleSave">应用</button>
+              <button class="save-btn" @click="handleSave">{{ translateUi('directorStudio.inspector.apply') }}</button>
             </div>
           </div>
 
@@ -113,7 +113,7 @@
             </div>
             
             <!-- 重置按钮 -->
-            <button class="reset-btn" @click="resetToDefault" title="重置">
+            <button class="reset-btn" @click="resetToDefault" :title="translateUi('common.reset')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" stroke-linecap="round" stroke-linejoin="round"/>
                 <path d="M3 3v5h5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -125,7 +125,7 @@
           <div class="selectors-row">
             <!-- 相机选择器 -->
             <div class="selector-group camera-selector">
-              <div class="selector-label-top">{{ isCinemaMode ? '机身' : (isPhoneMode ? '手机' : '相机') }}</div>
+              <div class="selector-label-top">{{ isCinemaMode ? translateUi('uiMessages.mee38b80c37d9') : (isPhoneMode ? translateUi('uiMessages.m2e07333c8c74') : translateUi('uiMessages.mdacf07026026')) }}</div>
               <WheelSelector
                 :items="filteredCameras"
                 v-model="selectedCamera"
@@ -138,7 +138,7 @@
 
             <!-- 镜头选择器（仅电影机模式） -->
             <div class="selector-group" v-if="isCinemaMode">
-              <div class="selector-label-top">镜头</div>
+              <div class="selector-label-top">{{ translateUi('directorStudio.inspector.camera') }}</div>
               <WheelSelector
                 :items="compatibleLenses"
                 v-model="selectedLens"
@@ -150,7 +150,7 @@
 
             <!-- 焦段选择器 -->
             <div class="selector-group">
-              <div class="selector-label-top">焦段</div>
+              <div class="selector-label-top">{{ translateUi('uiMessages.ma29ff2f5cc1e') }}</div>
               <WheelSelector
                 :items="availableFocalLengths"
                 v-model="selectedFocalLength"
@@ -161,7 +161,7 @@
 
             <!-- 光圈选择器 -->
             <div class="selector-group">
-              <div class="selector-label-top">光圈</div>
+              <div class="selector-label-top">{{ translateUi('uiMessages.me3df0be2e19a') }}</div>
               <WheelSelector
                 :items="availableApertures"
                 v-model="selectedAperture"
@@ -175,15 +175,15 @@
           <div class="camera-info-bar" v-if="selectedCameraData">
             <div class="info-row">
               <div class="info-item" v-if="selectedCameraData.year">
-                <span class="info-label">年份</span>
+                <span class="info-label">{{ translateUi('uiMessages.mbff0b9e4a393') }}</span>
                 <span class="info-value highlight">{{ selectedCameraData.year }}</span>
               </div>
               <div class="info-item" v-if="selectedCameraData.format">
-                <span class="info-label">{{ isCinemaMode ? '画幅' : '画幅' }}</span>
+                <span class="info-label">{{ isCinemaMode ? translateUi('directorStudio.inspector.frame') : translateUi('directorStudio.inspector.frame') }}</span>
                 <span class="info-value highlight">{{ selectedCameraData.format }}</span>
               </div>
               <div class="info-item" v-if="selectedCameraData.sensor">
-                <span class="info-label">{{ isCinemaMode ? '传感器/胶片' : '传感器' }}</span>
+                <span class="info-label">{{ isCinemaMode ? translateUi('uiMessages.m5a6970f3ecdf') : translateUi('uiMessages.ma4f7cbe44e92') }}</span>
                 <span class="info-value">{{ selectedCameraData.sensor }}</span>
               </div>
             </div>
@@ -197,7 +197,7 @@
             </div>
             <!-- 经典电影（仅电影机模式） -->
             <div class="info-films" v-if="isCinemaMode && selectedCameraData.famousFilms && selectedCameraData.famousFilms.length > 0">
-              <span class="films-label">🎬 经典作品：</span>
+              <span class="films-label">{{ translateUi('uiMessages.m4f5c1c9d3f3d') }}</span>
               <span class="films-list">{{ selectedCameraData.famousFilms.join('、') }}</span>
             </div>
           </div>
@@ -205,8 +205,8 @@
           <!-- 镜头特效选择 -->
           <div class="effects-section" v-if="availableEffects.length > 0">
             <div class="effects-header">
-              <span class="effects-title">镜头特效</span>
-              <span class="effects-hint">{{ selectedLensData?.description || '选择此镜头特有的光学效果' }}</span>
+              <span class="effects-title">{{ translateUi('uiMessages.mede43ed63507') }}</span>
+              <span class="effects-hint">{{ selectedLensData?.description || translateUi('uiMessages.m91c6b10368c7') }}</span>
             </div>
             <div class="effects-grid">
               <button
@@ -224,8 +224,8 @@
 
           <!-- 预览提示词 -->
           <div class="preview-section">
-            <div class="preview-label">生成的提示词（将追加到您的提示词后方）</div>
-            <div class="preview-prompt">{{ generatedPrompt || '请选择相机和镜头' }}</div>
+            <div class="preview-label">{{ translateUi('uiMessages.m5f68ae8c7c7c') }}</div>
+            <div class="preview-prompt">{{ generatedPrompt || translateUi('uiMessages.m6d9103221617') }}</div>
           </div>
         </div>
       </div>
@@ -234,6 +234,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import WheelSelector from './WheelSelector.vue'
 import {

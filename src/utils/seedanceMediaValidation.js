@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 export const SEEDANCE_MAX_IMAGE_PIXELS = 36_000_000
 export const SEEDANCE_MAX_IMAGE_BYTES = 30 * 1024 * 1024
 export const SEEDANCE_MIN_VIDEO_PIXELS = 409_600
@@ -118,7 +119,7 @@ export function readLocalVideoMetadata(file) {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video')
     const url = URL.createObjectURL(file)
-    const timeoutId = setTimeout(() => finish(new Error('读取视频规格超时，请更换视频文件')), 10_000)
+    const timeoutId = setTimeout(() => finish(new Error(translateUi('uiMessages.m1aa222f4889b'))), 10_000)
     const finish = (error, metadata) => {
       clearTimeout(timeoutId)
       video.onloadedmetadata = null
@@ -137,7 +138,7 @@ export function readLocalVideoMetadata(file) {
       size: file.size,
       type: file.type
     })
-    video.onerror = () => finish(new Error('无法读取视频规格，请更换视频文件'))
+    video.onerror = () => finish(new Error(translateUi('uiMessages.mde44e9212221')))
     video.src = url
   })
 }

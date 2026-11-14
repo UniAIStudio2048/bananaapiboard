@@ -9,7 +9,7 @@
       >
         <div class="mention-popup-header">
           <span class="mention-popup-icon">@</span>
-          <span class="mention-popup-title">插入引用</span>
+          <span class="mention-popup-title">{{ translateUi('uiMessages.m077fd1c85fe5') }}</span>
         </div>
         <div v-if="items.length" class="mention-popup-list" ref="listRef">
           <div
@@ -49,13 +49,15 @@
             </div>
           </div>
         </div>
-        <div v-else class="mention-popup-empty">暂无可用媒体，可先上传或生成图片/视频</div>
+        <div v-else class="mention-popup-empty">{{ translateUi('uiMessages.m9762aa9be0cd') }}</div>
       </div>
     </Transition>
   </Teleport>
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, watch, ref, nextTick } from 'vue'
 import { getVideoPosterUrl } from '@/utils/canvasThumbnail'
 import { getMentionPreviewImageSrc, getMentionPreviewUrl } from '@/utils/promptMention'
@@ -79,7 +81,7 @@ const popupStyle = computed(() => ({
 }))
 
 function typeLabel(type) {
-  const map = { image: '参考图片', video: '参考视频', audio: '参考音频', file: '参考文件' }
+  const map = { image: translateUi('canvas.templates.nodeTitle.referenceImage'), video: translateUi('canvas.videoNode.refVideo'), audio: translateUi('canvas.audioNode.refAudio'), file: translateUi('uiMessages.m14fbb41e2e68') }
   return map[type] || type
 }
 

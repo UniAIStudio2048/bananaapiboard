@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import CheckoutDialog from '@/components/payment/CheckoutDialog.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
@@ -330,10 +332,10 @@ const isIcpFooterVisible = computed(() => {
               :class="{ active: isActive('/inspiration') }"
             >
               <IconSet name="sparkles" :size="16" class="mr-0 xl:mr-1" />
-              <span class="hidden xl:inline">灵感中心</span>
+              <span class="hidden xl:inline">{{ translateUi('uiMessages.m9ab5493d9a33') }}</span>
             </RouterLink>
 
-            <RouterLink v-if="me && !me.is_subuser && me.has_subusers" to="/subuser" class="nav-link flex items-center"><span class="hidden xl:inline">子用户管理</span><span class="xl:hidden">子用户</span></RouterLink>
+            <RouterLink v-if="me && !me.is_subuser && me.has_subusers" to="/subuser" class="nav-link flex items-center"><span class="hidden xl:inline">{{ translateUi('uiMessages.md19c97e3879d') }}</span><span class="xl:hidden">{{ translateUi('uiMessages.m5fde729c34a1') }}</span></RouterLink>
             <!-- 购买套餐入口 -->
             <RouterLink
               v-show="me"
@@ -362,7 +364,7 @@ const isIcpFooterVisible = computed(() => {
                 {{ formatPoints(me.package_points) }} <span class="hidden xl:inline">{{ t('user.points') }}</span>
               </div>
               <!-- 永久积分 -->
-              <div class="px-2 py-1.5 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full text-white text-sm font-medium shadow-lg hover:shadow-xl transition-shadow whitespace-nowrap shrink-0" :title="me.is_subuser ? '其中分配 ' + formatPoints(me.subuser_points || 0) + '；分配部分按有效期使用，未消费部分可由主用户回收' : t('user.permanentPointsDesc')">
+              <div class="px-2 py-1.5 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full text-white text-sm font-medium shadow-lg hover:shadow-xl transition-shadow whitespace-nowrap shrink-0" :title="me.is_subuser ? translateUi('uiMessages.m9229b2cc669b') + formatPoints(me.subuser_points || 0) + translateUi('uiMessages.m2e2c4536620a') : t('user.permanentPointsDesc')">
                 <span class="mr-1">⭐</span>
                 {{ formatPoints(getPermanentUserPoints(me)) }} <span class="hidden xl:inline">{{ t('user.points') }}</span>
               </div>
@@ -428,7 +430,7 @@ const isIcpFooterVisible = computed(() => {
                     @click="isUserMenuOpen = false"
                   >
                     <span class="mr-3">🎨</span>
-                    我的主页
+                    {{ translateUi('uiMessages.md00c2ec8124f') }}
                   </RouterLink>
                   
                   <button
@@ -532,10 +534,10 @@ const isIcpFooterVisible = computed(() => {
             @click="isMenuOpen = false"
           >
             <span class="mr-2 inline-flex align-middle"><IconSet name="sparkles" :size="18" /></span>
-            <span class="align-middle">灵感中心</span>
+            <span class="align-middle">{{ translateUi('uiMessages.m9ab5493d9a33') }}</span>
           </RouterLink>
 
-          <RouterLink v-if="me && !me.is_subuser && me.has_subusers" to="/subuser" class="block nav-link" @click="isMenuOpen = false">子用户管理</RouterLink>
+          <RouterLink v-if="me && !me.is_subuser && me.has_subusers" to="/subuser" class="block nav-link" @click="isMenuOpen = false">{{ translateUi('uiMessages.md19c97e3879d') }}</RouterLink>
           <!-- 移动端购买套餐入口 -->
           <RouterLink
             v-if="me"
@@ -575,7 +577,7 @@ const isIcpFooterVisible = computed(() => {
                 <span class="font-bold">{{ formatPoints(getPermanentUserPoints(me)) }}</span>
               </div>
               <div class="text-xs opacity-90 mt-1">
-                {{ me.is_subuser ? '其中分配 ' + formatPoints(me.subuser_points || 0) + '；分配部分按有效期使用，未消费部分可由主用户回收' : t('user.permanentPointsDesc') }}
+                {{ me.is_subuser ? translateUi('uiMessages.m9229b2cc669b') + formatPoints(me.subuser_points || 0) + translateUi('uiMessages.m2e2c4536620a') : t('user.permanentPointsDesc') }}
               </div>
             </div>
             <div class="px-3 py-2 bg-gradient-to-r from-green-500 to-green-600 rounded-lg text-white text-sm font-medium shadow-lg">
@@ -630,7 +632,7 @@ const isIcpFooterVisible = computed(() => {
                 @click="isMenuOpen = false"
               >
                 <span class="mr-2">🎨</span>
-                我的主页
+                {{ translateUi('uiMessages.md00c2ec8124f') }}
               </RouterLink>
               
               <button

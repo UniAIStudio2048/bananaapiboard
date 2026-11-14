@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../i18n/index.js'
 /**
  * AI Inspiration Assistant API
  * AI 灵感助手相关 API
@@ -41,7 +42,7 @@ function throwPromptSafetyErrorIfNeeded(error) {
  */
 export async function uploadAttachment(file) {
   const fileType = detectFileType(file)
-  if (fileType === 'file') throw new Error('仅支持图片、视频或音频附件')
+  if (fileType === 'file') throw new Error(translateUi('uiMessages.mabfdee5a0cc0'))
   const result = await uploadCanvasFile(file, fileType)
   return {
     url: result.url,
@@ -99,7 +100,7 @@ export async function uploadAttachments(files) {
       console.log(`[AI-Assistant] 文件类型识别: ${file.name} -> ${fileType} (MIME: ${file.type || 'unknown'})`)
     } catch (error) {
       console.error(`[AI-Assistant] 上传文件 ${file.name} 失败:`, error)
-      throw new Error(`上传文件 "${file.name}" 失败: ${error.message}`)
+      throw new Error(translateUi('uiMessages.m363d3711da4d', { value1: (file.name), value2: (error.message) }))
     }
   }
 
@@ -151,7 +152,7 @@ export async function sendMessage(params) {
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
     throwPromptSafetyErrorIfNeeded(error)
-    throw new Error(error.message || error.error || 'AI 助手请求失败')
+    throw new Error(error.message || error.error || translateUi('uiMessages.m4399f214ead7'))
   }
 
   return response.json()
@@ -191,7 +192,7 @@ export async function sendMessageStream(params) {
     if (!response.ok) {
       const error = await response.json().catch(() => ({}))
       throwPromptSafetyErrorIfNeeded(error)
-      throw new Error(error.message || error.error || 'AI 助手请求失败')
+      throw new Error(error.message || error.error || translateUi('uiMessages.m4399f214ead7'))
     }
 
     // 读取流式响应
@@ -256,7 +257,7 @@ export async function sendMessageStream(params) {
                   break
 
                 case 'error':
-                  throw new Error(json.error || 'AI 助手返回错误')
+                  throw new Error(json.error || translateUi('uiMessages.mee7823c5360a'))
 
                 case 'approval_required':
                   result = json
@@ -332,7 +333,7 @@ export async function deleteSession(sessionId) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || '删除会话失败')
+    throw new Error(error.message || translateUi('uiMessages.mf039e402f489'))
   }
 
   return response.json()
@@ -351,7 +352,7 @@ export async function getSessionMessages(sessionId, spaceParams) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || '获取会话历史失败')
+    throw new Error(error.message || translateUi('uiMessages.m72ea977b534b'))
   }
 
   return response.json()

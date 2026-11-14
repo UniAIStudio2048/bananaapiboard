@@ -1,3 +1,6 @@
+import * as i18nTestRuntime from '../../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
@@ -14,7 +17,7 @@ function dropdown(modelConfig, selectedMode = '') {
     modes: minimaxH3Modes.value,
     defaultMode: minimaxH3DefaultMode.value,
     current: currentMinimaxH3ModeConfig.value
-  })`, {
+  })`, { translateUi, uiLanguage,
     computed,
     currentModelConfig: ref(modelConfig),
     selectedMinimaxH3Mode: ref(selectedMode)

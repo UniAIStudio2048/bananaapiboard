@@ -3,7 +3,7 @@
     <div v-if="isOpen" class="image-preset-dialog-overlay" @click="handleOverlayClick">
       <div class="image-preset-dialog" @click.stop>
         <div class="dialog-header">
-          <h2 class="dialog-title">{{ editMode ? '编辑图像预设' : '新建图像预设' }}</h2>
+          <h2 class="dialog-title">{{ editMode ? translateUi('uiMessages.m4fb14b307359') : translateUi('uiMessages.m20855d556d73') }}</h2>
           <button class="close-btn" @click="close">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -15,19 +15,19 @@
           <!-- 预设名称 -->
           <div class="form-group">
             <label class="form-label">
-              预设名称 <span class="required">*</span>
+              {{ translateUi('uiMessages.m5fe110aa6d1d') }} <span class="required">*</span>
             </label>
             <input
               v-model="formData.name"
               type="text"
               class="form-input"
-              placeholder="例如：5秒后预测、角色三视图"
+              :placeholder="translateUi('uiMessages.m31a4ee8eff99')"
               maxlength="50"
               @input="validateName"
             />
             <div class="form-hint">
               <span :class="{ 'text-warning': formData.name.length > 40 }">
-                {{ formData.name.length }}/50 字符
+                {{ translateUi('uiMessages.m5257713441ae', { value1: (formData.name.length) }) }}
               </span>
               <span v-if="nameError" class="text-error">{{ nameError }}</span>
             </div>
@@ -36,36 +36,36 @@
           <!-- 预设描述 -->
           <div class="form-group">
             <label class="form-label">
-              预设描述 <span class="optional">(可选)</span>
+              {{ translateUi('uiMessages.mdd98177083fe') }} <span class="optional">{{ translateUi('uiMessages.m4dc0652b94e5') }}</span>
             </label>
             <input
               v-model="formData.description"
               type="text"
               class="form-input"
-              placeholder="简要描述预设的用途"
+              :placeholder="translateUi('uiMessages.m9cceb95e94ec')"
               maxlength="100"
             />
             <div class="form-hint">
-              <span>{{ formData.description?.length || 0 }}/100 字符</span>
+              <span>{{ translateUi('uiMessages.m993d9ac82775', { value1: (formData.description?.length || 0) }) }}</span>
             </div>
           </div>
 
           <!-- 提示词模板 -->
           <div class="form-group">
             <label class="form-label">
-              提示词模板 <span class="required">*</span>
+              {{ translateUi('uiMessages.m99711af0ad83') }} <span class="required">*</span>
             </label>
             <textarea
               v-model="formData.prompt"
               class="form-textarea"
-              placeholder="输入图像生成的提示词模板...&#10;&#10;例如：Generate a character turnaround sheet showing the character from front, side, and back views..."
+              :placeholder="translateUi('uiMessages.mf719564ff678')"
               rows="8"
               maxlength="6000"
               @input="validatePrompt"
             ></textarea>
             <div class="form-hint">
               <span :class="{ 'text-warning': formData.prompt.length > 5500, 'text-error': formData.prompt.length > 5900 }">
-                {{ formData.prompt.length }}/6000 字符
+                {{ translateUi('uiMessages.m9ddfcc864398', { value1: (formData.prompt.length) }) }}
               </span>
               <span v-if="promptError" class="text-error">{{ promptError }}</span>
             </div>
@@ -73,7 +73,7 @@
 
           <!-- 分类选择 -->
           <div class="form-group">
-            <label class="form-label">分类</label>
+            <label class="form-label">{{ translateUi('directorStudio.inspector.category') }}</label>
             <div class="category-grid">
               <button
                 v-for="cat in categories"
@@ -91,7 +91,7 @@
 
         <div class="dialog-footer">
           <button class="btn btn-secondary" @click="close">
-            取消
+            {{ translateUi('common.cancel') }}
           </button>
           <button
             v-if="!editMode"
@@ -99,7 +99,7 @@
             @click="handleTempUse"
             :disabled="!isFormValid || isSubmitting"
           >
-            仅本次使用
+            {{ translateUi('uiMessages.mcd8cf299109f') }}
           </button>
           <button
             class="btn btn-primary"
@@ -110,7 +110,7 @@
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            {{ isSubmitting ? '保存中...' : (editMode ? '更新' : '保存并使用') }}
+            {{ isSubmitting ? translateUi('common.saving') : (editMode ? translateUi('uiMessages.m3055a035f0eb') : translateUi('uiMessages.mbbba898d6e9c')) }}
           </button>
         </div>
       </div>
@@ -119,6 +119,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, computed, watch } from 'vue'
 
 const props = defineProps({
@@ -136,14 +138,14 @@ const emit = defineEmits(['close', 'submit', 'temp-use'])
 
 // 分类选项
 const categories = [
-  { value: 'general', label: '通用' },
-  { value: 'character', label: '角色' },
-  { value: 'landscape', label: '风景' },
-  { value: 'style', label: '艺术风格' },
-  { value: 'anime', label: '动漫' },
-  { value: 'realistic', label: '写实' },
-  { value: 'abstract', label: '抽象' },
-  { value: 'other', label: '其他' }
+  { value: 'general', get label() { return translateUi('uiMessages.m835b700e028c') } },
+  { value: 'character', get label() { return translateUi('user.role') } },
+  { value: 'landscape', get label() { return translateUi('uiMessages.m0f70eef46ff0') } },
+  { value: 'style', get label() { return translateUi('uiMessages.m645f12e4a922') } },
+  { value: 'anime', get label() { return translateUi('uiMessages.mdbc31bd44b06') } },
+  { value: 'realistic', get label() { return translateUi('uiMessages.m93294b654c40') } },
+  { value: 'abstract', get label() { return translateUi('uiMessages.m775f63691afe') } },
+  { value: 'other', get label() { return translateUi('uiMessages.md2909f1647e7') } }
 ]
 
 // 表单数据
@@ -176,9 +178,9 @@ const isFormValid = computed(() => {
 function validateName() {
   const name = formData.value.name.trim()
   if (!name) {
-    nameError.value = '预设名称不能为空'
+    nameError.value = translateUi('uiMessages.m1e396cf6fce0')
   } else if (name.length > 50) {
-    nameError.value = '预设名称最长50字符'
+    nameError.value = translateUi('uiMessages.m519dfdc0a18e')
   } else {
     nameError.value = ''
   }
@@ -188,9 +190,9 @@ function validateName() {
 function validatePrompt() {
   const prompt = formData.value.prompt
   if (!prompt.trim()) {
-    promptError.value = '提示词不能为空'
+    promptError.value = translateUi('uiMessages.me35619733cdd')
   } else if (prompt.length > 6000) {
-    promptError.value = '提示词最长6000字符'
+    promptError.value = translateUi('uiMessages.me75489536df7')
   } else {
     promptError.value = ''
   }

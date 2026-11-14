@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -37,7 +38,7 @@ test('VideoNode submits upstream video url and duration for Coze settlement', ()
   assert.match(submitBlock, /kling_motion_video_url/)
   assert.match(submitBlock, /source_video_duration/)
   assert.match(submitBlock, /isCozeVideoSwapModel\.value/)
-  assert.match(submitBlock, /Coze 视频换人/)
+  assert.match(submitBlock, localizedPattern(/Coze 视频换人/))
 })
 
 test('Coze video swap submits the uploaded accessible reference video url', () => {

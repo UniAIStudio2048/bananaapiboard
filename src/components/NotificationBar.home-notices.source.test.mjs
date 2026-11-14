@@ -1,3 +1,4 @@
+import { localizedPattern } from '../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -15,9 +16,9 @@ test('notification bar loads and rotates home notices', () => {
   assert.match(componentSource, /import \{ getHomeNotices \} from '@\/api\/community'/)
   assert.match(componentSource, /const ROTATION_INTERVAL_MS = 8000/)
   assert.match(componentSource, /setInterval\([^)]*showNextNotice[^)]*ROTATION_INTERVAL_MS/s)
-  assert.match(componentSource, /const badgeText = computed\(\(\) => activeNotice\.value\?\.badge_text \|\| '📣 通知'\)/)
+  assert.match(componentSource, localizedPattern(/const badgeText = computed\(\(\) => activeNotice\.value\?\.badge_text \|\| '📣 通知'\)/))
   assert.match(componentSource, /<span class="home-notice-badge">\{\{ badgeText \}\}<\/span>/)
-  assert.doesNotMatch(componentSource, /activeNotice\.preset === 'maintenance' \? '维护' : '通知'/)
+  assert.doesNotMatch(componentSource, localizedPattern(/activeNotice\.preset === 'maintenance' \? '维护' : '通知'/))
   assert.match(componentSource, /home-notice-bar/)
   assert.match(componentSource, /home-notice-card/)
 })

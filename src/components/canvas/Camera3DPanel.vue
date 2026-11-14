@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * Camera3DPanel.vue - 多角度编辑器
  * 用于图像节点工具栏的角度切换功能
@@ -70,13 +72,13 @@ const customPromptText = ref('')
 
 // 场景预设定义（参数来自设计稿）
 const scenePresets = [
-  { id: 'custom', label: '自定义', azimuth: 0, elevation: 0, zoom: 5, prompt: '' },
-  { id: 'fisheye', label: '鱼眼视角', azimuth: 0, elevation: 30, zoom: 9, prompt: '极度特写镜头，广角镜头，边缘带有鱼眼畸变效果' },
-  { id: 'dutch', label: '倾斜视角', azimuth: 45, elevation: -30, zoom: 5, prompt: 'dutch angle，tilted frame' },
-  { id: 'frontTop', label: '正面俯拍', azimuth: 0, elevation: 60, zoom: 5, prompt: '' },
-  { id: 'frontLow', label: '正面仰拍', azimuth: 0, elevation: -30, zoom: 5, prompt: '' },
-  { id: 'panoramaTop', label: '全景俯拍', azimuth: 45, elevation: 30, zoom: 1, prompt: '' },
-  { id: 'rear', label: '背面视角', azimuth: 180, elevation: 0, zoom: 5, prompt: '' }
+  { id: 'custom', get label() { return translateUi('uiMessages.m4eafa9e925b3') }, azimuth: 0, elevation: 0, zoom: 5, prompt: '' },
+  { id: 'fisheye', get label() { return translateUi('uiMessages.mff7aa5fa7fd2') }, azimuth: 0, elevation: 30, zoom: 9, prompt: '极度特写镜头，广角镜头，边缘带有鱼眼畸变效果' },
+  { id: 'dutch', get label() { return translateUi('uiMessages.m236c69c3055f') }, azimuth: 45, elevation: -30, zoom: 5, prompt: 'dutch angle，tilted frame' },
+  { id: 'frontTop', get label() { return translateUi('uiMessages.m35b97bd8abca') }, azimuth: 0, elevation: 60, zoom: 5, prompt: '' },
+  { id: 'frontLow', get label() { return translateUi('uiMessages.mf8f4c8a54236') }, azimuth: 0, elevation: -30, zoom: 5, prompt: '' },
+  { id: 'panoramaTop', get label() { return translateUi('uiMessages.m5551c7ad6367') }, azimuth: 45, elevation: 30, zoom: 1, prompt: '' },
+  { id: 'rear', get label() { return translateUi('uiMessages.m3485898a8b63') }, azimuth: 180, elevation: 0, zoom: 5, prompt: '' }
 ]
 
 // 方位角映射表
@@ -150,28 +152,28 @@ const outputPrompt = computed(() => {
 
 const angleDescription = computed(() => {
   const azimuthMap = {
-    'front view': '正面', 'front-right quarter view': '右前方',
-    'right side view': '右侧', 'back-right quarter view': '右后方',
-    'back view': '背面', 'back-left quarter view': '左后方',
-    'left side view': '左侧', 'front-left quarter view': '左前方'
+    'front view': translateUi('uiMessages.m740f5e8102e0'), 'front-right quarter view': translateUi('uiMessages.m2506ca306b3c'),
+    'right side view': translateUi('uiMessages.m1cf1d4d0b24b'), 'back-right quarter view': translateUi('uiMessages.m193b2c4fb210'),
+    'back view': translateUi('uiMessages.m2d270b6ce44a'), 'back-left quarter view': translateUi('uiMessages.m8ddc926d9056'),
+    'left side view': translateUi('uiMessages.m6a24b14f33c7'), 'front-left quarter view': translateUi('uiMessages.mf9ce5cdf1abf')
   }
   const elevationMap = {
-    'low-angle shot': '仰拍', 'eye-level shot': '平视',
-    'elevated shot': '俯拍', 'high-angle shot': '高角度'
+    'low-angle shot': translateUi('uiMessages.m7c58bdb0934c'), 'eye-level shot': translateUi('uiMessages.m3f2e434feef2'),
+    'elevated shot': translateUi('uiMessages.m7d5f06405a4d'), 'high-angle shot': translateUi('uiMessages.m305c355c2973')
   }
   const distanceMap = {
-    'close-up': '特写', 'medium shot': '中景', 'wide shot': '全景'
+    'close-up': translateUi('uiMessages.m1ea74a0fc83a'), 'medium shot': translateUi('uiMessages.m9f5579e35c8b'), 'wide shot': translateUi('directorStudio.panorama.title')
   }
-  const a = azimuthMap[getAzimuthLabel(horizontalAngle.value)] || '正面'
-  const e = elevationMap[getElevationLabel(verticalAngle.value)] || '平视'
-  const d = distanceMap[getDistanceLabel(zoomLevel.value)] || '中景'
+  const a = azimuthMap[getAzimuthLabel(horizontalAngle.value)] || translateUi('uiMessages.m740f5e8102e0')
+  const e = elevationMap[getElevationLabel(verticalAngle.value)] || translateUi('uiMessages.m3f2e434feef2')
+  const d = distanceMap[getDistanceLabel(zoomLevel.value)] || translateUi('uiMessages.m9f5579e35c8b')
   return `${a} · ${e} · ${d}`
 })
 
 const zoomLabel = computed(() => {
-  if (zoomLevel.value < 3.33) return '全景'
-  if (zoomLevel.value < 6.66) return '中景'
-  return '特写'
+  if (zoomLevel.value < 3.33) return translateUi('directorStudio.panorama.title')
+  if (zoomLevel.value < 6.66) return translateUi('uiMessages.m9f5579e35c8b')
+  return translateUi('uiMessages.m1ea74a0fc83a')
 })
 
 // 滑块填充百分比
@@ -485,28 +487,28 @@ function handleApply() {
 
 async function uploadCameraImageToCloud(imageUrl) {
   const token = localStorage.getItem('token')
-  if (!token) throw new Error('请先登录')
+  if (!token) throw new Error(translateUi('uiMessages.m48144f96c150'))
 
   let blob
   if (imageUrl.startsWith('blob:')) {
     const response = await fetch(imageUrl)
-    if (!response.ok) throw new Error('无法读取图片')
+    if (!response.ok) throw new Error(translateUi('uiMessages.m6e0025786a68'))
     blob = await response.blob()
   } else if (imageUrl.startsWith('data:')) {
     const base64Match = imageUrl.match(/^data:(.+?);base64,(.+)$/)
-    if (!base64Match) throw new Error('无效的图片格式')
+    if (!base64Match) throw new Error(translateUi('uiMessages.mca03f674f33a'))
     const binaryData = atob(base64Match[2])
     const uint8Array = new Uint8Array(binaryData.length)
     for (let i = 0; i < binaryData.length; i++) uint8Array[i] = binaryData.charCodeAt(i)
     blob = new Blob([uint8Array], { type: base64Match[1] })
   } else {
-    throw new Error('不支持的图片URL格式')
+    throw new Error(translateUi('uiMessages.m2df86775a8df'))
   }
 
   const file = new File([blob], 'camera3d-source.jpg', { type: blob.type || 'image/jpeg' })
   const uploadResult = await uploadCanvasMedia(file, 'image')
   if (uploadResult.status !== 'completed' || !uploadResult.url) {
-    throw new Error('媒体上传未完成')
+    throw new Error(translateUi('uiMessages.m909a1763f7f8'))
   }
   return uploadResult.url
 }
@@ -514,29 +516,29 @@ async function uploadCameraImageToCloud(imageUrl) {
 async function handleGenerate() {
   if (generating.value) return
   if (!props.imageUrl) {
-    generateError.value = '请先选择一张图片'
+    generateError.value = translateUi('uiMessages.m160f7108496b')
     return
   }
 
   generating.value = true
-  generateProgress.value = '准备中...'
+  generateProgress.value = translateUi('uiMessages.mc68d88d6f41e')
   generateError.value = ''
 
   try {
     const token = localStorage.getItem('token')
-    if (!token) throw new Error('请先登录')
+    if (!token) throw new Error(translateUi('uiMessages.m48144f96c150'))
 
     let finalImageUrl = props.imageUrl
     if (props.imageUrl.startsWith('blob:') || props.imageUrl.startsWith('data:')) {
-      generateProgress.value = '上传图片到云端...'
+      generateProgress.value = translateUi('uiMessages.m941bdb886b15')
       try {
         finalImageUrl = await uploadCameraImageToCloud(props.imageUrl)
       } catch (uploadError) {
-        throw new Error(`图片上传失败: ${uploadError.message}`)
+        throw new Error(translateUi('uiMessages.mff5e033bcb93', { value1: (uploadError.message) }))
       }
     }
 
-    generateProgress.value = '提交任务中...'
+    generateProgress.value = translateUi('uiMessages.mff12ee1c2008')
     const spaceParams = teamStore.getSpaceParams('current')
     const response = await fetch(getApiUrl('/api/images/multiangle'), {
       method: 'POST',
@@ -555,12 +557,12 @@ async function handleGenerate() {
 
     if (!response.ok) {
       const errorData = await response.json()
-      throw new Error(errorData.message || '生成失败')
+      throw new Error(errorData.message || translateUi('imageGen.failed'))
     }
 
     const result = await response.json()
     const taskId = result.taskId
-    if (!taskId) throw new Error('未获取到任务ID')
+    if (!taskId) throw new Error(translateUi('uiMessages.mff01debd2a54'))
 
     emit('generate-start', {
       taskId,
@@ -577,7 +579,7 @@ async function handleGenerate() {
     handleClose()
   } catch (error) {
     console.error('[Camera3D] 生成失败:', error)
-    generateError.value = error.message || '生成失败'
+    generateError.value = error.message || translateUi('canvas.audioNode.generateFailed')
     generating.value = false
     emit('generate-error', { error: error.message })
   }
@@ -621,7 +623,7 @@ onUnmounted(() => {
     <div ref="panelRef" class="camera-3d-panel" @click.stop @mousedown.stop>
       <!-- 标题栏 -->
       <div class="panel-header">
-        <span class="panel-title">多角度编辑器</span>
+        <span class="panel-title">{{ translateUi('uiMessages.m046bdf60fc59') }}</span>
         <button class="panel-close" @click="handleClose">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
@@ -666,7 +668,7 @@ onUnmounted(() => {
           <!-- 水平环绕 -->
           <div class="control-group">
             <div class="control-label">
-              <span>水平环绕</span>
+              <span>{{ translateUi('uiMessages.m787c02abe056') }}</span>
               <span class="control-value">{{ horizontalAngle }}°</span>
             </div>
             <input
@@ -679,7 +681,7 @@ onUnmounted(() => {
           <!-- 垂直俯仰 -->
           <div class="control-group">
             <div class="control-label">
-              <span>垂直俯仰</span>
+              <span>{{ translateUi('uiMessages.mf3bcdd82526c') }}</span>
               <span class="control-value">{{ verticalAngle }}°</span>
             </div>
             <input
@@ -692,7 +694,7 @@ onUnmounted(() => {
           <!-- 景别缩放 -->
           <div class="control-group">
             <div class="control-label">
-              <span>景别缩放</span>
+              <span>{{ translateUi('uiMessages.md93f5cf3f16d') }}</span>
               <span class="control-value zoom-text">{{ zoomLabel }}</span>
             </div>
             <input
@@ -705,7 +707,7 @@ onUnmounted(() => {
           <!-- 提示词 -->
           <div class="prompt-section">
             <div class="prompt-toggle-row">
-              <span class="prompt-label">提示词</span>
+              <span class="prompt-label">{{ translateUi('directorStudio.inspector.prompt') }}</span>
               <label class="toggle-switch">
                 <input type="checkbox" v-model="showCustomPrompt" />
                 <span class="toggle-slider-ui"></span>
@@ -715,7 +717,7 @@ onUnmounted(() => {
               v-if="showCustomPrompt"
               v-model="customPromptText"
               class="prompt-textarea"
-              placeholder="输入自定义提示词，将拼接在角度描述后..."
+              :placeholder="translateUi('uiMessages.mb82dfd924144')"
               rows="3"
             ></textarea>
           </div>
@@ -745,7 +747,7 @@ onUnmounted(() => {
             <path d="M1 4v6h6" stroke-linecap="round" stroke-linejoin="round"/>
             <path d="M3.51 15a9 9 0 105.64-12.36L1 10" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          重置参数
+          {{ translateUi('uiMessages.m432be5625e37') }}
         </button>
         <div class="footer-right">
           <span v-if="pointsCost > 0" class="points-info">
@@ -756,7 +758,7 @@ onUnmounted(() => {
             class="generate-btn"
             @click="handleGenerate"
             :disabled="generating || !imageUrl"
-            :title="generating ? '生成中...' : '生成多角度图片'"
+            :title="generating ? translateUi('imageGen.generating') : translateUi('uiMessages.m0c7e75eff1bc')"
           >
             <svg v-if="generating" class="spinner" viewBox="0 0 24 24" fill="none" width="20" height="20">
               <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="31.4 31.4" />

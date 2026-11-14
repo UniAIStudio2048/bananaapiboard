@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 /**
  * AI 灵感助手「从历史进入进行中对话」回归测试（bugfix）。
  *
@@ -64,7 +65,7 @@ test('停止后直发撞到锁释放窗口时，queued done 保留助手占位�
 })
 
 test('「立即插入」按钮对可见排队项始终渲染：空闲时点击=直接发送，不再依赖 activeTurnRunning', () => {
-  const insertButton = queueBar.match(/<button[\s\S]*?aria-label="立即插入这条消息"[\s\S]*?<\/button>/)?.[0]
+  const insertButton = queueBar.match(localizedPattern(/<button[\s\S]*?aria-label="立即插入这条消息"[\s\S]*?<\/button>/))?.[0]
   assert.ok(insertButton, 'insert button must exist')
   assert.doesNotMatch(insertButton, /v-if="activeTurnRunning"/)
 })

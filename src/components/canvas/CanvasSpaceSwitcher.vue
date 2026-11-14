@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi, currentLanguage as uiLanguage } from '@/i18n'
+
 /**
  * CanvasSpaceSwitcher.vue - 画布右上角空间快速切换按钮
  * 显示当前空间名称，点击展开下拉菜单切换全局空间
@@ -131,7 +133,7 @@ async function saveAllTabsAndReset() {
         })
       } else if (tabNodes.length >= 2) {
         await saveWorkflow({
-          name: tab.name || `草稿_${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`,
+          name: tab.name || translateUi('uiMessages.mb0f9ff13e0a1', { value1: (new Date().toLocaleTimeString(uiLanguage.value, { hour: '2-digit', minute: '2-digit' })) }),
           uploadToCloud: false,
           isDraft: true,
           clientTabId: tab.id,
@@ -208,7 +210,7 @@ function handleClickOutside(event) {
 }
 
 function getRoleText(role) {
-  const map = { owner: '所有者', admin: '管理员', member: '成员' }
+  const map = { owner: translateUi('uiMessages.m43a7f4b4c5c8'), admin: translateUi('user.roleAdmin'), member: translateUi('uiMessages.m6e6d6ddbb7c1') }
   return map[role] || role
 }
 
@@ -218,10 +220,10 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 
 <template>
   <div class="canvas-space-switcher" ref="dropdownRef">
-    <button class="space-trigger" @click="toggleDropdown" :disabled="isSwitching" :title="'当前空间: ' + teamStore.currentSpaceLabel.value">
+    <button class="space-trigger" @click="toggleDropdown" :disabled="isSwitching" :title="translateUi('uiMessages.m746d155a1586') + teamStore.currentSpaceLabel.value">
       <span v-if="isSwitching" class="space-icon switching-spinner"></span>
       <span v-else class="space-icon">{{ teamStore.currentSpaceIcon.value }}</span>
-      <span class="space-label">{{ isSwitching ? '切换中...' : teamStore.currentSpaceLabel.value }}</span>
+      <span class="space-label">{{ isSwitching ? translateUi('canvas.switching') : teamStore.currentSpaceLabel.value }}</span>
       <svg class="arrow-icon" :class="{ open: isOpen }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
         <polyline points="6 9 12 15 18 9"/>
       </svg>

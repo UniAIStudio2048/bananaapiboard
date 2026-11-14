@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 /**
  * 主题管理工具
  * 统一管理多种主题模式切换
@@ -8,7 +9,7 @@ export const themes = {
   light: {
     id: 'light',
     name: '浅色模式',
-    description: '适合白天使用',
+    get description() { return translateUi('uiMessages.m9ddcfd221a0b') },
     icon: '☀️',
     isDark: false,
     colors: {
@@ -20,7 +21,7 @@ export const themes = {
   dark: {
     id: 'dark',
     name: '深色模式',
-    description: '适合夜晚使用',
+    get description() { return translateUi('uiMessages.m5ca6a840ce83') },
     icon: '🌙',
     isDark: true,
     colors: {

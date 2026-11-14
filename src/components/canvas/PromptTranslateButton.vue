@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { showToast } from '@/composables/useCanvasDialog'
 import { translatePrompt } from '@/api/canvas/prompt-translation'
@@ -35,11 +37,11 @@ async function handleTranslate() {
   loading.value = true
   try {
     const result = await translatePrompt(props.text)
-    if (!result?.result) throw new Error('翻译服务返回空结果')
+    if (!result?.result) throw new Error(translateUi('uiMessages.ma6a3815cc6b0'))
     emit('translated', result.result)
-    showToast('提示词已翻译', 'success')
+    showToast(translateUi('uiMessages.m53b7b81a23fa'), 'success')
   } catch (error) {
-    showToast(error.message || '提示词翻译失败', 'error')
+    showToast(error.message || translateUi('uiMessages.mf8a6d6373b85'), 'error')
   } finally {
     loading.value = false
   }
@@ -51,8 +53,8 @@ async function handleTranslate() {
     type="button"
     class="prompt-translate-button nodrag"
     :disabled="isDisabled"
-    title="翻译提示词（中译英 / 英译中）"
-    aria-label="翻译提示词（中译英 / 英译中）"
+    :title="translateUi('uiMessages.me78da556bda2')"
+    :aria-label="translateUi('uiMessages.me78da556bda2')"
     @mousedown.stop
     @pointerdown.stop
     @click.stop="handleTranslate"

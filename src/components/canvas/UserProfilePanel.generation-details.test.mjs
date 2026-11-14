@@ -1,3 +1,5 @@
+import { includesUiText } from '../../i18n/sourceAssertions.mjs'
+import { t as translateUi } from '../../i18n/index.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -30,7 +32,7 @@ function renderCell(item) {
   const node = find(template, node => node.props.some(prop => prop.name === 'data-label' && prop.value?.content === '详细说明'))
   const { code } = compile(node.loc.source, { mode: 'function', prefixIdentifiers: true, bindingMetadata: bindings })
   const render = new Function('Vue', code)(Vue)
-  return text(render({ item }, [], {}, { getPointsLedgerGenerationDetailsText: ledger.getPointsLedgerGenerationDetailsText }))
+  return text(render({ item }, [], {}, { translateUi, getPointsLedgerGenerationDetailsText: ledger.getPointsLedgerGenerationDetailsText }))
 }
 
 test('actual canvas details cell renders image resolution and aspect ratio beside the memo and task', () => {
@@ -43,7 +45,7 @@ test('actual canvas details cell renders image resolution and aspect ratio besid
 
 test('actual canvas details cell renders selected video mode and does not add it to audio', () => {
   const rendered = renderCell({ memo: '视频生成', generation_details: { kind: 'video', resolution: '1080p', aspect_ratio: '9:16', mode: 'image2video_first_last', quality: 'pro' } })
-  for (const expected of ['分辨率：1080p', '尺寸比例：9:16', '视频模式：首尾帧 / 专业模式']) assert.ok(rendered.includes(expected))
+  for (const expected of ['分辨率：1080p', '尺寸比例：9:16', '视频模式：首尾帧 / 专业模式']) assert.ok(includesUiText(rendered, expected))
   assert.equal(renderCell({ memo: '音频生成' }), '音频生成')
 })
 

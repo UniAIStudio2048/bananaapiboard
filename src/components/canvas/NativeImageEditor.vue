@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * NativeImageEditor.vue - 基于原生 Canvas API 的全功能图片编辑器
  *
@@ -144,7 +146,7 @@ const filterPreviewMinIntervalMs = 33
 const mixerColorChannels = [
   {
     id: 'red',
-    label: '红色',
+    get label() { return translateUi('uiMessages.m789f61dbfcc7') },
     hue: 0,
     width: 34,
     track: {
@@ -155,7 +157,7 @@ const mixerColorChannels = [
   },
   {
     id: 'orange',
-    label: '橙色',
+    get label() { return translateUi('uiMessages.maa1e899dd357') },
     hue: 30,
     width: 28,
     track: {
@@ -166,7 +168,7 @@ const mixerColorChannels = [
   },
   {
     id: 'yellow',
-    label: '黄色',
+    get label() { return translateUi('uiMessages.md451c07d739b') },
     hue: 60,
     width: 28,
     track: {
@@ -177,7 +179,7 @@ const mixerColorChannels = [
   },
   {
     id: 'green',
-    label: '绿色',
+    get label() { return translateUi('uiMessages.m30c83dc25b12') },
     hue: 120,
     width: 40,
     track: {
@@ -188,7 +190,7 @@ const mixerColorChannels = [
   },
   {
     id: 'aqua',
-    label: '浅绿色',
+    get label() { return translateUi('uiMessages.mb84d512cb1f8') },
     hue: 170,
     width: 36,
     track: {
@@ -199,7 +201,7 @@ const mixerColorChannels = [
   },
   {
     id: 'blue',
-    label: '蓝色',
+    get label() { return translateUi('uiMessages.m67035e6b7f82') },
     hue: 225,
     width: 42,
     track: {
@@ -210,7 +212,7 @@ const mixerColorChannels = [
   },
   {
     id: 'purple',
-    label: '紫色',
+    get label() { return translateUi('uiMessages.m2ed9c6fabac2') },
     hue: 275,
     width: 34,
     track: {
@@ -221,7 +223,7 @@ const mixerColorChannels = [
   },
   {
     id: 'magenta',
-    label: '洋红',
+    get label() { return translateUi('uiMessages.m1274ba4c47cc') },
     hue: 320,
     width: 34,
     track: {
@@ -294,7 +296,7 @@ const colorPresets = [
 
 // 裁剪比例预设
 const cropRatios = [
-  { value: 'free', label: '自由' },
+  { value: 'free', get label() { return translateUi('uiMessages.md1047eed5dd5') } },
   { value: '1:1', label: '1:1' },
   { value: '4:3', label: '4:3' },
   { value: '16:9', label: '16:9' },
@@ -303,17 +305,17 @@ const cropRatios = [
 
 // 形状选项
 const shapeOptions = [
-  { value: 'rect', label: '矩形', icon: '⬜' },
-  { value: 'circle', label: '圆形', icon: '⭕' },
-  { value: 'arrow', label: '箭头', icon: '➡️' },
-  { value: 'line', label: '直线', icon: '📏' }
+  { value: 'rect', get label() { return translateUi('uiMessages.m88b75a101595') }, icon: '⬜' },
+  { value: 'circle', get label() { return translateUi('uiMessages.m81639a8a9bce') }, icon: '⭕' },
+  { value: 'arrow', get label() { return translateUi('uiMessages.m83fa01a2d780') }, icon: '➡️' },
+  { value: 'line', get label() { return translateUi('onboarding.settings.edgeStyleStraight') }, icon: '📏' }
 ]
 
 const mixerTabs = [
-  { id: 'hue', label: '色相' },
-  { id: 'saturation', label: '饱和度' },
-  { id: 'lightness', label: '明亮度' },
-  { id: 'liquify', label: '液化' }
+  { id: 'hue', get label() { return translateUi('uiMessages.m3ff6d1c07cfc') } },
+  { id: 'saturation', get label() { return translateUi('uiMessages.m762f17e26780') } },
+  { id: 'lightness', get label() { return translateUi('uiMessages.md0b1b2ff072b') } },
+  { id: 'liquify', get label() { return translateUi('uiMessages.ma2d1d27aed87') } }
 ]
 
 const activeMixerRange = computed(() => {
@@ -2069,40 +2071,40 @@ watch(() => props.imageUrl, (newUrl) => {
             class="tool-btn"
             :class="{ active: currentMode === 'crop' }"
             @click="activateMode('crop')"
-            title="裁剪"
+            :title="translateUi('uiMessages.m184506303bf5')"
           >
             <span class="tool-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v14a2 2 0 002 2h14"/><path d="M18 22V8a2 2 0 00-2-2H2"/></svg>
             </span>
-            <span class="tool-label">裁剪</span>
+            <span class="tool-label">{{ translateUi('uiMessages.m184506303bf5') }}</span>
           </button>
 
-          <button class="tool-btn" @click="flipHorizontal" title="水平翻转">
+          <button class="tool-btn" @click="flipHorizontal" :title="translateUi('uiMessages.m44775fbf3342')">
             <span class="tool-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 00-2 2v14a2 2 0 002 2h3"/><path d="M16 3h3a2 2 0 012 2v14a2 2 0 01-2 2h-3"/><line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2 2"/></svg>
             </span>
-            <span class="tool-label">水平翻转</span>
+            <span class="tool-label">{{ translateUi('uiMessages.m44775fbf3342') }}</span>
           </button>
 
-          <button class="tool-btn" @click="flipVertical" title="垂直翻转">
+          <button class="tool-btn" @click="flipVertical" :title="translateUi('uiMessages.mfcd75ef0a054')">
             <span class="tool-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V5a2 2 0 012-2h14a2 2 0 012 2v3"/><path d="M3 16v3a2 2 0 002 2h14a2 2 0 002-2v-3"/><line x1="3" y1="12" x2="21" y2="12" stroke-dasharray="2 2"/></svg>
             </span>
-            <span class="tool-label">垂直翻转</span>
+            <span class="tool-label">{{ translateUi('uiMessages.mfcd75ef0a054') }}</span>
           </button>
 
-          <button class="tool-btn" @click="rotateLeft" title="左旋转90°">
+          <button class="tool-btn" @click="rotateLeft" :title="translateUi('uiMessages.mb8ca9529b4d7')">
             <span class="tool-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 2v6h6"/><path d="M2.5 8a10 10 0 0119 2.5"/><path d="M12 22a10 10 0 01-8.5-4.5"/></svg>
             </span>
-            <span class="tool-label">左旋</span>
+            <span class="tool-label">{{ translateUi('uiMessages.md2e5032f9ad5') }}</span>
           </button>
 
-          <button class="tool-btn" @click="rotateRight" title="右旋转90°">
+          <button class="tool-btn" @click="rotateRight" :title="translateUi('uiMessages.m0b2bcc9a9862')">
             <span class="tool-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6"/><path d="M21.5 8a10 10 0 00-19 2.5"/><path d="M12 22a10 10 0 008.5-4.5"/></svg>
             </span>
-            <span class="tool-label">右旋</span>
+            <span class="tool-label">{{ translateUi('uiMessages.mbf56d7fedf6b') }}</span>
           </button>
         </div>
 
@@ -2113,72 +2115,72 @@ watch(() => props.imageUrl, (newUrl) => {
             class="tool-btn"
             :class="{ active: currentMode === 'draw' }"
             @click="activateMode('draw')"
-            title="画笔"
+            :title="translateUi('uiMessages.m05731b92ad31')"
           >
             <span class="tool-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
             </span>
-            <span class="tool-label">画笔</span>
+            <span class="tool-label">{{ translateUi('uiMessages.m05731b92ad31') }}</span>
           </button>
 
           <button
             class="tool-btn"
             :class="{ active: currentMode === 'annotate' }"
             @click="activateMode('annotate')"
-            title="标注（右键删除）"
+            :title="translateUi('uiMessages.m63430e216a6c')"
           >
             <span class="tool-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
             </span>
-            <span class="tool-label">标注</span>
+            <span class="tool-label">{{ translateUi('uiMessages.m9875b1f82509') }}</span>
           </button>
 
           <button
             class="tool-btn"
             :class="{ active: currentMode === 'shape' }"
             @click="activateMode('shape')"
-            title="形状"
+            :title="translateUi('uiMessages.mc2f71c1b10ef')"
           >
             <span class="tool-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
             </span>
-            <span class="tool-label">形状</span>
+            <span class="tool-label">{{ translateUi('uiMessages.mc2f71c1b10ef') }}</span>
           </button>
 
           <button
             class="tool-btn"
             :class="{ active: currentMode === 'text' }"
             @click="activateMode('text')"
-            title="文字"
+            :title="translateUi('uiMessages.m14b69bd6eeb0')"
           >
             <span class="tool-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
             </span>
-            <span class="tool-label">文字</span>
+            <span class="tool-label">{{ translateUi('uiMessages.m14b69bd6eeb0') }}</span>
           </button>
 
           <button
             class="tool-btn"
             :class="{ active: currentMode === 'mask' }"
             @click="activateMode('mask')"
-            title="蒙版（用于AI重绘）"
+            :title="translateUi('uiMessages.m39fe35a1377b')"
           >
             <span class="tool-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
             </span>
-            <span class="tool-label">蒙版</span>
+            <span class="tool-label">{{ translateUi('uiMessages.me7c802f4a183') }}</span>
           </button>
 
           <button
             class="tool-btn"
             :class="{ active: currentMode === 'spot-heal' }"
             @click="activateMode('spot-heal')"
-            title="污点修复"
+            :title="translateUi('uiMessages.m53e5c49eed70')"
           >
             <span class="tool-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 010 5.7l-6.4 6.4a4 4 0 01-5.7-5.7L9 6.3a4 4 0 015.7 0z"/><path d="M6.5 14.5l3 3"/><path d="M16 4l1-2"/><path d="M19 7l2-1"/><path d="M18 11l2 1"/></svg>
             </span>
-            <span class="tool-label">污点修复</span>
+            <span class="tool-label">{{ translateUi('uiMessages.m53e5c49eed70') }}</span>
           </button>
         </div>
 
@@ -2189,37 +2191,37 @@ watch(() => props.imageUrl, (newUrl) => {
             class="tool-btn"
             :class="{ active: currentMode === 'filter' }"
             @click="activateMode('filter')"
-            title="调色混色器"
+            :title="translateUi('uiMessages.mcc7b0e57861d')"
           >
             <span class="tool-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="13" r="2.5"/><circle cx="9" cy="16.5" r="2.5"/><path d="M7.5 3.5A10 10 0 1020.5 18c.7-1.2-.2-2.7-1.6-2.7h-1.2"/></svg>
             </span>
-            <span class="tool-label">混色器</span>
+            <span class="tool-label">{{ translateUi('uiMessages.m436f0210fa8a') }}</span>
           </button>
         </div>
 
         <div class="toolbar-divider"></div>
 
         <div class="toolbar-group">
-          <button class="tool-btn" @click="undo" :disabled="historyIndex <= 0" title="撤销">
+          <button class="tool-btn" @click="undo" :disabled="historyIndex <= 0" :title="translateUi('canvas.undo')">
             <span class="tool-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
             </span>
-            <span class="tool-label">撤销</span>
+            <span class="tool-label">{{ translateUi('canvas.undo') }}</span>
           </button>
 
-          <button class="tool-btn" @click="redo" :disabled="historyIndex >= history.length - 1" title="重做">
+          <button class="tool-btn" @click="redo" :disabled="historyIndex >= history.length - 1" :title="translateUi('canvas.redo')">
             <span class="tool-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.13-9.36L23 10"/></svg>
             </span>
-            <span class="tool-label">重做</span>
+            <span class="tool-label">{{ translateUi('canvas.redo') }}</span>
           </button>
 
-          <button class="tool-btn danger" @click="resetAll" title="重置">
+          <button class="tool-btn danger" @click="resetAll" :title="translateUi('common.reset')">
             <span class="tool-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
             </span>
-            <span class="tool-label">重置</span>
+            <span class="tool-label">{{ translateUi('common.reset') }}</span>
           </button>
         </div>
       </div>
@@ -2230,7 +2232,7 @@ watch(() => props.imageUrl, (newUrl) => {
       <!-- 裁剪选项 -->
       <template v-if="currentMode === 'crop'">
         <div class="sub-control">
-          <label>比例</label>
+          <label>{{ translateUi('directorStudio.inspector.aspect') }}</label>
           <div class="ratio-btns">
             <button
               v-for="ratio in cropRatios"
@@ -2244,17 +2246,17 @@ watch(() => props.imageUrl, (newUrl) => {
           </div>
         </div>
         <button class="sub-btn primary" @click="applyCrop">
-          <span>&#10003;</span> 应用裁剪
+          <span>&#10003;</span> {{ translateUi('uiMessages.m5a2a4223e38b') }}
         </button>
         <button class="sub-btn" @click="cancelCrop">
-          取消
+          {{ translateUi('common.cancel') }}
         </button>
       </template>
 
       <!-- 画笔设置 -->
       <template v-if="currentMode === 'draw'">
         <div class="sub-control">
-          <label>大小</label>
+          <label>{{ translateUi('canvas.assetPanel.size') }}</label>
           <input
             type="range"
             v-model.number="brushSize"
@@ -2266,7 +2268,7 @@ watch(() => props.imageUrl, (newUrl) => {
         </div>
 
         <div class="sub-control">
-          <label>硬度</label>
+          <label>{{ translateUi('uiMessages.m3f8950eeb398') }}</label>
           <input
             type="range"
             v-model.number="brushHardness"
@@ -2278,7 +2280,7 @@ watch(() => props.imageUrl, (newUrl) => {
         </div>
 
         <div class="sub-control">
-          <label>不透明度</label>
+          <label>{{ translateUi('uiMessages.m04405e4a9ffd') }}</label>
           <input
             type="range"
             v-model.number="brushOpacity"
@@ -2290,7 +2292,7 @@ watch(() => props.imageUrl, (newUrl) => {
         </div>
 
         <div class="sub-control colors">
-          <label>颜色</label>
+          <label>{{ translateUi('directorStudio.inspector.color') }}</label>
           <div class="color-presets">
             <button
               v-for="color in colorPresets"
@@ -2312,7 +2314,7 @@ watch(() => props.imageUrl, (newUrl) => {
       <!-- 蒙版笔刷设置 -->
       <template v-if="currentMode === 'mask'">
         <div class="sub-control">
-          <label>大小</label>
+          <label>{{ translateUi('canvas.assetPanel.size') }}</label>
           <input
             type="range"
             v-model.number="brushSize"
@@ -2324,7 +2326,7 @@ watch(() => props.imageUrl, (newUrl) => {
         </div>
 
         <div class="sub-control">
-          <label>硬度</label>
+          <label>{{ translateUi('uiMessages.m3f8950eeb398') }}</label>
           <input
             type="range"
             v-model.number="brushHardness"
@@ -2336,7 +2338,7 @@ watch(() => props.imageUrl, (newUrl) => {
         </div>
 
         <div class="sub-control">
-          <label>不透明度</label>
+          <label>{{ translateUi('uiMessages.m04405e4a9ffd') }}</label>
           <input
             type="range"
             v-model.number="brushOpacity"
@@ -2348,9 +2350,9 @@ watch(() => props.imageUrl, (newUrl) => {
         </div>
 
         <div class="mask-controls">
-          <span class="mask-hint">涂抹区域将用于 AI 重绘（保存后生成黑白蒙版）</span>
+          <span class="mask-hint">{{ translateUi('uiMessages.m430d966edd4f') }}</span>
           <button class="clear-mask-btn" @click="clearMaskCanvas(); renderMaskPreview();">
-            清除蒙版
+            {{ translateUi('uiMessages.m0ed290c456de') }}
           </button>
         </div>
       </template>
@@ -2358,7 +2360,7 @@ watch(() => props.imageUrl, (newUrl) => {
       <!-- 污点修复笔刷设置 -->
       <template v-if="currentMode === 'spot-heal'">
         <div class="sub-control">
-          <label>大小</label>
+          <label>{{ translateUi('canvas.assetPanel.size') }}</label>
           <input
             type="range"
             v-model.number="brushSize"
@@ -2370,7 +2372,7 @@ watch(() => props.imageUrl, (newUrl) => {
         </div>
 
         <div class="sub-control">
-          <label>硬度</label>
+          <label>{{ translateUi('uiMessages.m3f8950eeb398') }}</label>
           <input
             type="range"
             v-model.number="brushHardness"
@@ -2382,7 +2384,7 @@ watch(() => props.imageUrl, (newUrl) => {
         </div>
 
         <div class="sub-control">
-          <label>强度</label>
+          <label>{{ translateUi('uiMessages.ma2846644a638') }}</label>
           <input
             type="range"
             v-model.number="brushOpacity"
@@ -2394,9 +2396,9 @@ watch(() => props.imageUrl, (newUrl) => {
         </div>
 
         <div class="mask-controls">
-          <span class="mask-hint">涂抹要修复的污点区域，保存后使用本地 OpenCV 修复</span>
+          <span class="mask-hint">{{ translateUi('uiMessages.m228b82439532') }}</span>
           <button class="clear-mask-btn" @click="clearMaskCanvas(); renderMaskPreview();">
-            清除涂抹
+            {{ translateUi('uiMessages.m63b53f419853') }}
           </button>
         </div>
       </template>
@@ -2405,15 +2407,15 @@ watch(() => props.imageUrl, (newUrl) => {
       <template v-if="currentMode === 'annotate'">
         <div class="annotate-controls">
           <span class="annotate-hint">
-            点击添加标注（{{ annotations.length }} 个）| 右键删除
+            {{ translateUi('uiMessages.mc5db05824784', { value1: (annotations.length) }) }}
           </span>
-          <span class="next-label-preview">下一个: {{ nextAnnotationLabel }}</span>
+          <span class="next-label-preview">{{ translateUi('uiMessages.m433794552309', { value1: (nextAnnotationLabel) }) }}</span>
           <button
             class="clear-mask-btn"
             @click="clearAllAnnotations"
             :disabled="annotations.length === 0"
           >
-            清除全部
+            {{ translateUi('uiMessages.m55f1033fab69') }}
           </button>
         </div>
       </template>
@@ -2421,7 +2423,7 @@ watch(() => props.imageUrl, (newUrl) => {
       <!-- 形状设置 -->
       <template v-if="currentMode === 'shape'">
         <div class="sub-control">
-          <label>形状</label>
+          <label>{{ translateUi('uiMessages.mc2f71c1b10ef') }}</label>
           <div class="shape-btns">
             <button
               v-for="shape in shapeOptions"
@@ -2437,7 +2439,7 @@ watch(() => props.imageUrl, (newUrl) => {
         </div>
 
         <div class="sub-control">
-          <label>粗细</label>
+          <label>{{ translateUi('uiMessages.m5bfd154840f1') }}</label>
           <input
             type="range"
             v-model.number="strokeWidth"
@@ -2449,7 +2451,7 @@ watch(() => props.imageUrl, (newUrl) => {
         </div>
 
         <div class="sub-control colors">
-          <label>颜色</label>
+          <label>{{ translateUi('directorStudio.inspector.color') }}</label>
           <div class="color-presets">
             <button
               v-for="color in colorPresets"
@@ -2466,7 +2468,7 @@ watch(() => props.imageUrl, (newUrl) => {
       <!-- 文字设置 -->
       <template v-if="currentMode === 'text'">
         <div class="sub-control">
-          <label>字号</label>
+          <label>{{ translateUi('uiMessages.mf71561b5af0a') }}</label>
           <input
             type="range"
             v-model.number="fontSize"
@@ -2478,7 +2480,7 @@ watch(() => props.imageUrl, (newUrl) => {
         </div>
 
         <div class="sub-control colors">
-          <label>颜色</label>
+          <label>{{ translateUi('directorStudio.inspector.color') }}</label>
           <div class="color-presets">
             <button
               v-for="color in colorPresets"
@@ -2492,13 +2494,13 @@ watch(() => props.imageUrl, (newUrl) => {
         </div>
 
         <div class="text-hint">
-          点击图片添加文字
+          {{ translateUi('uiMessages.m741547b5e004') }}
         </div>
       </template>
 
       <!-- 无工具选中时的占位 -->
       <div v-if="!currentMode" class="sub-placeholder">
-        选择工具开始编辑
+        {{ translateUi('uiMessages.m6d42af84bc20') }}
       </div>
     </div>
 
@@ -2507,7 +2509,7 @@ watch(() => props.imageUrl, (newUrl) => {
       <div class="editor-canvas-container" @wheel.prevent="handleWheel">
         <div v-if="isLoading" class="loading-overlay">
           <div class="loading-spinner"></div>
-          <span>加载中...</span>
+          <span>{{ translateUi('common.loading') }}</span>
         </div>
 
         <!-- 缩放占位容器（保持正确的滚动区域） -->
@@ -2608,14 +2610,14 @@ watch(() => props.imageUrl, (newUrl) => {
               <input
                 v-model="textContent"
                 type="text"
-                placeholder="输入文字..."
+                :placeholder="translateUi('uiMessages.mde877535f14e')"
                 :style="{ fontSize: fontSize + 'px', color: brushColor }"
                 @keyup.enter="addText"
                 @keyup.escape="cancelText"
               />
               <div class="text-input-actions">
-                <button @click="addText">确定</button>
-                <button @click="cancelText">取消</button>
+                <button @click="addText">{{ translateUi('common.ok') }}</button>
+                <button @click="cancelText">{{ translateUi('common.cancel') }}</button>
               </div>
             </div>
           </div>
@@ -2624,8 +2626,8 @@ watch(() => props.imageUrl, (newUrl) => {
 
       <aside v-if="currentMode === 'filter'" class="color-mixer-panel">
         <div class="mixer-header">
-          <h3>调色混色器</h3>
-          <button class="mixer-reset-btn" @click="resetFilters">重置</button>
+          <h3>{{ translateUi('uiMessages.mcc7b0e57861d') }}</h3>
+          <button class="mixer-reset-btn" @click="resetFilters">{{ translateUi('common.reset') }}</button>
         </div>
 
         <div class="mixer-tabs">
@@ -2676,7 +2678,7 @@ watch(() => props.imageUrl, (newUrl) => {
                 <button
                   class="mixer-reset-value-btn"
                   type="button"
-                  title="重置"
+                  :title="translateUi('common.reset')"
                   @click="resetMixerControl(channel.id)"
                 >
                   0
@@ -2701,7 +2703,7 @@ watch(() => props.imageUrl, (newUrl) => {
         <div v-else class="mixer-controls liquify-controls">
           <div class="mixer-control">
             <div class="mixer-control-header">
-              <label for="liquify-brush-size">画笔大小</label>
+              <label for="liquify-brush-size">{{ translateUi('uiMessages.m667f2d7b34e2') }}</label>
               <span class="mixer-value">{{ liquifyBrushSize }}px</span>
             </div>
             <input
@@ -2718,7 +2720,7 @@ watch(() => props.imageUrl, (newUrl) => {
 
           <div class="mixer-control">
             <div class="mixer-control-header">
-              <label for="liquify-pressure">压力</label>
+              <label for="liquify-pressure">{{ translateUi('uiMessages.m30fe3f304c98') }}</label>
               <span class="mixer-value">{{ liquifyPressure }}%</span>
             </div>
             <input
@@ -2734,7 +2736,7 @@ watch(() => props.imageUrl, (newUrl) => {
           </div>
 
           <button class="mixer-reset-btn liquify-reset-btn" @click="resetLiquify">
-            重置液化
+            {{ translateUi('uiMessages.mb3a90ce8855a') }}
           </button>
         </div>
       </aside>
@@ -2743,21 +2745,21 @@ watch(() => props.imageUrl, (newUrl) => {
     <!-- 底部操作栏 -->
     <div class="editor-actions">
       <div class="action-info">
-        <span v-if="history.length > 0">步骤 {{ historyIndex + 1 }}/{{ history.length }}</span>
+        <span v-if="history.length > 0">{{ translateUi('uiMessages.m13af505ccfb1', { value1: (historyIndex + 1), value2: (history.length) }) }}</span>
         <span class="zoom-info">
           <button class="zoom-btn" @click="zoomLevel = Math.max(minZoom, zoomLevel - 0.25)">−</button>
           <span class="zoom-value">{{ Math.round(zoomLevel * 100) }}%</span>
           <button class="zoom-btn" @click="zoomLevel = Math.min(maxZoom, zoomLevel + 0.25)">+</button>
-          <button class="zoom-btn reset" @click="zoomLevel = 1" title="重置缩放">⟲</button>
+          <button class="zoom-btn reset" @click="zoomLevel = 1" :title="translateUi('uiMessages.mc9cdc9678c51')">⟲</button>
         </span>
       </div>
       <div class="action-buttons">
         <button class="action-btn cancel" @click="cancel">
-          取消
+          {{ translateUi('common.cancel') }}
         </button>
         <button class="action-btn primary" @click="save">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-          保存
+          {{ translateUi('common.save') }}
         </button>
       </div>
     </div>

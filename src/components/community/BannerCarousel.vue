@@ -21,7 +21,7 @@
               decoding="async"
             />
             <div v-else class="w-full h-full bg-neutral-900 flex items-center justify-center">
-              <span class="text-neutral-600 text-sm">暂无图片</span>
+              <span class="text-neutral-600 text-sm">{{ translateUi('uiMessages.mb86852571f0c') }}</span>
             </div>
             <div
               v-if="prevBanner?.title"
@@ -53,7 +53,7 @@
               decoding="async"
             />
             <div v-else class="w-full h-full bg-neutral-900 flex items-center justify-center">
-              <span class="text-neutral-600">暂无轮播图</span>
+              <span class="text-neutral-600">{{ translateUi('uiMessages.m45f4b4a7ab64') }}</span>
             </div>
             <!-- 标题遮罩（hover 时显示） -->
             <div
@@ -86,7 +86,7 @@
               decoding="async"
             />
             <div v-else class="w-full h-full bg-neutral-900 flex items-center justify-center">
-              <span class="text-neutral-600 text-sm">暂无图片</span>
+              <span class="text-neutral-600 text-sm">{{ translateUi('uiMessages.mb86852571f0c') }}</span>
             </div>
             <div
               v-if="nextBanner?.title"
@@ -104,7 +104,7 @@
     <button
       v-if="banners.length > 1"
       class="absolute left-4 top-1/2 -translate-y-1/2 z-30 w-10 h-10 rounded-full bg-black/30 hover:bg-black/60 text-white/70 hover:text-white flex items-center justify-center transition-all backdrop-blur-sm"
-      aria-label="上一张"
+      :aria-label="translateUi('uiMessages.mbcf200709dbc')"
       @click="prev"
     >
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
@@ -112,7 +112,7 @@
     <button
       v-if="banners.length > 1"
       class="absolute right-4 top-1/2 -translate-y-1/2 z-30 w-10 h-10 rounded-full bg-black/30 hover:bg-black/60 text-white/70 hover:text-white flex items-center justify-center transition-all backdrop-blur-sm"
-      aria-label="下一张"
+      :aria-label="translateUi('uiMessages.mdcd4eb027369')"
       @click="next"
     >
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
@@ -125,7 +125,7 @@
         :key="idx"
         class="h-[3px] rounded-full transition-all duration-500"
         :class="idx === activeIndex ? 'w-7 bg-white' : 'w-3 bg-white/35 hover:bg-white/55'"
-        :aria-label="'切换到第' + (idx + 1) + '张'"
+        :aria-label="translateUi('communityUI.slide', { index: idx + 1 })"
         @click="goTo(idx)"
       />
     </div>
@@ -197,14 +197,14 @@
                 <div v-show="controlsVisible" class="absolute top-0 left-0 right-0 z-40 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/70 to-transparent">
                   <button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-white/80 hover:text-white transition" @click.stop="exitFullView">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-                    返回
+                    {{ translateUi('common.back') }}
                   </button>
                   <button
                     v-if="activeBanner.workflow_id || activeBanner.work_id || parseWorkIdFromLink(activeBanner.external_link)"
                     class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-white/80 hover:text-white transition"
                     @click.stop="openWorkflowFromFullView"
                   >
-                    查看制作过程 →
+                    {{ translateUi('uiMessages.m1e7556dc3475') }}
                   </button>
                 </div>
               </transition>
@@ -261,7 +261,7 @@
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                   </svg>
-                  返回
+                  {{ translateUi('common.back') }}
                 </button>
                 <span class="text-sm text-white font-medium truncate max-w-[400px]">{{ activeBanner.title || '' }}</span>
               </div>
@@ -282,7 +282,7 @@
                   @click="handlePlay"
                 >
                   <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                  立即观看
+                  {{ translateUi('uiMessages.md64db6165397') }}
                 </button>
                 <button
                   v-if="activeBanner.workflow_id || activeBanner.work_id || parseWorkIdFromLink(activeBanner.external_link)"
@@ -292,7 +292,7 @@
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                   </svg>
-                  查看制作过程
+                  {{ translateUi('uiMessages.m1df27a2f3caf') }}
                 </button>
                 <a
                   v-if="activeBanner.external_link || activeBanner.link_url"
@@ -303,7 +303,7 @@
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
                   </svg>
-                  查看链接
+                  {{ translateUi('uiMessages.m1a908f566a77') }}
                 </a>
               </div>
               <!-- 缩略图推荐列表 -->
@@ -331,7 +331,7 @@
                       class="w-full h-full object-cover rounded-md"
                     />
                     <div v-else class="w-full h-full bg-neutral-800 flex items-center justify-center rounded-md">
-                      <span class="text-neutral-500 text-[10px]">{{ b.title || '无图' }}</span>
+                      <span class="text-neutral-500 text-[10px]">{{ b.title || translateUi('uiMessages.m3ac5075e3e93') }}</span>
                     </div>
                   </div>
                 </div>
@@ -368,6 +368,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { getWorkDetail, getProjectWorkflows } from '@/api/community'
 import { getCanvasThumbnailUrl } from '@/utils/canvasThumbnail'
@@ -643,7 +645,7 @@ async function handleWorkflowPreview() {
   if (!banner?.workflow_id && !banner?.work_id && !parseWorkIdFromLink(banner?.external_link)) return
 
   previewWorkflowId.value = banner.workflow_id || ''
-  previewWorkflowTitle.value = banner.title || '工作流预览'
+  previewWorkflowTitle.value = banner.title || translateUi('uiMessages.m29dff383df15')
   bannerWork.value = null
   bannerWorkId.value = 0
   bannerProjectInfo.value = null

@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * ImageToolbar.vue - 图像节点工具栏
  * 
@@ -78,10 +80,10 @@ const showEditDropdown = ref(false)
 
 // 宫格尺寸选项
 const gridCropSizeOptions = [
-  { cols: 2, rows: 2, count: 4, label: '4宫格', type: 'grid4' },
-  { cols: 3, rows: 3, count: 9, label: '9宫格', type: 'grid9' },
-  { cols: 4, rows: 4, count: 16, label: '16宫格', type: 'grid16' },
-  { cols: 5, rows: 5, count: 25, label: '25宫格', type: 'grid25' }
+  { cols: 2, rows: 2, count: 4, get label() { return translateUi('uiMessages.me766a8910eea') }, type: 'grid4' },
+  { cols: 3, rows: 3, count: 9, get label() { return translateUi('uiMessages.mdfc78d0303b6') }, type: 'grid9' },
+  { cols: 4, rows: 4, count: 16, get label() { return translateUi('uiMessages.m2e68ea44e19a') }, type: 'grid16' },
+  { cols: 5, rows: 5, count: 25, get label() { return translateUi('uiMessages.m21696819d974') }, type: 'grid25' }
 ]
 
 // 获取节点的图片URL
@@ -111,35 +113,35 @@ const editDropdownItems = [
   {
     id: 'edit-primary',
     icon: 'edit',
-    label: '编辑',
+    get label() { return translateUi('common.edit') },
     handler: handleRepaint,
     requiresImage: true
   },
   {
     id: 'repaint',
     icon: 'repaint',
-    label: '重绘',
+    get label() { return translateUi('uiMessages.mf56d491d6572') },
     handler: handleRepaint,
     requiresImage: true
   },
   {
     id: 'erase',
     icon: 'erase',
-    label: '擦除',
+    get label() { return translateUi('uiMessages.m96960e526529') },
     handler: handleErase,
     requiresImage: true
   },
   {
     id: 'cutout',
     icon: 'cutout',
-    label: '抠图',
+    get label() { return translateUi('uiMessages.mb84dd748d185') },
     handler: handleCutout,
     requiresImage: true
   },
   {
     id: 'expand',
     icon: 'expand',
-    label: '扩图',
+    get label() { return translateUi('uiMessages.mdc76bd45af6f') },
     handler: handleExpand,
     requiresImage: true
   }
@@ -150,21 +152,21 @@ const toolbarItems = [
   { 
     id: 'edit', 
     icon: 'edit',
-    label: '编辑', 
+    get label() { return translateUi('common.edit') },
     handler: handleEditButtonClick,
     requiresImage: true
   },
   {
     id: 'enhance', 
     icon: 'enhance',
-    label: '调色', 
+    get label() { return translateUi('uiMessages.m139e3d0e3a51') },
     handler: handleEnhance,
     requiresImage: true
   },
   { 
     id: 'grid-crop', 
     icon: 'grid-crop',
-    label: '宫格裁剪', 
+    get label() { return translateUi('uiMessages.m160674cb8c48') },
     handler: () => showGridCropMenu('selecting'),
     requiresImage: true
   },
@@ -174,7 +176,7 @@ const toolbarItems = [
   { 
     id: 'annotate', 
     icon: 'annotate',
-    label: '标注', 
+    get label() { return translateUi('uiMessages.m9875b1f82509') },
     handler: handleAnnotate,
     requiresImage: true,
     iconOnly: true
@@ -182,7 +184,7 @@ const toolbarItems = [
   { 
     id: 'crop', 
     icon: 'crop',
-    label: '裁剪', 
+    get label() { return translateUi('uiMessages.m184506303bf5') },
     handler: handleCrop,
     requiresImage: true,
     iconOnly: true
@@ -190,7 +192,7 @@ const toolbarItems = [
   { 
     id: 'download', 
     icon: 'download',
-    label: '下载', 
+    get label() { return translateUi('common.download') },
     handler: handleDownload,
     requiresImage: true,
     iconOnly: true
@@ -198,7 +200,7 @@ const toolbarItems = [
   { 
     id: 'preview', 
     icon: 'preview',
-    label: '放大预览', 
+    get label() { return translateUi('uiMessages.m6ad55eb17752') },
     handler: handlePreview,
     requiresImage: true,
     iconOnly: true
@@ -286,7 +288,7 @@ async function uploadCropToCloud(nodeId, file, blobUrl) {
 async function fetchImageAsBlob(url) {
   const response = await fetch(url)
   if (!response.ok) {
-    throw new Error(`图片下载失败: ${response.status} ${response.statusText}`)
+    throw new Error(translateUi('uiMessages.m3478cee83d6e', { value1: (response.status), value2: (response.statusText) }))
   }
   const blob = await response.blob()
   const blobUrl = URL.createObjectURL(blob)
@@ -307,7 +309,7 @@ async function fetchImageAsBlob(url) {
 
 async function loadImageForCanvas(imageUrl) {
   if (!imageUrl) {
-    throw new Error('图片地址为空')
+    throw new Error(translateUi('uiMessages.m3c6da45d343a'))
   }
 
   if (imageUrl.startsWith('blob:') || imageUrl.startsWith('data:')) {
@@ -361,7 +363,7 @@ async function loadImageForCanvas(imageUrl) {
     console.warn('[ImageToolbar] loadImageForCanvas: crossOrigin 加载也失败:', error.message)
   }
 
-  throw lastError || new Error('图片加载失败，请检查网络连接后重试')
+  throw lastError || new Error(translateUi('uiMessages.m8d4a049e2ddc'))
 }
 
 // ========== 宫格裁剪选项菜单（统一入口） ==========
@@ -431,7 +433,7 @@ async function createStoryboardFromCrop(cols, rows) {
       }
     } catch (deductError) {
       console.error(`[ImageToolbar] ${cols}x${rows}裁剪：积分扣除失败`, deductError)
-      alert(deductError.message || '积分不足，无法执行裁剪操作')
+      alert(deductError.message || translateUi('uiMessages.m5ae20b4a8716'))
       return
     }
     
@@ -504,7 +506,7 @@ async function createStoryboardFromCrop(cols, rows) {
       type: 'storyboard',
       position: { x: baseX + offsetX, y: baseY },
       data: {
-        title: `${cols}x${rows}分镜`,
+        title: translateUi('uiMessages.mec53ede603e1', { value1: (cols), value2: (rows) }),
         gridSize: gridSize,
         aspectRatio: aspectRatio,
         gridScale: 1,
@@ -518,7 +520,7 @@ async function createStoryboardFromCrop(cols, rows) {
     
   } catch (error) {
     console.error('[ImageToolbar] 创建分镜格子失败:', error)
-    alert(error.message || '创建分镜格子失败，请重试')
+    alert(error.message || translateUi('uiMessages.m482165b1981b'))
   }
 }
 
@@ -541,7 +543,7 @@ async function handleGenericGridCrop(cols, rows) {
       }
     } catch (deductError) {
       console.error(`[ImageToolbar] ${count}宫格裁剪：积分扣除失败`, deductError)
-      alert(deductError.message || '积分不足，无法执行裁剪操作')
+      alert(deductError.message || translateUi('uiMessages.m5ae20b4a8716'))
       isGridCropping.value = false
       return
     }
@@ -596,7 +598,7 @@ async function handleGenericGridCrop(cols, rows) {
         type: 'image',
         position: { x: nodeX, y: nodeY },
         data: {
-          title: `裁剪 ${item.index + 1}`,
+          title: translateUi('uiMessages.m616dd877e33f', { value1: (item.index + 1) }),
           nodeRole: 'source',
           sourceImages: [item.url],
           isGenerated: true,
@@ -612,7 +614,7 @@ async function handleGenericGridCrop(cols, rows) {
     }
     
     if (newNodeIds.length === count) {
-      canvasStore.createGroup(newNodeIds, `${count}宫格裁剪`)
+      canvasStore.createGroup(newNodeIds, translateUi('uiMessages.macff203a70b5', { value1: (count) }))
     }
     
     console.log(`[ImageToolbar] ${count}宫格裁剪完成，创建了`, newNodeIds.length, '个节点，正在后台上传到云端')
@@ -625,7 +627,7 @@ async function handleGenericGridCrop(cols, rows) {
     
   }catch (error) {
     console.error(`[ImageToolbar] ${count}宫格裁剪失败:`, error)
-    alert(error.message || `${count}宫格裁剪失败，请重试`)
+    alert(error.message || translateUi('uiMessages.me7293a77f422', { value1: (count) }))
   } finally {
     isGridCropping.value = false
   }
@@ -650,7 +652,7 @@ async function handleGrid4Crop() {
       }
     } catch (deductError) {
       console.error('[ImageToolbar] 4宫格裁剪：积分扣除失败', deductError)
-      alert(deductError.message || '积分不足，无法执行裁剪操作')
+      alert(deductError.message || translateUi('uiMessages.m5ae20b4a8716'))
       isGrid4Cropping.value = false
       return
     }
@@ -732,7 +734,7 @@ async function handleGrid4Crop() {
         type: 'image',
         position: { x: nodeX, y: nodeY },
         data: {
-          title: `裁剪 ${item.index + 1}`,
+          title: translateUi('uiMessages.m616dd877e33f', { value1: (item.index + 1) }),
           urls: [item.url],
           output: {
             type: 'image',
@@ -746,7 +748,7 @@ async function handleGrid4Crop() {
     
     // 创建编组
     if (newNodeIds.length === 4) {
-      canvasStore.createGroup(newNodeIds, '4宫格裁剪')
+      canvasStore.createGroup(newNodeIds, translateUi('uiMessages.mfef3585b8c85'))
     }
     
     console.log('[ImageToolbar] 4宫格裁剪完成，创建了', newNodeIds.length, '个节点')
@@ -800,12 +802,12 @@ function dataUrlToBlob(dataUrl) {
 
 async function handleDownload() {
   if (!imageUrl.value) {
-    showToast('没有可下载的图片', 'warning')
+    showToast(translateUi('uiMessages.m16b92f55f19a'), 'warning')
     return
   }
   
   const filename = getCanvasNodeDownloadName(props.imageNode, 'png')
-  showToast('正在下载图片...', 'info')
+  showToast(translateUi('uiMessages.m9c36889fe930'), 'info')
   
   try {
     const url = imageUrl.value
@@ -820,16 +822,16 @@ async function handleDownload() {
       link.click()
       document.body.removeChild(link)
       window.URL.revokeObjectURL(blobUrl)
-      showToast('下载完成', 'success')
+      showToast(translateUi('uiMessages.mc1c79b63f418'), 'success')
       emit('download', { nodeId: props.imageNode?.id, imageUrl: imageUrl.value })
       return
     }
     
     startStreamDownload(url, filename)
-    showToast('已开始下载', 'success')
+    showToast(translateUi('uiMessages.m3ef9b9f84210'), 'success')
   } catch (error) {
     console.error('[ImageToolbar] 下载图片失败:', error)
-    showToast('下载失败，请重试', 'error')
+    showToast(translateUi('uiMessages.m45f5dfb2c926'), 'error')
   }
   
   emit('download', { 
@@ -938,10 +940,10 @@ async function handleAddToAssets() {
     console.log('[ImageToolbar] 已添加到资产库:', fileName)
     
     // 创建一个临时的成功提示
-    showSuccessToast('已成功添加到我的资产！')
+    showSuccessToast(translateUi('uiMessages.m2aa250503a6c'))
   } catch (error) {
     console.error('[ImageToolbar] 添加到资产失败:', error)
-    showErrorToast('添加失败，请重试')
+    showErrorToast(translateUi('uiMessages.m2096e97a237f'))
   }
 }
 
@@ -1246,7 +1248,7 @@ onUnmounted(() => {
       @click.stop
     >
       <div class="grid-crop-menu-title">
-        {{ gridCropMenuType === 'grid9' ? '9宫格裁剪' : '4宫格裁剪' }}
+        {{ gridCropMenuType === 'grid9' ? translateUi('uiMessages.m20459f93ffe0') : translateUi('uiMessages.mfef3585b8c85') }}
       </div>
       <button class="grid-crop-menu-item" @click="handleGridCropOnly">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -1254,8 +1256,8 @@ onUnmounted(() => {
           <line x1="12" y1="3" x2="12" y2="21"/>
           <line x1="3" y1="12" x2="21" y2="12"/>
         </svg>
-        <span>仅裁剪</span>
-        <span class="menu-hint">创建独立图片节点</span>
+        <span>{{ translateUi('uiMessages.mab59f1037ff4') }}</span>
+        <span class="menu-hint">{{ translateUi('uiMessages.ma90785ecfea1') }}</span>
       </button>
       <button class="grid-crop-menu-item" @click="handleGridCropToStoryboard">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -1265,10 +1267,10 @@ onUnmounted(() => {
           <rect x="5" y="14" width="5" height="5" rx="0.5"/>
           <rect x="14" y="14" width="5" height="5" rx="0.5"/>
         </svg>
-        <span>创建分镜格子</span>
-        <span class="menu-hint">自动填充到分镜节点</span>
+        <span>{{ translateUi('uiMessages.m80ce1ec6a889') }}</span>
+        <span class="menu-hint">{{ translateUi('uiMessages.m4f56ae6f4feb') }}</span>
       </button>
-      <button class="grid-crop-menu-close" @click="closeGridCropMenu">取消</button>
+      <button class="grid-crop-menu-close" @click="closeGridCropMenu">{{ translateUi('common.cancel') }}</button>
     </div>
   </div>
   
@@ -1293,20 +1295,20 @@ onUnmounted(() => {
         
         <!-- 缩放控制按钮 -->
         <div class="preview-zoom-controls" @click.stop>
-          <button class="zoom-btn" @click="handleZoomOut" title="缩小">
+          <button class="zoom-btn" @click="handleZoomOut" :title="translateUi('canvas.zoomOut')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="11" cy="11" r="8"/>
               <path d="M21 21l-4.35-4.35M8 11h6"/>
             </svg>
           </button>
           <span class="zoom-level">{{ Math.round(previewScale * 100) }}%</span>
-          <button class="zoom-btn" @click="handleZoomIn" title="放大">
+          <button class="zoom-btn" @click="handleZoomIn" :title="translateUi('canvas.zoomIn')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="11" cy="11" r="8"/>
               <path d="M21 21l-4.35-4.35M11 8v6M8 11h6"/>
             </svg>
           </button>
-          <button class="zoom-btn reset" @click="handleZoomReset" title="重置">
+          <button class="zoom-btn reset" @click="handleZoomReset" :title="translateUi('common.reset')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
               <path d="M3 3v5h5"/>
@@ -1323,7 +1325,7 @@ onUnmounted(() => {
         >
           <img 
             :src="previewImageUrl" 
-            alt="预览图片" 
+            :alt="translateUi('uiMessages.mde078ce976ce')"
             class="preview-image" 
             :style="{
               transform: `translate(${previewPosition.x}px, ${previewPosition.y}px) scale(${previewScale})`,
@@ -1339,19 +1341,19 @@ onUnmounted(() => {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            <span>下载</span>
+            <span>{{ translateUi('common.download') }}</span>
           </button>
           <button class="preview-action-btn add-asset-btn" @click="handleAddToAssets">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            <span>加入资产</span>
+            <span>{{ translateUi('uiMessages.mc55086e7a469') }}</span>
           </button>
         </div>
         
         <!-- 操作提示 -->
         <div class="preview-hint">
-          滚轮缩放 · 拖动查看细节
+          {{ translateUi('uiMessages.m2c58e3e58361') }}
         </div>
       </div>
     </Transition>

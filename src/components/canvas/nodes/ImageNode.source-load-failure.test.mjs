@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -39,7 +40,7 @@ test('ImageNode upload-overlay-btn 显示条件覆盖加载失败场景', () => 
   )
   assert.match(
     source,
-    /sourceImageLoadFailed \? '重新上传' : '上传'/
+    localizedPattern(/sourceImageLoadFailed \? '重新上传' : '上传'/)
   )
 })
 

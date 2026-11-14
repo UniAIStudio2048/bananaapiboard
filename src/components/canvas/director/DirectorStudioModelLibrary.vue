@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, ref } from 'vue'
 import { Box, Move3D } from '@lucide/vue'
 import { useDirectorStudioI18n } from './useDirectorStudioI18n.js'
@@ -65,7 +67,7 @@ function addPedestrians() {
   <section class="director-model-library" :class="{ highlighted }">
     <div class="director-panel-heading">
       <div>
-        <span>{{ dt('modelLibrary.title', '模型库') }}</span>
+        <span>{{ dt('modelLibrary.title', translateUi('directorStudio.shortcuts.modelLibrary')) }}</span>
         <strong>{{ filteredModels.length }}</strong>
       </div>
       <Box :size="16" stroke-width="2" />
@@ -75,11 +77,11 @@ function addPedestrians() {
       v-model="searchTerm"
       class="director-library-search"
       type="search"
-      :placeholder="dt('modelLibrary.searchPlaceholder', '搜索模型')"
+      :placeholder="dt('modelLibrary.searchPlaceholder', translateUi('directorStudio.modelLibrary.searchPlaceholder'))"
       autocomplete="off"
     >
 
-    <div class="director-category-tabs" :aria-label="dt('modelLibrary.categoriesLabel', '模型分类')">
+    <div class="director-category-tabs" :aria-label="dt('modelLibrary.categoriesLabel', translateUi('directorStudio.modelLibrary.categoriesLabel'))">
       <button
         v-for="category in categories"
         :key="category.id"
@@ -105,58 +107,58 @@ function addPedestrians() {
           <small>{{ model.presetId }}</small>
         </span>
       </button>
-      <div v-if="filteredModels.length === 0" class="director-empty-row">{{ dt('modelLibrary.empty', '暂无模型') }}</div>
+      <div v-if="filteredModels.length === 0" class="director-empty-row">{{ dt('modelLibrary.empty', translateUi('directorStudio.modelLibrary.empty')) }}</div>
     </div>
 
     <div class="director-pedestrian-panel">
       <div class="director-pedestrian-heading">
         <Move3D :size="14" stroke-width="2" />
-        <span>{{ dt('modelLibrary.pedestrians', '行人') }}</span>
+        <span>{{ dt('modelLibrary.pedestrians', translateUi('directorStudio.modelLibrary.pedestrians')) }}</span>
       </div>
 
       <div class="director-field-row">
-        <label>{{ dt('modelLibrary.mode', '模式') }}</label>
+        <label>{{ dt('modelLibrary.mode', translateUi('directorStudio.modelLibrary.mode')) }}</label>
         <select v-model="pedestrianMode">
-          <option value="single">{{ dt('modelLibrary.modes.single', '单人') }}</option>
-          <option value="array">{{ dt('modelLibrary.modes.array', '阵列') }}</option>
-          <option value="random">{{ dt('modelLibrary.modes.random', '随机') }}</option>
+          <option value="single">{{ dt('modelLibrary.modes.single', translateUi('directorStudio.inspector.actionPreset')) }}</option>
+          <option value="array">{{ dt('modelLibrary.modes.array', translateUi('directorStudio.modelLibrary.modes.array')) }}</option>
+          <option value="random">{{ dt('modelLibrary.modes.random', translateUi('directorStudio.modelLibrary.modes.random')) }}</option>
         </select>
       </div>
 
       <div class="director-field-row">
-        <label>{{ dt('modelLibrary.crowdAction', '群众动作') }}</label>
+        <label>{{ dt('modelLibrary.crowdAction', translateUi('directorStudio.modelLibrary.crowdAction')) }}</label>
         <select v-model="crowdActionMode">
-          <option value="standing">{{ dt('modelLibrary.crowdActions.standing', '随机站立') }}</option>
-          <option value="walking">{{ dt('modelLibrary.crowdActions.walking', '随机行走') }}</option>
-          <option value="conversation">{{ dt('modelLibrary.crowdActions.conversation', '交谈小组') }}</option>
+          <option value="standing">{{ dt('modelLibrary.crowdActions.standing', translateUi('directorStudio.modelLibrary.crowdActions.standing')) }}</option>
+          <option value="walking">{{ dt('modelLibrary.crowdActions.walking', translateUi('directorStudio.modelLibrary.crowdActions.walking')) }}</option>
+          <option value="conversation">{{ dt('modelLibrary.crowdActions.conversation', translateUi('directorStudio.modelLibrary.crowdActions.conversation')) }}</option>
         </select>
       </div>
 
       <div v-if="pedestrianMode !== 'single'" class="director-field-grid">
         <label>
-          <span>{{ dt('modelLibrary.count', '数量') }}</span>
+          <span>{{ dt('modelLibrary.count', translateUi('directorStudio.modelLibrary.count')) }}</span>
           <input v-model.number="pedestrianCount" type="number" min="1" max="80" step="1">
         </label>
         <label v-if="pedestrianMode === 'array'">
-          <span>{{ dt('modelLibrary.columns', '列数') }}</span>
+          <span>{{ dt('modelLibrary.columns', translateUi('directorStudio.modelLibrary.columns')) }}</span>
           <input v-model.number="pedestrianColumns" type="number" min="1" max="20" step="1">
         </label>
         <label v-if="pedestrianMode === 'array'">
-          <span>{{ dt('modelLibrary.xSpacing', 'X 间距') }}</span>
+          <span>{{ dt('modelLibrary.xSpacing', translateUi('directorStudio.modelLibrary.xSpacing')) }}</span>
           <input v-model.number="pedestrianSpacingX" type="number" min="0.2" max="10" step="0.1">
         </label>
         <label v-if="pedestrianMode === 'array'">
-          <span>{{ dt('modelLibrary.zSpacing', 'Z 间距') }}</span>
+          <span>{{ dt('modelLibrary.zSpacing', translateUi('directorStudio.modelLibrary.zSpacing')) }}</span>
           <input v-model.number="pedestrianSpacingZ" type="number" min="0.2" max="10" step="0.1">
         </label>
         <label v-if="pedestrianMode === 'random'">
-          <span>{{ dt('modelLibrary.radius', '半径') }}</span>
+          <span>{{ dt('modelLibrary.radius', translateUi('directorStudio.modelLibrary.radius')) }}</span>
           <input v-model.number="pedestrianRadius" type="number" min="0.2" max="30" step="0.1">
         </label>
       </div>
 
       <button type="button" class="director-add-pedestrians" @click="addPedestrians">
-        {{ dt('modelLibrary.addPedestrians', '添加行人') }}
+        {{ dt('modelLibrary.addPedestrians', translateUi('directorStudio.modelLibrary.addPedestrians')) }}
       </button>
     </div>
   </section>

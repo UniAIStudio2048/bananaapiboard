@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * SeedanceCharacterNode.vue - Seedance 角色节点
  * 无边框设计，匹配 ImageNode 风格
@@ -107,7 +109,7 @@ const showPreviewModal = ref(false)
 // 标签编辑
 const isEditingLabel = ref(false)
 const labelInputRef = ref(null)
-const localLabel = ref(props.data?.label || props.data?.assetName || 'Seedance 角色')
+const localLabel = ref(props.data?.label || props.data?.assetName || translateUi('canvas.nodeConfig.seedanceCharacter.label'))
 
 watch(() => props.data?.assetName, (newName) => {
   if (!props.data?.label && newName) {
@@ -134,7 +136,7 @@ function handleLabelDoubleClick(event) {
 
 function saveLabelEdit() {
   isEditingLabel.value = false
-  const newLabel = localLabel.value.trim() || props.data?.assetName || 'Seedance 角色'
+  const newLabel = localLabel.value.trim() || props.data?.assetName || translateUi('canvas.nodeConfig.seedanceCharacter.label')
   localLabel.value = newLabel
   canvasStore.updateNodeData(props.id, { label: newLabel })
 }
@@ -144,7 +146,7 @@ function handleLabelKeyDown(event) {
     saveLabelEdit()
   } else if (event.key === 'Escape') {
     isEditingLabel.value = false
-    localLabel.value = props.data?.label || props.data?.assetName || 'Seedance 角色'
+    localLabel.value = props.data?.label || props.data?.assetName || translateUi('canvas.nodeConfig.seedanceCharacter.label')
   }
 }
 
@@ -173,9 +175,9 @@ const statusClass = computed(() => {
 })
 const statusLabel = computed(() => {
   const s = props.data?.status
-  if (s === 'Active') return '可用'
-  if (s === 'Processing') return '处理中'
-  if (s === 'Failed') return '失败'
+  if (s === 'Active') return translateUi('uiMessages.m4d99c976beb8')
+  if (s === 'Processing') return translateUi('videoGen.processing')
+  if (s === 'Failed') return translateUi('uiMessages.m28384d7afd2e')
   return ''
 })
 
@@ -370,7 +372,7 @@ onUnmounted(() => {
       v-if="!isEditingLabel"
       class="node-label"
       @dblclick="handleLabelDoubleClick"
-      title="双击重命名"
+      :title="translateUi('uiMessages.m732f14650dba')"
     >
       {{ localLabel }}
     </div>
@@ -405,7 +407,7 @@ onUnmounted(() => {
           <div v-if="data.assetUrl" class="character-toolbar">
             <button
               class="character-toolbar-btn"
-              title="下载"
+              :title="translateUi('common.download')"
               @mousedown.stop.prevent="handleDownloadCharacter"
               @click.stop.prevent
             >
@@ -415,7 +417,7 @@ onUnmounted(() => {
             </button>
             <button
               class="character-toolbar-btn"
-              title="放大预览"
+              :title="translateUi('uiMessages.m6ad55eb17752')"
               @mousedown.stop.prevent="handlePreviewCharacter"
               @click.stop.prevent
             >
@@ -431,8 +433,8 @@ onUnmounted(() => {
               @click.stop="openSelector"
             >
               <div class="failed-icon">⚠️</div>
-              <div class="failed-text">角色图片加载失败</div>
-              <div class="failed-hint">点击重新选择角色</div>
+              <div class="failed-text">{{ translateUi('uiMessages.mba1e1c081a82') }}</div>
+              <div class="failed-hint">{{ translateUi('uiMessages.m211fce197b6b') }}</div>
             </div>
             <video v-else-if="data.assetUrl && mediaType === 'video'" :key="data.assetId" :src="data.assetUrl" :poster="data.thumbnailUrl !== data.assetUrl ? data.thumbnailUrl : undefined" class="character-media nodrag" controls playsinline preload="metadata" @error="handleImageError" />
             <div v-else-if="mediaType === 'audio'" class="character-audio nodrag">
@@ -467,7 +469,7 @@ onUnmounted(() => {
               <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.5"/>
               <path d="M5 20C5 16.134 8.134 13 12 13C15.866 13 19 16.134 19 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
-            <span class="empty-text">点击选择角色</span>
+            <span class="empty-text">{{ translateUi('uiMessages.m92ad47714b0b') }}</span>
           </div>
         </template>
 
@@ -486,7 +488,7 @@ onUnmounted(() => {
       <button
         ref="addBtnRef"
         class="node-add-btn node-add-btn-right nodrag"
-        title="单击：添加节点 | 长按/拖拽：连线"
+        :title="translateUi('uiMessages.mad7fb14c4d5f')"
         @mousedown="handleAddRightMouseDown"
       >
         +
@@ -512,7 +514,7 @@ onUnmounted(() => {
     <Teleport to="body">
       <Transition name="character-preview-fade">
         <div v-if="showPreviewModal" class="character-preview-modal" @click.self="showPreviewModal = false">
-          <button class="character-preview-close" title="关闭" @click.stop="showPreviewModal = false">
+          <button class="character-preview-close" :title="translateUi('common.close')" @click.stop="showPreviewModal = false">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M18 6 6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
@@ -521,7 +523,7 @@ onUnmounted(() => {
           <audio v-else-if="mediaType === 'audio'" :src="data.assetUrl" controls autoplay class="character-preview-audio" />
           <img v-else
             :src="data.assetUrl"
-            :alt="data.assetName || '角色预览'"
+            :alt="data.assetName || translateUi('uiMessages.m3970f2635e19')"
             class="character-preview-large"
             @error="handleImageError"
           />

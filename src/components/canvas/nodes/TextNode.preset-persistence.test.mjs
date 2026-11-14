@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -35,7 +36,7 @@ test('text node persists preset id and prompt snapshot when the selection change
 test('text node uses persisted preset snapshot when the preset cannot be resolved', () => {
   assert.match(
     source,
-    /return props\.data\?\.selectedPresetName \|\| '通用对话'/,
+    localizedPattern(/return props\.data\?\.selectedPresetName \|\| '通用对话'/),
     'the preset dropdown should show the saved preset name after reload or community clone'
   )
 })

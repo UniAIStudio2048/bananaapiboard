@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import { readFileSync } from 'node:fs'
 import { strict as assert } from 'node:assert'
 import { fileURLToPath } from 'node:url'
@@ -12,11 +13,11 @@ assert.match(
   'NativeImageEditor should import the shared liquify utility'
 )
 
-assert.match(source, /调色混色器/, 'top toolbar should present the color mixer')
-assert.doesNotMatch(source, />滤镜</, 'top toolbar should no longer display 滤镜')
-assert.match(source, /液化/, 'mixer panel should expose liquify controls')
-assert.match(source, /画笔大小/, 'liquify controls should expose brush size')
-assert.match(source, /压力/, 'liquify controls should expose pressure')
+assert.match(source, localizedPattern(/调色混色器/), 'top toolbar should present the color mixer')
+assert.doesNotMatch(source, localizedPattern(/>滤镜</), 'top toolbar should no longer display 滤镜')
+assert.match(source, localizedPattern(/液化/), 'mixer panel should expose liquify controls')
+assert.match(source, localizedPattern(/画笔大小/), 'liquify controls should expose brush size')
+assert.match(source, localizedPattern(/压力/), 'liquify controls should expose pressure')
 assert.match(source, /activeMixerTab = ref\('hue'\)/, 'editor should track mixer tab state')
 assert.match(source, /id: 'liquify'/, 'mixer tabs should include a liquify tab')
 assert.match(source, /applyLiquifyPush/, 'editor should use the liquify utility')

@@ -1,3 +1,4 @@
+import { localizedPattern } from '../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -16,7 +17,7 @@ function loadFunction(source, name, context) {
 
 test('both resource menus expose history selection and Canvas handles the event', () => {
   for (const source of [menu, selector]) {
-    assert.match(source, /从生成历史选择/)
+    assert.match(source, localizedPattern(/从生成历史选择/))
     assert.match(source, /emit\('select-history'/)
   }
   assert.equal((canvas.match(/@select-history="openHistoryPicker"/g) || []).length, 2)

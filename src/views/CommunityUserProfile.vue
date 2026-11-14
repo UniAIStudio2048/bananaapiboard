@@ -5,7 +5,7 @@
       <img
         v-if="profile?.banner_url"
         :src="profile.banner_url"
-        alt="背景图"
+        :alt="translateUi('uiMessages.m75bde8e3bba4')"
         class="w-full h-full object-cover"
       />
       <div v-else class="w-full h-full bg-gradient-to-br from-indigo-900/40 via-purple-900/30 to-gray-900" />
@@ -19,7 +19,7 @@
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
-        更换背景图片
+        {{ translateUi('uiMessages.ma0e8be24d19d') }}
       </button>
       <div v-if="bannerUploading" class="absolute inset-0 flex items-center justify-center bg-black/60">
         <div class="h-8 w-8 rounded-full border-2 border-white/30 border-t-white animate-spin" />
@@ -39,7 +39,7 @@
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
         </svg>
-        返回
+        {{ translateUi('common.back') }}
       </button>
     </div>
 
@@ -54,7 +54,7 @@
         class="mt-4 inline-flex items-center rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-white/90"
         @click="loadProfile"
       >
-        重新加载
+        {{ translateUi('uiMessages.m7bdd5ce1e298') }}
       </button>
     </div>
 
@@ -103,7 +103,7 @@
 
               <!-- 用户名 -->
               <div class="text-center">
-                <h1 class="text-xl font-bold text-white truncate">{{ profile?.username || '未知作者' }}</h1>
+                <h1 class="text-xl font-bold text-white truncate">{{ profile?.username || translateUi('uiMessages.mc96ed7ec0b0b') }}</h1>
               </div>
 
               <!-- 简介 -->
@@ -115,25 +115,25 @@
                     maxlength="200"
                     rows="3"
                     class="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white/80 placeholder-white/30 focus:border-white/40 focus:outline-none resize-none"
-                    placeholder="写点什么介绍自己吧..."
+                    :placeholder="translateUi('uiMessages.mb1c824b995e4')"
                     @keydown.enter.ctrl="saveBio"
                   />
                   <div class="flex items-center justify-between">
                     <span class="text-xs text-white/30">{{ bioText.length }}/200</span>
                     <div class="flex items-center gap-2">
-                      <button class="rounded-lg px-3 py-1 text-xs text-white/50 hover:text-white/80 transition-colors" @click="cancelBioEdit">取消</button>
-                      <button class="rounded-lg bg-white/10 px-3 py-1 text-xs text-white hover:bg-white/20 transition-colors disabled:opacity-50" :disabled="bioSaving" @click="saveBio">{{ bioSaving ? '保存中...' : '保存' }}</button>
+                      <button class="rounded-lg px-3 py-1 text-xs text-white/50 hover:text-white/80 transition-colors" @click="cancelBioEdit">{{ translateUi('common.cancel') }}</button>
+                      <button class="rounded-lg bg-white/10 px-3 py-1 text-xs text-white hover:bg-white/20 transition-colors disabled:opacity-50" :disabled="bioSaving" @click="saveBio">{{ bioSaving ? translateUi('common.saving') : translateUi('common.save') }}</button>
                     </div>
                   </div>
                 </div>
                 <template v-else>
                   <div v-if="isSelf" class="group/bio cursor-pointer" @click="startBioEdit">
                     <p v-if="profile?.bio" class="text-sm text-white/50 leading-relaxed">{{ profile.bio }}</p>
-                    <p v-else class="text-sm text-white/30 italic">点击编辑简介...</p>
+                    <p v-else class="text-sm text-white/30 italic">{{ translateUi('uiMessages.mae0e4e3a0979') }}</p>
                   </div>
                   <template v-else>
                     <p v-if="profile?.bio" class="text-sm text-white/50 leading-relaxed">{{ profile.bio }}</p>
-                    <p v-else class="text-sm text-white/30">暂无简介</p>
+                    <p v-else class="text-sm text-white/30">{{ translateUi('uiMessages.m5ad78db20614') }}</p>
                   </template>
                 </template>
               </div>
@@ -142,15 +142,15 @@
               <div class="flex justify-center gap-6 py-2 border-t border-b border-white/5">
                 <div class="text-center">
                   <div class="text-lg font-bold text-white">{{ stats.followerCount }}</div>
-                  <div class="text-xs text-white/40">粉丝</div>
+                  <div class="text-xs text-white/40">{{ translateUi('uiMessages.m261c51c9f1cd') }}</div>
                 </div>
                 <div class="text-center">
                   <div class="text-lg font-bold text-white">{{ stats.workCount }}</div>
-                  <div class="text-xs text-white/40">作品</div>
+                  <div class="text-xs text-white/40">{{ translateUi('uiMessages.m37a3a796866b') }}</div>
                 </div>
                 <div class="text-center">
                   <div class="text-lg font-bold text-white">{{ stats.likeCount }}</div>
-                  <div class="text-xs text-white/40">获赞</div>
+                  <div class="text-xs text-white/40">{{ translateUi('uiMessages.m668342d91d9a') }}</div>
                 </div>
               </div>
 
@@ -173,7 +173,7 @@
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.721C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                     </svg>
-                    发私信
+                    {{ translateUi('uiMessages.m8b3540e2da8f') }}
                   </button>
                 </template>
 
@@ -185,7 +185,7 @@
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                   </svg>
-                  分享
+                  {{ translateUi('canvas.share') }}
                 </button>
 
                 <!-- 自己主页：进入创作 -->
@@ -197,7 +197,7 @@
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                   </svg>
-                  进入创作
+                  {{ translateUi('uiMessages.m03e9088e5bd2') }}
                 </router-link>
               </div>
             </div>
@@ -237,7 +237,7 @@
               <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
               </svg>
-              发布作品
+              {{ translateUi('uiMessages.m0faf5a113a1b') }}
             </button>
           </div>
 
@@ -248,7 +248,7 @@
             </div>
             <div v-else-if="worksError && !works.length" class="rounded-2xl border border-red-500/20 bg-red-500/10 px-6 py-8 text-center">
               <p class="text-sm text-red-300">{{ worksError }}</p>
-              <button class="mt-4 inline-flex items-center rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-white/90" @click="loadWorks(true)">重新加载</button>
+              <button class="mt-4 inline-flex items-center rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-white/90" @click="loadWorks(true)">{{ translateUi('uiMessages.m7bdd5ce1e298') }}</button>
             </div>
             <div v-else-if="works.length" class="columns-2 gap-3 [column-fill:_balance-all] sm:columns-2 lg:columns-3 xl:columns-4">
               <div v-for="item in works" :key="item.id" class="mb-3 break-inside-avoid">
@@ -261,13 +261,13 @@
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
               </div>
-              <p class="text-sm text-white/40 mb-4">你还没有发布公开作品</p>
+              <p class="text-sm text-white/40 mb-4">{{ translateUi('uiMessages.mbd868a1f5363') }}</p>
               <button class="inline-flex items-center gap-2 rounded-xl bg-white/10 px-5 py-2.5 text-sm text-white transition hover:bg-white/20" @click="openPublishDialog">
-                发布第一个作品
+                {{ translateUi('uiMessages.m0c3ac36de84b') }}
               </button>
             </div>
             <div v-else class="rounded-2xl border border-white/10 bg-white/5 px-6 py-16 text-center text-sm text-white/40">
-              这个作者暂时还没有公开作品
+              {{ translateUi('uiMessages.m68a391af565e') }}
             </div>
             <!-- 加载更多 -->
             <div v-if="works.length" class="flex justify-center pt-6">
@@ -278,9 +278,9 @@
                 @click="loadWorks()"
               >
                 <div v-if="worksLoading" class="h-4 w-4 rounded-full border-2 border-white/20 border-t-white animate-spin" />
-                <span>{{ worksLoading ? '加载中...' : '加载更多' }}</span>
+                <span>{{ worksLoading ? translateUi('common.loading') : translateUi('uiMessages.maf90a08fec8e') }}</span>
               </button>
-              <div v-else class="text-sm text-white/30">已经到底了</div>
+              <div v-else class="text-sm text-white/30">{{ translateUi('uiMessages.mb7c1cdefd7e1') }}</div>
             </div>
           </div>
 
@@ -306,13 +306,13 @@
                   <span class="text-white/60 text-lg">{{ (user.username || '?')[0] }}</span>
                 </div>
                 <div class="min-w-0 flex-1">
-                  <div class="text-sm font-medium text-white truncate">{{ user.username || '未知用户' }}</div>
-                  <div class="text-xs text-white/40 truncate mt-0.5">{{ user.bio || '暂无简介' }}</div>
+                  <div class="text-sm font-medium text-white truncate">{{ user.username || translateUi('uiMessages.m1ac13841ba2e') }}</div>
+                  <div class="text-xs text-white/40 truncate mt-0.5">{{ user.bio || translateUi('uiMessages.m5ad78db20614') }}</div>
                 </div>
               </router-link>
             </div>
             <div v-else class="rounded-2xl border border-white/10 bg-white/5 px-6 py-16 text-center text-sm text-white/40">
-              {{ isSelf ? '你还没有关注任何人' : '该用户还没有关注任何人' }}
+              {{ isSelf ? translateUi('uiMessages.m5685aea9132c') : translateUi('uiMessages.mf53313a7d351') }}
             </div>
             <!-- 加载更多 -->
             <div v-if="followingList.length && followingHasMore" class="flex justify-center pt-6">
@@ -321,7 +321,7 @@
                 :disabled="followingLoading"
                 @click="loadFollowing()"
               >
-                {{ followingLoading ? '加载中...' : '加载更多' }}
+                {{ followingLoading ? translateUi('common.loading') : translateUi('uiMessages.maf90a08fec8e') }}
               </button>
             </div>
           </div>
@@ -354,7 +354,7 @@
                     <span class="shrink-0 text-xs text-white/30">{{ formatMessageTime(conv.last_message_at || conv.updated_at || conv.created_at) }}</span>
                   </div>
                   <p class="mt-1 line-clamp-1 text-xs text-white/45">
-                    {{ conv.last_message_text || conv.last_message?.content || '暂无消息' }}
+                    {{ conv.last_message_text || conv.last_message?.content || translateUi('uiMessages.m98b9751bbf85') }}
                   </p>
                 </div>
                 <span
@@ -369,7 +369,7 @@
                   to="/community/messages"
                   class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 py-2.5 text-sm text-white/80 transition hover:bg-white/10"
                 >
-                  查看全部私信
+                  {{ translateUi('uiMessages.m9a76f80e8611') }}
                 </router-link>
               </div>
             </div>
@@ -379,12 +379,12 @@
                   <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.721C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
               </div>
-              <p class="text-sm text-white/40 mb-4">暂无私信会话</p>
+              <p class="text-sm text-white/40 mb-4">{{ translateUi('uiMessages.m501c3652ddbf') }}</p>
               <router-link
                 to="/community"
                 class="inline-flex items-center gap-2 rounded-xl bg-white/10 px-5 py-2.5 text-sm text-white transition hover:bg-white/20"
               >
-                去社区发现作者
+                {{ translateUi('uiMessages.m723e25af9d56') }}
               </router-link>
             </div>
           </div>
@@ -392,7 +392,7 @@
           <!-- 我的点赞 Tab -->
           <div v-else-if="activeTab === 'favorites'">
             <div v-if="!isSelf" class="rounded-2xl border border-white/10 bg-white/5 px-6 py-16 text-center text-sm text-white/40">
-              点赞列表仅自己可见
+              {{ translateUi('uiMessages.me4b9e6ba15fc') }}
             </div>
             <template v-else>
               <div v-if="favoritesLoading" class="flex min-h-[240px] items-center justify-center">
@@ -404,7 +404,7 @@
                 </div>
               </div>
               <div v-else class="rounded-2xl border border-white/10 bg-white/5 px-6 py-16 text-center text-sm text-white/40">
-                你还没有点赞任何作品
+                {{ translateUi('uiMessages.m5ecfdf106c94') }}
               </div>
               <!-- 加载更多 -->
               <div v-if="favoritesList.length && favoritesHasMore" class="flex justify-center pt-6">
@@ -413,7 +413,7 @@
                   :disabled="favoritesLoading"
                   @click="loadFavorites()"
                 >
-                  {{ favoritesLoading ? '加载中...' : '加载更多' }}
+                  {{ favoritesLoading ? translateUi('common.loading') : translateUi('uiMessages.maf90a08fec8e') }}
                 </button>
               </div>
             </template>
@@ -435,6 +435,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, ref, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCommunityUserProfile, getCommunityUserWorks, toggleLike, toggleFavorite, getFollowing, getMyFavorites, getConversations, getUnreadMessageCount, uploadAvatar, uploadBanner, updateUserProfile } from '@/api/community'
@@ -458,11 +460,11 @@ const profileError = ref('')
 // Tab state
 const activeTab = ref('works')
 const tabs = computed(() => {
-  const base = [{ key: 'works', label: '我的作品集' }]
-  base.push({ key: 'following', label: '关注' })
+  const base = [{ key: 'works', get label() { return translateUi('uiMessages.mcd6a49d43413') } }]
+  base.push({ key: 'following', get label() { return translateUi('uiMessages.meb137dee4c0a') } })
   if (isSelf.value) {
-    base.push({ key: 'messages', label: '私信' })
-    base.push({ key: 'favorites', label: '我的点赞' })
+    base.push({ key: 'messages', get label() { return translateUi('uiMessages.m39aeb5f130e8') } })
+    base.push({ key: 'favorites', get label() { return translateUi('uiMessages.m621cdb74262f') } })
   }
   return base
 })
@@ -523,7 +525,7 @@ function triggerAvatarUpload() { avatarInputRef.value?.click() }
 async function handleAvatarChange(e) {
   const file = e.target.files?.[0]
   if (!file) return
-  if (file.size > 5 * 1024 * 1024) { toast('头像图片不能超过 5MB'); return }
+  if (file.size > 5 * 1024 * 1024) { toast(translateUi('uiMessages.mdbeb7faa0e10')); return }
   avatarUploading.value = true
   try {
     const result = await uploadAvatar(file)
@@ -533,7 +535,7 @@ async function handleAvatarChange(e) {
     }
   } catch (err) {
     console.error('[Profile] 头像上传失败:', err)
-    toast('头像上传失败，请重试')
+    toast(translateUi('uiMessages.m77092f4dd5ec'))
   } finally {
     avatarUploading.value = false
     if (avatarInputRef.value) avatarInputRef.value.value = ''
@@ -547,7 +549,7 @@ function triggerBannerUpload() { bannerInputRef.value?.click() }
 async function handleBannerChange(e) {
   const file = e.target.files?.[0]
   if (!file) return
-  if (file.size > 10 * 1024 * 1024) { toast('背景图不能超过 10MB'); return }
+  if (file.size > 10 * 1024 * 1024) { toast(translateUi('uiMessages.mc9d8ed96c199')); return }
   bannerUploading.value = true
   try {
     const result = await uploadBanner(file)
@@ -556,7 +558,7 @@ async function handleBannerChange(e) {
     }
   } catch (err) {
     console.error('[Profile] 背景图上传失败:', err)
-    toast('背景图上传失败，请重试')
+    toast(translateUi('uiMessages.m329d0c7dd1fc'))
   } finally {
     bannerUploading.value = false
     if (bannerInputRef.value) bannerInputRef.value.value = ''
@@ -585,7 +587,7 @@ async function saveBio() {
     }
   } catch (err) {
     console.error('[Profile] 保存简介失败:', err)
-    toast('保存失败，请重试')
+    toast(translateUi('user.saveFailed'))
   } finally {
     bioSaving.value = false
   }
@@ -607,7 +609,7 @@ function normalizeWorkAuthor(work) {
 // Load profile
 async function loadProfile() {
   const userId = route.params.userId
-  if (!userId) { profile.value = null; profileError.value = '缺少作者信息'; return }
+  if (!userId) { profile.value = null; profileError.value = translateUi('uiMessages.mbffa83e7e0c2'); return }
   profileLoading.value = true
   profileError.value = ''
   try {
@@ -616,7 +618,7 @@ async function loadProfile() {
   } catch (error) {
     console.error('[Profile] 加载作者信息失败:', error)
     profile.value = null
-    profileError.value = error?.message || '加载作者信息失败'
+    profileError.value = error?.message || translateUi('uiMessages.m8b7616cfe587')
   } finally {
     profileLoading.value = false
   }
@@ -653,7 +655,7 @@ async function loadWorks(reset = false) {
     worksPage.value = currentPage + 1
   } catch (error) {
     console.error('[Profile] 加载作品失败:', error)
-    worksError.value = error?.message || '加载作品失败'
+    worksError.value = error?.message || translateUi('uiMessages.m372e7cb639af')
   } finally {
     worksLoading.value = false
   }
@@ -714,11 +716,11 @@ async function loadFavorites(reset = false) {
 const currentUserId = computed(() => String(localStorage.getItem('user_id') || localStorage.getItem('userId') || ''))
 
 function normalizeConversationPeer(conversation) {
-  if (!conversation) return { userId: '', name: '未知用户', avatar: '', initial: '?' }
+  if (!conversation) return { userId: '', name: translateUi('uiMessages.m1ac13841ba2e'), avatar: '', initial: '?' }
   const rawPeer = conversation.peer || conversation.partner || conversation.target_user || conversation.user || null
   const participants = Array.isArray(conversation.participants) ? conversation.participants : []
   const peerFromParticipants = participants.find(item => String(item?.id || item?.user_id) !== currentUserId.value)
-  const fallbackName = conversation.peer_name || conversation.partner_username || conversation.target_username || conversation.username || conversation.title || '未知用户'
+  const fallbackName = conversation.peer_name || conversation.partner_username || conversation.target_username || conversation.username || conversation.title || translateUi('uiMessages.m1ac13841ba2e')
   const name = rawPeer?.username || rawPeer?.name || peerFromParticipants?.username || peerFromParticipants?.name || fallbackName
   const avatar = rawPeer?.avatar_url || rawPeer?.avatar || peerFromParticipants?.avatar_url || peerFromParticipants?.avatar || conversation.peer_avatar || conversation.partner_avatar_url || conversation.target_avatar || ''
   const userId = String(rawPeer?.id || rawPeer?.user_id || peerFromParticipants?.id || peerFromParticipants?.user_id || conversation.peer_user_id || conversation.partner_id || conversation.target_user_id || '')
@@ -732,10 +734,10 @@ function formatMessageTime(value) {
   const now = new Date()
   const diffMs = now - date
   const diffMins = Math.floor(diffMs / 60000)
-  if (diffMins < 1) return '刚刚'
-  if (diffMins < 60) return `${diffMins}分钟前`
+  if (diffMins < 1) return translateUi('time.justNow')
+  if (diffMins < 60) return translateUi('uiMessages.mab2c53a24038', { value1: (diffMins) })
   const diffHours = Math.floor(diffMins / 60)
-  if (diffHours < 24) return `${diffHours}小时前`
+  if (diffHours < 24) return translateUi('uiMessages.maff25df598e8', { value1: (diffHours) })
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   const hours = String(date.getHours()).padStart(2, '0')
@@ -824,9 +826,9 @@ async function handleLike(work) {
 async function handleShare() {
   try {
     await navigator.clipboard.writeText(window.location.href)
-    toast('链接已复制到剪贴板')
+    toast(translateUi('uiMessages.m2f7602ddf50b'))
   } catch {
-    toast('复制失败，请手动复制链接')
+    toast(translateUi('uiMessages.m9820487db9ba'))
   }
 }
 

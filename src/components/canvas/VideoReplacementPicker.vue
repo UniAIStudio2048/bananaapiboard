@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { Check, Film, FolderOpen, History, X } from '@lucide/vue'
 import { getAssets } from '@/api/canvas/assets'
@@ -26,7 +28,7 @@ function normalizeVideoSources(rows, source) {
   return (Array.isArray(rows) ? rows : [])
     .filter(item => item?.type === 'video' && typeof item.url === 'string' && item.url.trim() && item.url !== 'null' &&
       (source !== 'history' || !item.status || ['completed', 'success', 'succeeded'].includes(String(item.status).toLowerCase())))
-    .map(item => ({ ...item, source, url: item.url.trim(), name: item.name || item.title || '视频', posterFailed: false, previewFailed: false }))
+    .map(item => ({ ...item, source, url: item.url.trim(), name: item.name || item.title || translateUi('canvas.nodeConfig.videoInput.label'), posterFailed: false, previewFailed: false }))
 }
 
 async function loadSource(nextPage = 1) {
@@ -54,7 +56,7 @@ async function loadSource(nextPage = 1) {
   } catch (error) {
     if (currentRequest !== requestId) return
     items.value = []
-    errorMessage.value = error?.message || '素材加载失败，请重试'
+    errorMessage.value = error?.message || translateUi('uiMessages.m424178a364e9')
   } finally {
     if (currentRequest === requestId) loading.value = false
   }
@@ -99,21 +101,21 @@ onUnmounted(() => { requestId++ })
 <template>
   <Teleport to="body">
     <div class="video-replacement-overlay" @click.self="!busy && emit('close')" @keydown="handleKeydown">
-      <section class="video-replacement-dialog" role="dialog" aria-modal="true" aria-label="选择视频素材">
+      <section class="video-replacement-dialog" role="dialog" aria-modal="true" :aria-label="translateUi('uiMessages.m700dc567a1c2')">
         <aside class="replacement-sidebar">
-          <div class="replacement-heading">素材库</div>
-          <button type="button" :class="{ active: activeSource === 'history' }" :disabled="busy" @click="switchSource('history')"><History :size="16" />生成历史</button>
-          <button type="button" :class="{ active: activeSource === 'asset' }" :disabled="busy" @click="switchSource('asset')"><FolderOpen :size="16" />我的资产</button>
+          <div class="replacement-heading">{{ translateUi('uiMessages.m89e906481e9f') }}</div>
+          <button type="button" :class="{ active: activeSource === 'history' }" :disabled="busy" @click="switchSource('history')"><History :size="16" />{{ translateUi('uiMessages.m4a8255fdfa4d') }}</button>
+          <button type="button" :class="{ active: activeSource === 'asset' }" :disabled="busy" @click="switchSource('asset')"><FolderOpen :size="16" />{{ translateUi('canvas.assetPanel.title') }}</button>
         </aside>
         <div class="replacement-content">
           <header>
-            <div><strong>{{ activeSource === 'history' ? '生成历史' : '我的资产' }}</strong><span>视频</span></div>
-            <button ref="closeButton" type="button" class="replacement-close" aria-label="关闭素材选择" :disabled="busy" @click="emit('close')"><X :size="18" /></button>
+            <div><strong>{{ activeSource === 'history' ? translateUi('uiMessages.m4a8255fdfa4d') : translateUi('canvas.assetPanel.title') }}</strong><span>{{ translateUi('canvas.nodes.video') }}</span></div>
+            <button ref="closeButton" type="button" class="replacement-close" :aria-label="translateUi('uiMessages.mac625de7bc2f')" :disabled="busy" @click="emit('close')"><X :size="18" /></button>
           </header>
           <div class="replacement-list nowheel" @wheel.stop>
-            <div v-if="loading" class="replacement-state">正在加载视频…</div>
-            <div v-else-if="errorMessage" class="replacement-state"><span>{{ errorMessage }}</span><button type="button" @click="loadSource(page)">重试</button></div>
-            <div v-else-if="!items.length" class="replacement-state">暂无可用视频</div>
+            <div v-if="loading" class="replacement-state">{{ translateUi('uiMessages.m5925013f934a') }}</div>
+            <div v-else-if="errorMessage" class="replacement-state"><span>{{ errorMessage }}</span><button type="button" @click="loadSource(page)">{{ translateUi('common.retry') }}</button></div>
+            <div v-else-if="!items.length" class="replacement-state">{{ translateUi('uiMessages.ma2f5f182d73b') }}</div>
             <div v-else class="replacement-grid">
               <button v-for="item in items" :key="item.id || item.url" type="button" class="replacement-item" :class="{ selected: selected === item }" :aria-pressed="selected === item" :disabled="busy" @click="selected = item">
                 <span class="replacement-thumbnail">
@@ -128,13 +130,13 @@ onUnmounted(() => { requestId++ })
           </div>
           <footer>
             <div v-if="page > 1 || hasNextPage" class="replacement-pages">
-              <button type="button" :disabled="page <= 1 || loading || busy" @click="changePage(page - 1)">上一页</button>
+              <button type="button" :disabled="page <= 1 || loading || busy" @click="changePage(page - 1)">{{ translateUi('uiMessages.mc9b9ae7a6144') }}</button>
               <span>{{ page }}</span>
-              <button type="button" :disabled="!hasNextPage || loading || busy" @click="changePage(page + 1)">下一页</button>
+              <button type="button" :disabled="!hasNextPage || loading || busy" @click="changePage(page + 1)">{{ translateUi('uiMessages.m8a8542f69648') }}</button>
             </div>
             <span v-else class="replacement-footer-spacer"></span>
-            <button type="button" :disabled="busy" @click="emit('close')">取消</button>
-            <button type="button" class="replacement-confirm" :disabled="!selected || busy" @click="emit('select', selected)">{{ busy ? '替换中…' : '确认选择' }}</button>
+            <button type="button" :disabled="busy" @click="emit('close')">{{ translateUi('common.cancel') }}</button>
+            <button type="button" class="replacement-confirm" :disabled="!selected || busy" @click="emit('select', selected)">{{ busy ? translateUi('uiMessages.m87fcf3b8eb6d') : translateUi('uiMessages.m2c8691449787') }}</button>
           </footer>
         </div>
       </section>

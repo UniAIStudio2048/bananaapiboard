@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../i18n/index.js'
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 
 function headers() {
@@ -7,7 +8,7 @@ function headers() {
 export async function getVideoAnalysisConfig() {
   const response = await fetch(getApiUrl('/api/video-tools/analysis/config'), { headers: headers(), signal: AbortSignal.timeout(15000) })
   const data = await response.json()
-  if (!response.ok) throw new Error(data.message || '视频解析配置加载失败')
+  if (!response.ok) throw new Error(data.message || translateUi('uiMessages.m68456465c8a0'))
   return data
 }
 export async function waitForVideoAnalysisTask(taskId, { onUpdate, signal, pollIntervalMs = 1000 } = {}) {
@@ -17,9 +18,9 @@ export async function waitForVideoAnalysisTask(taskId, { onUpdate, signal, pollI
     const response = await fetch(getApiUrl(`/api/video-tools/analysis/tasks/${encodeURIComponent(taskId)}`), { headers: headers(), signal: requestSignal })
     const data = await response.json()
     if (data.node && data.edge) onUpdate?.(data)
-    if (!response.ok || data.error || data.status === 'failed') throw new Error(data.message || '视频解析失败')
+    if (!response.ok || data.error || data.status === 'failed') throw new Error(data.message || translateUi('uiMessages.m66de99e87520'))
     if (data.success && data.node && data.edge) return data
-    if (data.status !== 'processing') throw new Error('视频解析状态无效')
+    if (data.status !== 'processing') throw new Error(translateUi('uiMessages.me2e541405d4d'))
     await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
     requestSignal.throwIfAborted()
   }
@@ -31,7 +32,7 @@ export async function analyzeVideoNode(payload, { onUpdate } = {}) {
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
     if (error.node && error.edge) onUpdate?.(error)
-    throw new Error(error.message || '视频解析失败')
+    throw new Error(error.message || translateUi('uiMessages.m66de99e87520'))
   }
   if (!(response.headers.get('content-type') || '').includes('text/event-stream')) {
     const data = await response.json()
@@ -39,7 +40,7 @@ export async function analyzeVideoNode(payload, { onUpdate } = {}) {
       onUpdate?.(data)
       return waitForVideoAnalysisTask(data.taskId, { onUpdate })
     }
-    if (!data.success || !data.node || !data.edge) throw new Error(data.message || '视频解析未完成')
+    if (!data.success || !data.node || !data.edge) throw new Error(data.message || translateUi('uiMessages.mdf5915791b08'))
     return data
   }
   const reader = response.body.getReader(), decoder = new TextDecoder()
@@ -58,12 +59,12 @@ export async function analyzeVideoNode(payload, { onUpdate } = {}) {
         const data = JSON.parse(text)
         if (data.node && data.edge && !data.success) onUpdate?.(data)
         if (data.status === 'processing' && !data.error && data.node && data.edge) continue
-        if (data.error || (data.status && !data.success)) throw new Error(data.message || '视频解析失败')
+        if (data.error || (data.status && !data.success)) throw new Error(data.message || translateUi('uiMessages.m66de99e87520'))
         if (data.success && data.node && data.edge) result = data
       }
       if (done) break
     }
   } finally { reader.releaseLock() }
-  if (!result) throw new Error('视频解析未完成，请刷新画布查看结果后再重试')
+  if (!result) throw new Error(translateUi('uiMessages.me80e7954f238'))
   return result
 }

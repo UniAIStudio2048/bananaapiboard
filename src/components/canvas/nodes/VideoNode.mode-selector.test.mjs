@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
@@ -101,8 +102,8 @@ test('Wan3 file and link modes have independent persistent inputs and request fi
 })
 
 test('Wan3 rejects files or links mixed with frame and reference inputs', () => {
-  assert.match(source, /万相 3\.0 文件和网页链接不能同时使用/)
-  assert.match(source, /万相 3\.0 文件或网页链接不能与首尾帧、参考素材同时使用/)
+  assert.match(source, localizedPattern(/万相 3\.0 文件和网页链接不能同时使用/))
+  assert.match(source, localizedPattern(/万相 3\.0 文件或网页链接不能与首尾帧、参考素材同时使用/))
 })
 
 test('Wan3 attachment popover closes when prompt input regains interaction', () => {

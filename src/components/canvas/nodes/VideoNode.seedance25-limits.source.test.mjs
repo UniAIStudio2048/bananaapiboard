@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -23,7 +24,7 @@ test('VideoNode uses a 2.5 total video cap separate from the per-video cap', () 
 test('VideoNode applies the 2.5 30-second audio duration contract', () => {
   assert.match(source, /maxAudioDuration = seedance2Limits\.value\.maxReferenceMediaDuration \|\| 15/)
   assert.match(source, /totalAudioCap = seedance2Limits\.value\.maxTotalReferenceMediaDuration/)
-  assert.match(source, /总时长不超过 \$\{totalAudioCap\} 秒/)
+  assert.match(source, /translateUi\('uiMessages\.m24820cbac48e', \{ value1: \(Math\.round\(totalAudioDuration\)\), value2: \(totalAudioCap\) \}\)/)
 })
 
 test('VideoNode locks Seedance 2.5 special submodes to adaptive ratio and validates their prompts', () => {
@@ -52,5 +53,5 @@ test('VideoNode locks Seedance 2.5 video edit duration to the ten-second Auto pr
   const durationOptionsSource = source.slice(durationOptionsStart, durationOptionsStart + 900)
 
   assert.match(durationOptionsSource, /selectedSeedance2Mode\.value === 'video_edit'/)
-  assert.match(durationOptionsSource, /return \[\{ value: '-1', label: '自动' \}\]/)
+  assert.match(durationOptionsSource, localizedPattern(/return \[\{ value: '-1', label: '自动' \}\]/))
 })

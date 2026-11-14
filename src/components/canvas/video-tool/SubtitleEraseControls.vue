@@ -1,20 +1,22 @@
 <template>
   <label class="subtitle-erase-controls">
-    <span>擦除模式</span>
+    <span>{{ translateUi('uiMessages.m730eff0a1b31') }}</span>
     <select :value="mode" @change="$emit('update:mode', $event.target.value)">
-      <optgroup label="字幕擦除">
-        <option value="subtitle_all_area">全域智能擦除</option>
-        <option value="subtitle_sel_area">选区擦除</option>
+      <optgroup :label="translateUi('user.ledgerType.subtitle_erase')">
+        <option value="subtitle_all_area">{{ translateUi('uiMessages.m94ecd6ccc205') }}</option>
+        <option value="subtitle_sel_area">{{ translateUi('uiMessages.m3aac65393e9d') }}</option>
       </optgroup>
-      <optgroup label="高级水印/字幕擦除">
-        <option value="watermark_all_area">全域水印/字幕擦除</option>
-        <option value="watermark_sel_area">选区水印/字幕擦除</option>
+      <optgroup :label="translateUi('uiMessages.mb47b5d585533')">
+        <option value="watermark_all_area">{{ translateUi('uiMessages.m38c8454ea9c7') }}</option>
+        <option value="watermark_sel_area">{{ translateUi('uiMessages.mdc389c05c626') }}</option>
       </optgroup>
     </select>
   </label>
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 defineProps({
   mode: {
     type: String,

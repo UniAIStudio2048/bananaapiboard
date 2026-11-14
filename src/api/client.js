@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { logApiRequest, logApiResponse, logApiError, logAuth, logUserAction } from '@/utils/logger'
 import { createPromptSafetyError } from '@/utils/promptSafetyError'
@@ -431,7 +432,7 @@ export function buildVideoDownloadUrl(url, filename) {
  * 用于用户点击下载按钮的场景，避免前端先 fetch 完整文件导致大图长时间无响应。
  */
 export function startStreamDownload(url, filename) {
-  if (!url) throw new Error('下载 URL 为空')
+  if (!url) throw new Error(translateUi('uiMessages.m392b25286fe5'))
 
   const correctedFilename = correctFilenameExtension(filename || 'download', url)
   let cleanUrl = getQiniuOriginalUrl(url)
@@ -643,7 +644,7 @@ export async function apiRequest(path, options = {}) {
  * @returns {Promise<void>}
  */
 export async function smartDownload(url, filename) {
-  if (!url) throw new Error('下载 URL 为空')
+  if (!url) throw new Error(translateUi('uiMessages.m392b25286fe5'))
 
   if (typeof document !== 'undefined') {
     startStreamDownload(url, filename)
@@ -667,12 +668,12 @@ export async function smartDownload(url, filename) {
     const contentType = response.headers.get('content-type') || ''
     if (contentType.includes('application/json')) {
       const text = await response.text()
-      throw new Error(`服务端返回错误: ${text.substring(0, 200)}`)
+      throw new Error(translateUi('uiMessages.mfda34ecf7c5d', { value1: (text.substring(0, 200)) }))
     }
     const expectedLen = parseInt(response.headers.get('content-length'), 10)
     const blob = await response.blob()
     if (expectedLen > 0 && blob.size < expectedLen * 0.95) {
-      throw new Error(`下载不完整: 预期 ${expectedLen} 字节, 实际 ${blob.size} 字节`)
+      throw new Error(translateUi('uiMessages.m29aa99514af8', { value1: (expectedLen), value2: (blob.size) }))
     }
     if (isMediaFile && blob.size < MIN_IMAGE_SIZE && blob.size > 0) {
       console.warn(`[smartDownload] blob 异常小 (${blob.size}B), 可能不是原始文件`)
@@ -930,7 +931,7 @@ export async function downloadWithAuth(downloadUrl, filename) {
     })
     
     if (!response.ok) {
-      throw new Error(`下载失败: ${response.status} ${response.statusText}`)
+      throw new Error(translateUi('uiMessages.m35ed3b264ab0', { value1: (response.status), value2: (response.statusText) }))
     }
     
     // 获取文件 blob

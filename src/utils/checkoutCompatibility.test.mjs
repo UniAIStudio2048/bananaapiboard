@@ -1,12 +1,13 @@
+import { t as translateUi } from '../i18n/index.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { webcrypto } from 'node:crypto'
-const source = readFileSync(new URL('./checkoutController.js', import.meta.url), 'utf8').replace('export function', 'function')
+const source = readFileSync(new URL('./checkoutController.js', import.meta.url), 'utf8').replace(/^import .*\n/gm, '').replace('export function', 'function')
 function fixture(crypto, overrides = {}) {
   const keys = [], orderKeys = []; let fail = true
-  const create = runInNewContext(`Array.prototype.at = undefined;\n${source}\ncreateCheckoutController`, { crypto, AbortController, Uint8Array })
+  const create = runInNewContext(`Array.prototype.at = undefined;\n${source}\ncreateCheckoutController`, { crypto, AbortController, Uint8Array, translateUi })
   const controller = create({ api: {
     methods: async () => [{ id: 1 }],
     create: async (_input, key) => { orderKeys.push(key); if (fail) { fail = false; throw new Error('offline') } return { id: 'order' } },

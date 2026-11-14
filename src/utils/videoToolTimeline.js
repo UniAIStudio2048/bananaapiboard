@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 function normalizeNumber(value, name) {
   const n = Number(value)
   if (!Number.isFinite(n) || n < 0) {
@@ -90,7 +91,7 @@ export function getSplitDisabledReason(clips, selectedClipId, time, action) {
 }
 
 export function splitTimelineClip(clips, selectedClipId, time, action) {
-  if (!['split', 'left', 'right'].includes(action)) throw new Error('未知分割操作')
+  if (!['split', 'left', 'right'].includes(action)) throw new Error(translateUi('uiMessages.m4ff1ae762a6b'))
   const reason = getSplitDisabledReason(clips, selectedClipId, time, action)
   if (reason) throw new Error(reason)
   const index = clips.findIndex(clip => clip.id === selectedClipId)
@@ -113,7 +114,7 @@ export function splitTimelineClip(clips, selectedClipId, time, action) {
 
 export function selectedExportClips(clips, selectedClipId) {
   const clip = clips.find(entry => entry.id === selectedClipId)
-  if (!clip) throw new Error('请先选择要导出的片段')
+  if (!clip) throw new Error(translateUi('uiMessages.madd14fcfd4d3'))
   return normalizeTimelineClips([JSON.parse(JSON.stringify(clip))])
 }
 

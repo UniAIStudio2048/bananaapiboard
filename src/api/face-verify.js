@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 /**
  * H5 真人认证 API
  * 用于用户侧发起和查询真人扫脸认证
@@ -43,7 +44,7 @@ export async function requestFaceVerifyToken(params = {}) {
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '获取认证Token失败')
+    throw new Error(error.error || translateUi('uiMessages.maf0721db93bf'))
   }
   return response.json()
 }
@@ -62,7 +63,7 @@ export async function queryFaceVerifyResult(bytedToken) {
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '查询认证结果失败')
+    throw new Error(error.error || translateUi('uiMessages.m7ffae6ec22b0'))
   }
   return response.json()
 }

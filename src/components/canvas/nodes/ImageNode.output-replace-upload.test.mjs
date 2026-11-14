@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -13,8 +14,8 @@ test('generated output preview exposes an icon-only replace upload button', () =
   const outputPreview = outputPreviewMatch[0]
 
   assert.match(outputPreview, /class="[^"]*\breplace-output-image-btn\b[^"]*"/)
-  assert.match(outputPreview, /title="替换图片"/)
-  assert.match(outputPreview, /aria-label="替换图片"/)
+  assert.match(outputPreview, localizedPattern(/title="替换图片"/))
+  assert.match(outputPreview, localizedPattern(/aria-label="替换图片"/))
   assert.match(outputPreview, /@click\.stop="triggerReplaceOutputUpload"/)
 })
 
@@ -26,8 +27,8 @@ test('generated output preview exposes an icon-only full preview button', () => 
   const outputPreview = outputPreviewMatch[0]
 
   assert.match(outputPreview, /class="[^"]*\bpreview-output-image-btn\b[^"]*"/)
-  assert.match(outputPreview, /title="全图预览"/)
-  assert.match(outputPreview, /aria-label="全图预览"/)
+  assert.match(outputPreview, localizedPattern(/title="全图预览"/))
+  assert.match(outputPreview, localizedPattern(/aria-label="全图预览"/))
   assert.match(outputPreview, /@click\.stop="handleToolbarPreview"/)
 })
 

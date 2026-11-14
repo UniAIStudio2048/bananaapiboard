@@ -1,3 +1,4 @@
+import { uiTextIndex } from '../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -17,7 +18,7 @@ assert.ok(dragHandler, 'CanvasBoard should contain the node drag handler')
 
 const handlerSource = dragHandler[0]
 const firstSchedule = handlerSource.indexOf('scheduleActiveEdgePathsRead()')
-const throttledReturn = handlerSource.indexOf('return // 跳过这次计算')
+const throttledReturn = uiTextIndex(handlerSource, 'return // 跳过这次计算')
 
 assert.ok(firstSchedule > -1, 'node drag should schedule active edge flow refresh')
 assert.ok(throttledReturn > -1, 'node drag should keep the large-canvas alignment throttle')

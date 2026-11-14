@@ -6,7 +6,7 @@
     :disabled="disabled || loading"
     @click="handleClick"
   >
-    <span v-if="loading">处理中...</span>
+    <span v-if="loading">{{ translateUi('common.processing') }}</span>
     <template v-else>
       <svg v-if="isMutual" :class="iconClass" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5V9H2v11h5m10 0v-4a3 3 0 00-3-3H10a3 3 0 00-3 3v4m10 0H7m10 0h1m-11 0H6m6-12a3 3 0 110 6 3 3 0 010-6z" />
@@ -23,6 +23,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, ref } from 'vue'
 import { toggleFollow } from '@/api/community'
 
@@ -51,9 +53,9 @@ const iconClass = computed(() => {
 })
 
 const buttonText = computed(() => {
-  if (isMutual.value) return '互相关注'
-  if (isFollowing.value) return '已关注'
-  return '关注'
+  if (isMutual.value) return translateUi('uiMessages.m3cf06d8994a8')
+  if (isFollowing.value) return translateUi('uiMessages.m9fe1d0c9cca3')
+  return translateUi('uiMessages.meb137dee4c0a')
 })
 
 const buttonClass = computed(() => {

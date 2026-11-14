@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -13,7 +14,7 @@ test('audio model selector uses a single grouped dropdown', () => {
 
 test('audio prompt area includes a reference audio add entry', () => {
   assert.match(source, /class="audio-reference-section"/)
-  assert.match(source, />参考音频</)
+  assert.match(source, localizedPattern(/>参考音频</))
   assert.match(source, /class="audio-reference-add[^\"]*"[\s\S]*handleAddLeftClick/)
 })
 

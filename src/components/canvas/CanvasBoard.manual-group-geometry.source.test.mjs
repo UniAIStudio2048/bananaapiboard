@@ -1,3 +1,4 @@
+import { uiTextIndex } from '../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -21,7 +22,7 @@ test('manual grouping forwards the current Vue Flow selected-node geometry', () 
 test('visible group creation resolves optional live geometry before calculating bounds', () => {
   const source = storeSource.slice(
     storeSource.indexOf('function createVisibleGroup('),
-    storeSource.indexOf('/**\n   * 解散编组')
+    uiTextIndex(storeSource, '/**\n   * 解散编组')
   )
 
   assert.match(storeSource, /resolveVisibleGroupGeometryNodes/)

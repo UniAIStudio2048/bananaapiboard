@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 /**
  * 「立即插入」可见性测试（2026-08-20 II）：
  * 点击「立即插入」后，消息内容必须立即进入聊天区显示（用户气泡 + 助手思考占位），
@@ -17,7 +18,7 @@ const panel = await readFile(join(__dirname, 'AIAssistantPanel.vue'), 'utf8')
 const queueBar = await readFile(join(__dirname, 'AgentQueueBar.vue'), 'utf8')
 
 test('forceInsertQueuedMessage 回合运行中分支：置顶后立即把消息对推入聊天区并从队列条隐藏', () => {
-  const block = panel.match(/async function forceInsertQueuedMessage\(queued\)[\s\S]*?\n\}\n\n\/\/ 删除队列中未 dispatch 的消息/)?.[0]
+  const block = panel.match(localizedPattern(/async function forceInsertQueuedMessage\(queued\)[\s\S]*?\n\}\n\n\/\/ 删除队列中未 dispatch 的消息/))?.[0]
   assert.ok(block, 'forceInsertQueuedMessage block must exist')
   // 置顶走 PATCH 优先级接口，不打断当前回合
   assert.match(block, /promoteQueuedCodexMessage\(currentCodexThreadId\.value, queued\.turn_id\)/)
@@ -58,8 +59,8 @@ test('stopCurrentActivity 收尾已删除置顶回合的占位气泡（不留永
 })
 
 test('AgentQueueBar 不再显示「本轮后立即发送」等待标签；插入按钮对可见排队项始终渲染', () => {
-  assert.doesNotMatch(queueBar, /本轮后立即发送/)
-  const insertButton = queueBar.match(/<button[\s\S]*?aria-label="立即插入这条消息"[\s\S]*?<\/button>/)?.[0]
+  assert.doesNotMatch(queueBar, localizedPattern(/本轮后立即发送/))
+  const insertButton = queueBar.match(localizedPattern(/<button[\s\S]*?aria-label="立即插入这条消息"[\s\S]*?<\/button>/))?.[0]
   assert.ok(insertButton, 'insert button must exist')
   assert.doesNotMatch(insertButton, /v-if="!item\.priority"/)
 })

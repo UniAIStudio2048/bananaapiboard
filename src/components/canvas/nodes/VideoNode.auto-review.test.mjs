@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -55,8 +56,8 @@ test('switch saves user preferences before updating UI, preserves other habits a
 test('submission captures the toggle and sends its value to the backend', () => {
   assert.match(source, /autoReviewMaterials: autoReviewMaterials.value/)
   assert.match(source, /formData.append\('auto_review_materials', String\(capturedState.autoReviewMaterials\)\)/)
-  assert.match(source, /自动校验素材/)
-  assert.match(source, /高级设置/)
+  assert.match(source, localizedPattern(/自动校验素材/))
+  assert.match(source, localizedPattern(/高级设置/))
 })
 test('stars asset review toggle is enabled for Seedance 2.5 and pending providers keep the hint', () => {
   assert.match(source, /:disabled="savingAutoReview \|\| isGenerating \|\| !autoReviewConnected"/)

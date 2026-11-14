@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * PurchaseDialog.vue - 购买工作流确认弹窗
  */
@@ -78,7 +80,7 @@ async function handlePurchase() {
     emit('purchased', result)
     close()
   } catch (e) {
-    error.value = e.message || '购买失败，请重试'
+    error.value = e.message || translateUi('packages.purchaseFailed')
   } finally {
     loading.value = false
   }
@@ -97,11 +99,11 @@ async function handlePurchase() {
       <div class="relative w-full max-w-sm mx-4 bg-gray-900 rounded-2xl border border-white/10 shadow-2xl animate-[slideUp_0.3s_ease]">
         <!-- 头部 -->
         <div class="flex items-center justify-between px-6 py-4 border-b border-white/10">
-          <h2 class="text-lg font-semibold text-white">购买工作流</h2>
+          <h2 class="text-lg font-semibold text-white">{{ translateUi('uiMessages.m6ce9f8199b5b') }}</h2>
           <button
             class="w-8 h-8 flex items-center justify-center rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition"
             @click="close"
-            aria-label="关闭"
+            :aria-label="translateUi('common.close')"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
@@ -112,8 +114,8 @@ async function handlePurchase() {
           <div class="p-4 bg-white/5 rounded-xl mb-5">
             <p class="text-white font-medium text-sm mb-2">{{ work.title }}</p>
             <div class="flex items-center justify-between">
-              <span class="text-white/50 text-xs">价格</span>
-              <span class="text-white font-bold text-lg">{{ workPrice }} 积分</span>
+              <span class="text-white/50 text-xs">{{ translateUi('packages.price') }}</span>
+              <span class="text-white font-bold text-lg">{{ translateUi('uiMessages.md901f70479c8', { value1: (workPrice) }) }}</span>
             </div>
           </div>
 
@@ -121,23 +123,23 @@ async function handlePurchase() {
           <div class="p-3 bg-white/5 rounded-lg mb-4 space-y-2">
             <template v-if="loadingPoints">
               <div class="flex items-center justify-center py-1">
-                <span class="text-sm text-white/40">加载中...</span>
+                <span class="text-sm text-white/40">{{ translateUi('common.loading') }}</span>
               </div>
             </template>
             <template v-else>
               <div class="flex items-center justify-between">
-                <span class="text-sm text-white/60">套餐积分</span>
-                <span class="text-sm text-white/80">{{ packagePoints }} 积分</span>
+                <span class="text-sm text-white/60">{{ translateUi('imageGen.packagePoints') }}</span>
+                <span class="text-sm text-white/80">{{ translateUi('uiMessages.md901f70479c8', { value1: (packagePoints) }) }}</span>
               </div>
               <div class="flex items-center justify-between">
-                <span class="text-sm text-white/60">永久积分</span>
-                <span class="text-sm text-white/80">{{ permanentPoints }} 积分</span>
+                <span class="text-sm text-white/60">{{ translateUi('imageGen.permanentPoints') }}</span>
+                <span class="text-sm text-white/80">{{ translateUi('uiMessages.md901f70479c8', { value1: (permanentPoints) }) }}</span>
               </div>
               <div class="border-t border-white/10 pt-2">
                 <div class="flex items-center justify-between">
-                  <span class="text-sm text-white/80 font-medium">总可用</span>
+                  <span class="text-sm text-white/80 font-medium">{{ translateUi('uiMessages.m269bd32dcc9a') }}</span>
                   <span class="text-sm font-semibold" :class="canAfford ? 'text-white' : 'text-white/40'">
-                    {{ totalPoints }} 积分
+                    {{ translateUi('uiMessages.md901f70479c8', { value1: (totalPoints) }) }}
                   </span>
                 </div>
               </div>
@@ -146,17 +148,17 @@ async function handlePurchase() {
 
           <!-- 余额不足警告 -->
           <div v-if="!loadingPoints && !canAfford" class="p-3 mb-4 bg-white/5 border border-white/15 rounded-lg text-sm text-white/60">
-            总积分不足，还需 {{ workPrice - totalPoints }} 积分
+            {{ translateUi('uiMessages.m0ecfe5994ce2', { value1: (workPrice - totalPoints) }) }}
           </div>
 
           <!-- 服务费提示 -->
           <p class="text-xs text-white/40 mb-2">
-            平台将收取 {{ feePercent }}% 的服务费，作者实际到账 {{ authorIncome }} 积分
+            {{ translateUi('uiMessages.md0f7faebf1cc', { value1: (feePercent), value2: (authorIncome) }) }}
           </p>
 
           <!-- 积分扣除说明 -->
           <p class="text-xs text-white/30 mb-5">
-            购买后将优先扣除套餐积分，不足部分从永久积分扣除
+            {{ translateUi('uiMessages.mda3506311e0f') }}
           </p>
 
           <!-- 错误 -->
@@ -170,7 +172,7 @@ async function handlePurchase() {
               class="flex-1 py-2.5 bg-white/10 text-white/80 text-sm rounded-lg hover:bg-white/15 transition"
               @click="close"
               :disabled="loading"
-            >取消</button>
+            >{{ translateUi('common.cancel') }}</button>
             <button
               class="flex-1 py-2.5 bg-white text-neutral-900 text-sm font-medium rounded-lg hover:bg-neutral-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
               @click="handlePurchase"
@@ -178,9 +180,9 @@ async function handlePurchase() {
             >
               <span v-if="loading" class="inline-flex items-center justify-center">
                 <svg class="animate-spin -ml-1 mr-1.5 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>
-                购买中...
+                {{ translateUi('uiMessages.mde455183c1c3') }}
               </span>
-              <span v-else>确认购买</span>
+              <span v-else>{{ translateUi('packages.purchaseConfirm') }}</span>
             </button>
           </div>
         </div>

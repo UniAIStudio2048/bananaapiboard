@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -6,7 +7,7 @@ const source = readFileSync(new URL('./VoicePresetPicker.vue', import.meta.url),
 
 test('voice picker defaults to simplified Chinese', () => {
   assert.match(source, /const locale = ref\(isMiniMax\.value \|\| isFish\.value \? '' : 'zh-CN'\)/)
-  assert.match(source, /中文（简体）/)
+  assert.match(source, localizedPattern(/中文（简体）/))
 })
 
 test('voice picker paginates the list from the bottom', () => {
@@ -16,8 +17,8 @@ test('voice picker paginates the list from the bottom', () => {
   assert.match(source, /function getVisiblePageItems\(total, current\)/)
   assert.match(source, /item\.type === 'ellipsis'/)
   assert.match(source, /class="voice-picker-pagination"/)
-  assert.match(source, /上一页/)
-  assert.match(source, /下一页/)
+  assert.match(source, localizedPattern(/上一页/))
+  assert.match(source, localizedPattern(/下一页/))
 })
 
 test('voice picker shows each voice type description', () => {
@@ -51,11 +52,11 @@ test('MiniMax picker exposes clone controls only when the configured fixed price
   assert.match(source, /\/api\/audio\/minimax\/system-voices\?model=/)
   assert.match(source, /\?provider=minimax&_t=\$\{Date\.now\(\)\}/)
   assert.match(source, /const isMiniMaxCloneEnabled = computed\(\(\) => isMiniMax\.value && Number\.isFinite\(props\.clonePointsCost\)/)
-  assert.match(source, /v-if="\(!isMiniMax && !isFish\) \|\| isMiniMaxCloneEnabled \|\| isFishCloneEnabled"[^>]*>克隆新音色/)
+  assert.match(source, localizedPattern(/v-if="\(!isMiniMax && !isFish\) \|\| isMiniMaxCloneEnabled \|\| isFishCloneEnabled"[^>]*>克隆新音色/))
   assert.match(source, /accept="audio\/mpeg,audio\/mp4,audio\/wav,\.mp3,\.m4a,\.wav"/)
   assert.match(source, /\/api\/audio\/minimax\/voices\/clone/)
-  assert.match(source, /本次复刻将消耗/)
-  assert.match(source, /我确认拥有该声音的合法授权/)
+  assert.match(source, localizedPattern(/本次复刻将消耗/))
+  assert.match(source, localizedPattern(/我确认拥有该声音的合法授权/))
   assert.match(source, /v-if="!isMiniMax && !isFish" class="mine-upload"/)
   assert.match(source, /:disabled="!voice\.hasPreview && !isMiniMax && !isFish"/)
 })
@@ -77,8 +78,8 @@ test('Fish picker loads its voice library, permits voices without previews, and 
 })
 
 test('MiniMax clone checks file constraints and keeps the provider-required source format', () => {
-  assert.match(source, /复刻音频不能超过20MB/)
-  assert.match(source, /复刻音频时长需在10秒至5分钟之间/)
+  assert.match(source, localizedPattern(/复刻音频不能超过20MB/))
+  assert.match(source, localizedPattern(/复刻音频时长需在10秒至5分钟之间/))
   assert.match(source, /function getRecordingExtension\(mimeType = ''\)/)
   assert.match(source, /recording-\$\{Date\.now\(\)\}\$\{getRecordingExtension\(blob\.type\)\}/)
   assert.match(source, /if \(recordSeconds\.value >= 300\) stopRecording\(\)/)

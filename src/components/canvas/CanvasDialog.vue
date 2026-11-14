@@ -22,13 +22,13 @@
               class="dialog-btn dialog-btn-cancel"
               @click="handleCancel"
             >
-              {{ cancelText || '取消' }}
+              {{ cancelText || translateUi('common.cancel') }}
             </button>
             <button
               class="dialog-btn dialog-btn-confirm"
               @click="handleConfirm"
             >
-              {{ confirmText || '确定' }}
+              {{ confirmText || translateUi('common.ok') }}
             </button>
           </div>
         </div>
@@ -38,6 +38,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { defineProps, defineEmits } from 'vue'
 
 const props = defineProps({
@@ -64,11 +66,11 @@ const props = defineProps({
   },
   confirmText: {
     type: String,
-    default: '确定'
+    default: ''
   },
   cancelText: {
     type: String,
-    default: '取消'
+    default: ''
   }
 })
 

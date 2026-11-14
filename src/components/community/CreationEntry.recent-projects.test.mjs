@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
@@ -13,6 +14,6 @@ assert.match(source, /event\.preventDefault\(\)[\s\S]*element\.scrollLeft \+= ev
 assert.match(source, /function openAllProjects\(\)[\s\S]*router\.push\(['"]\/workflows['"]\)/, 'All projects should open the project management page')
 assert.match(source, /workflow_count[^\n]*> 0[\s\S]*query: \{ projectId \}/, 'Projects with workflows should open their project folder')
 assert.match(source, /path: ['"]\/canvas['"][\s\S]*query: \{ projectId \}/, 'Empty projects should open canvas with the project id')
-assert.match(source, /登录后查看最近项目/, 'Unauthenticated users should see a login prompt')
+assert.match(source, localizedPattern(/登录后查看最近项目/), 'Unauthenticated users should see a login prompt')
 
 console.log('CreationEntry recent project source tests passed')

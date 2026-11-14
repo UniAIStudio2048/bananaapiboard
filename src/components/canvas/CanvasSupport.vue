@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * CanvasSupport.vue - 画布模式客服按钮组件
  * 在画布右上角显示一个客服图标，点击可查看客服链接和二维码
@@ -40,7 +42,7 @@ async function loadSupportConfig() {
       if (helpLinks.show_support_in_canvas && (helpLinks.contact_support || helpLinks.contact_support_qr)) {
         supportConfig.value = {
           link: helpLinks.contact_support || '',
-          linkName: helpLinks.contact_support_name || '联系客服',
+          linkName: helpLinks.contact_support_name || translateUi('user.contactSupport'),
           qrImage: helpLinks.contact_support_qr || ''
         }
         isVisible.value = true
@@ -96,7 +98,7 @@ onUnmounted(() => {
       class="canvas-support-trigger"
       :class="{ 'theme-light': props.theme === 'light' }"
       @click.stop="togglePopup"
-      title="联系客服"
+      :title="translateUi('user.contactSupport')"
     >
       <!-- 客服图标 - 戴耳机的人物 -->
       <svg class="support-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -125,7 +127,7 @@ onUnmounted(() => {
               <!-- 麦克风 -->
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 19v2m0 0h-2m2 0h2" />
             </svg>
-            <span>客服支持</span>
+            <span>{{ translateUi('uiMessages.m414221385dfb') }}</span>
           </div>
           <button class="popup-close" @click="closePopup">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -149,9 +151,9 @@ onUnmounted(() => {
 
           <!-- 二维码区域 -->
           <div v-if="supportConfig?.qrImage" class="qr-code-section">
-            <div class="qr-code-label">扫码联系客服</div>
-            <img :src="supportConfig.qrImage" alt="客服二维码" class="qr-code-image" />
-            <p class="qr-code-tip">请使用微信扫描二维码</p>
+            <div class="qr-code-label">{{ translateUi('uiMessages.m2e8c4d83353d') }}</div>
+            <img :src="supportConfig.qrImage" :alt="translateUi('uiMessages.m32fddbbf37d9')" class="qr-code-image" />
+            <p class="qr-code-tip">{{ translateUi('uiMessages.m30e727236108') }}</p>
           </div>
         </div>
       </div>

@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 /**
  * 续聊参考图回归测试（audit AC-P1-08）。
  *
@@ -38,5 +39,5 @@ test('普通模式发送：同样不再自动合并历史参考图（AC-P1-08）
 test('附件-only：无文字但有附件时发送默认语义文本（AC-P2-01）', () => {
   const block = panel.match(/async function sendEnhancedMessage\(force = false\) \{[\s\S]*?\n  if \(!messageText\) return/)?.[0]
   assert.ok(block, 'sendEnhancedMessage head must exist')
-  assert.match(block, /inputText\.value\.trim\(\) \|\| \(attachments\.value\.length \? '请分析我附加的素材。' : ''\)/)
+  assert.match(block, localizedPattern(/inputText\.value\.trim\(\) \|\| \(attachments\.value\.length \? '请分析我附加的素材。' : ''\)/))
 })

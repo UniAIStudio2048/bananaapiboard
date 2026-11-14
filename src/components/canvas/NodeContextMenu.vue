@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * NodeContextMenu.vue - 节点右键菜单
  * 支持所有节点类型的"加入我的资产"功能
@@ -424,7 +426,7 @@ async function extractLastFrameToNode(nodeId, sourceVideoUrl) {
     canvasStore.updateNodeData(nodeId, {
       status: 'error',
       progress: '',
-      error: error.message || '截取视频尾帧失败'
+      error: error.message || translateUi('uiMessages.mb766b26e4837')
     })
   }
 }
@@ -434,7 +436,7 @@ function loadVideoDuration(sourceVideoUrl) {
     const video = document.createElement('video')
     const timeout = setTimeout(() => {
       cleanup()
-      reject(new Error('读取视频时长超时'))
+      reject(new Error(translateUi('uiMessages.mb391db5013d3')))
     }, 10000)
 
     function cleanup() {
@@ -452,12 +454,12 @@ function loadVideoDuration(sourceVideoUrl) {
       if (duration > 0) {
         resolve(duration)
       } else {
-        reject(new Error('无法读取视频时长'))
+        reject(new Error(translateUi('uiMessages.mfa308eefa87b')))
       }
     }
     video.onerror = () => {
       cleanup()
-      reject(new Error('读取视频时长失败'))
+      reject(new Error(translateUi('uiMessages.m1dcb7b2861cf')))
     }
     video.src = sourceVideoUrl
     video.load()
@@ -629,7 +631,7 @@ async function uploadToCloudForAsset(url, type = 'image') {
       })
       
       if (!response.ok) {
-        throw new Error(`获取文件失败: ${response.status}`)
+        throw new Error(translateUi('uiMessages.m21779287a048', { value1: (response.status) }))
       }
       
       blob = await response.blob()
@@ -648,7 +650,7 @@ async function uploadToCloudForAsset(url, type = 'image') {
       return urls[0]
     }
     
-    throw new Error('上传返回空 URL')
+    throw new Error(translateUi('uiMessages.mff46e2b3d326'))
   } catch (error) {
     console.error('[NodeContextMenu] 上传到云端失败:', error)
     throw error
@@ -693,17 +695,17 @@ async function addToMyAssets() {
   if (needsUpload) {
     // 异步上传模式：立即显示提示并关闭菜单，后台执行上传
     isAddingAsset.value = true
-    showToast('开始添加到资产库...', 'info')
+    showToast(translateUi('uiMessages.m70e0a332782f'), 'info')
     emit('close')
 
     // 后台异步执行上传和保存
     performAsyncUploadAndSave(assetData, contentUrl, type)
       .then(() => {
-        showToast(`${assetTypeName.value}已成功加入资产库`, 'success')
+        showToast(translateUi('uiMessages.m389684c5bc9a', { value1: (assetTypeName.value) }), 'success')
       })
       .catch((error) => {
         console.error('加入资产失败:', error)
-        showToast('添加失败：' + (error.message || '未知错误'), 'error')
+        showToast(translateUi('uiMessages.m2edd73b8b6f0') + (error.message || translateUi('canvas.unknownError')), 'error')
       })
       .finally(() => {
         isAddingAsset.value = false
@@ -721,13 +723,13 @@ async function addToMyAssets() {
 
       if (result && result.id) {
         notifyAssetsUpdated(result, assetData)
-        showToast(`${assetTypeName.value}已加入我的资产`, 'success')
+        showToast(translateUi('uiMessages.md98dc1571386', { value1: (assetTypeName.value) }), 'success')
       } else {
-        throw new Error(result?.error || '保存失败')
+        throw new Error(result?.error || translateUi('errors.saveFailed'))
       }
     } catch (error) {
       console.error('加入资产失败:', error)
-      showToast('保存失败：' + (error.message || '未知错误'), 'error')
+      showToast(translateUi('uiMessages.m6ade7baf8737') + (error.message || translateUi('canvas.unknownError')), 'error')
     } finally {
       isAddingAsset.value = false
       emit('close')
@@ -749,7 +751,7 @@ async function performAsyncUploadAndSave(assetData, contentUrl, type) {
     const result = await saveAsset(assetData)
 
     if (!result || !result.id) {
-      throw new Error(result?.error || '保存失败')
+      throw new Error(result?.error || translateUi('errors.saveFailed'))
     }
 
     notifyAssetsUpdated(result, assetData)
@@ -813,19 +815,19 @@ async function createDigitalHumanFromNode() {
   try {
     const channels = await getDigitalHumanChannels()
     const channel = channels.channels?.[0]
-    if (!channel) throw new Error('当前租户未配置可用的 HeyGen 渠道')
+    if (!channel) throw new Error(translateUi('uiMessages.m1b15ebf36b02'))
     const sourceUrl = await uploadToCloudForAsset(rawUrl, type)
     await createDigitalHuman({
-      name: String(props.node?.data?.title || `${type === 'video' ? '视频' : '图片'}数字人`).trim().slice(0, 255),
+      name: String(props.node?.data?.title || translateUi('uiMessages.m220c3035a792', { value1: (type === 'video' ? translateUi('canvas.nodeConfig.videoInput.label') : translateUi('canvas.nodeConfig.imageInput.label')) })).trim().slice(0, 255),
       kind: type === 'video' ? 'digital_twin' : 'photo_avatar',
       sourceUrl,
       channelId: channel.id
     })
-    showToast('HeyGen 数字人已创建，训练完成后会显示在资产库中', 'success')
+    showToast(translateUi('uiMessages.m7586a5036bc8'), 'success')
     emit('close')
   } catch (error) {
     console.error('[DigitalHuman] 从画布创建数字人失败:', error)
-    showToast(error.message || '创建 HeyGen 数字人失败', 'error')
+    showToast(error.message || translateUi('uiMessages.mfc3fc30e2542'), 'error')
   } finally {
     isCreatingDigitalHuman.value = false
   }
@@ -859,7 +861,7 @@ async function openSeedanceDialog() {
     const result = await listAssetGroups({ pageSize: 100 })
     activeProvider.value = result.activeProvider || ''
     if (!isImageNodeWithOutput.value && ['seedance_openapi_pro', 'bytefor'].includes(activeProvider.value)) {
-      showToast('当前素材渠道仅支持图片角色，不支持视频或音频', 'warning')
+      showToast(translateUi('uiMessages.m10870919e732'), 'warning')
       closeSeedanceDialog()
       return
     }
@@ -884,7 +886,7 @@ async function openByteforDialog() {
   activeProvider.value = 'bytefor'
   seedanceGroups.value = [{
     Id: 'seedance-openapi-pro-default',
-    Name: 'Bytefor 角色库'
+    Name: translateUi('uiMessages.mf896604477ed')
   }]
   showNewGroupInput.value = false
 
@@ -920,7 +922,7 @@ async function createNewGroupAndAsset() {
   
   const charName = characterName.value.trim()
   if (!charName) {
-    showToast('请输入角色名称', 'error')
+    showToast(translateUi('uiMessages.m089ccdbcd684'), 'error')
     characterNameRef.value?.focus()
     return
   }
@@ -930,28 +932,28 @@ async function createNewGroupAndAsset() {
   const sourceNode = props.node
   const providerType = activeProvider.value
   if (!url) {
-    showToast('未找到素材', 'error')
+    showToast(translateUi('uiMessages.m828878d11d15'), 'error')
     return
   }
 
   try {
     const groupResult = await createAssetGroup({ Name: groupNameVal, ProviderType: providerType })
     const groupId = groupResult.group?.Id || groupResult.Id
-    if (!groupId) throw new Error('创建分组返回数据异常')
+    if (!groupId) throw new Error(translateUi('uiMessages.mf84a3572a7a3'))
     
     closeSeedanceDialog()
-    showToast('已提交 Seedance 角色创建，后台处理中...', 'info')
+    showToast(translateUi('uiMessages.m2316ead0b5de'), 'info')
     createSeedanceCharacterAsync(groupId, url, charName, providerType, mediaAssetType, sourceNode)
   } catch (error) {
     console.error('[Seedance] 创建分组失败:', error)
-    showToast('创建分组失败：' + (error.message || '未知错误'), 'error')
+    showToast(translateUi('uiMessages.m8ba5c9944d0b') + (error.message || translateUi('canvas.unknownError')), 'error')
   }
 }
 
 function selectGroupAndCreate(groupId) {
   const charName = characterName.value.trim()
   if (!charName) {
-    showToast('请输入角色名称', 'error')
+    showToast(translateUi('uiMessages.m089ccdbcd684'), 'error')
     characterNameRef.value?.focus()
     return
   }
@@ -960,13 +962,13 @@ function selectGroupAndCreate(groupId) {
   const mediaAssetType = { image: 'Image', video: 'Video', audio: 'Audio' }[assetType.value]
   const sourceNode = props.node
   if (!url) {
-    showToast('未找到素材', 'error')
+    showToast(translateUi('uiMessages.m828878d11d15'), 'error')
     return
   }
 
   const providerType = activeProvider.value
   closeSeedanceDialog()
-  showToast('已提交 Seedance 角色创建，后台处理中...', 'info')
+  showToast(translateUi('uiMessages.m2316ead0b5de'), 'info')
   createSeedanceCharacterAsync(groupId, url, charName, providerType, mediaAssetType, sourceNode)
 }
 
@@ -996,7 +998,7 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name, providerType 
     })
     
     const assetId = assetResult.asset?.Id || assetResult.Id
-    if (!assetId) throw new Error('创建角色资产返回数据异常')
+    if (!assetId) throw new Error(translateUi('uiMessages.m3edb34b69d45'))
     const isOpenApiPro = providerType === 'seedance_openapi_pro' || providerType === 'bytefor'
     const faceCode = assetResult.asset?.FaceCode || assetResult.asset?.faceCode || assetResult.FaceCode || assetResult.faceCode || assetId
     const savedAssetUrl = isOpenApiPro ? `face:${faceCode}` : `asset://${assetId}`
@@ -1031,14 +1033,14 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name, providerType 
     }
 
     if (isOpenApiPro) {
-      showToast(isBytefor ? 'Bytefor 角色已提交审核' : 'Seedance 角色已提交审核', 'success')
+      showToast(isBytefor ? translateUi('uiMessages.m079edcc3056f') : translateUi('uiMessages.mffedd37b0b45'), 'success')
 
       const { position, size } = getSeedanceCharacterNodeLayout(sourceNode)
       canvasStore.addNode({
         type: isBytefor ? 'bytefor-character' : 'seedance-character',
         position,
         data: {
-          title: name || 'Seedance角色',
+          title: name || translateUi('uiMessages.mf75444a8035e'),
           assetId,
           assetUri: savedAssetUrl,
           assetUrl: url,
@@ -1093,7 +1095,7 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name, providerType 
       }
     }
     
-    showToast('Seedance 角色创建成功！', 'success')
+    showToast(translateUi('uiMessages.mfd47e4a3554c'), 'success')
 
     if (finalAsset.Status === 'Active') {
       const { position, size } = getSeedanceCharacterNodeLayout(sourceNode)
@@ -1105,7 +1107,7 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name, providerType 
         position,
         data: {
           ...buildSeedanceCharacterData({ ...finalAsset, Id: finalAsset.Id || assetId, AssetUri: finalAssetUri, URL: finalAsset.URL || url, AssetType: finalAsset.AssetType || mediaAssetType, Duration: finalAsset.Duration || sourceDuration, providerType }),
-          title: finalAsset.Name || name || 'Seedance角色',
+          title: finalAsset.Name || name || translateUi('uiMessages.mf75444a8035e'),
           assetId: finalAsset.Id || assetId,
           assetUri: finalAssetUri,
           assetUrl: finalAsset.URL || url,
@@ -1136,21 +1138,21 @@ async function createByteforCharacterAsync(groupId, rawUrl, name) {
 
 function getSeedanceCreateErrorMessage(error) {
   if (error?.category === 'timeout') {
-    return '角色创建请求超时：图片上传已完成，但渠道处理超时，请稍后重试或切换渠道。'
+    return translateUi('uiMessages.m8a87491f1c3e')
   }
   if (error?.category === 'network') {
-    return '角色创建网络连接失败：后端无法连接当前渠道，请检查渠道网络或切换渠道。'
+    return translateUi('uiMessages.ma0e72e2c6b44')
   }
   if (error?.category === 'non_json_response') {
-    return '角色创建返回了非 JSON 响应：可能是网关 502/504、代理异常或渠道页面错误。'
+    return translateUi('uiMessages.mfcb57b20c9bc')
   }
   if (error?.category === 'business_error') {
-    return `角色创建被渠道拒绝：${error.message || '上游返回业务错误'}`
+    return translateUi('uiMessages.me571b347a904', { value1: (error.message || translateUi('uiMessages.m3a2a446733bd')) })
   }
   if (error?.category === 'auth_error') {
-    return '角色创建认证失败：请检查当前渠道 API Key 或密钥配置。'
+    return translateUi('uiMessages.m27aaf245c136')
   }
-  if (error?.message?.includes('超时')) return t('canvas.characterTimeout')
+  if (error?.message?.includes(translateUi('uiMessages.me512cf016f96'))) return t('canvas.characterTimeout')
   return t('canvas.characterCreateFailed', { error: error?.message || t('canvas.unknownError') })
 }
 
@@ -1272,7 +1274,7 @@ function handleMenuClick(event) {
         @click="createDigitalHumanFromNode"
       >
         <span class="icon">✦</span>
-        {{ isCreatingDigitalHuman ? '创建中…' : '一键创建 HeyGen 数字人' }}
+        {{ isCreatingDigitalHuman ? translateUi('uiMessages.m56b63def0e29') : translateUi('uiMessages.mab6c274fb7d5') }}
       </div>
       
       <!-- 创建 Seedance 2.0 角色 -->
@@ -1282,7 +1284,7 @@ function handleMenuClick(event) {
         @click="openSeedanceDialog"
       >
         <span class="icon">👥</span>
-        创建 {{ seedanceCharacterLibraryName }} 2.0 角色
+        {{ translateUi('uiMessages.ma2023b995fc5', { value1: (seedanceCharacterLibraryName) }) }}
       </div>
 
       <!-- 创建 Bytefor 角色 -->
@@ -1291,8 +1293,8 @@ function handleMenuClick(event) {
         class="canvas-context-menu-item seedance-item"
         @click="openByteforDialog"
       >
-        <span class="icon">人</span>
-        创建 Bytefor 角色
+        <span class="icon">{{ translateUi('uiMessages.m50f5d65d5729') }}</span>
+        {{ translateUi('uiMessages.m13685cbe85d6') }}
       </div>
       
       <div class="canvas-context-menu-divider"></div>
@@ -1358,20 +1360,20 @@ function handleMenuClick(event) {
     <div v-if="showSeedanceDialog" class="seedance-dialog-overlay" @click="closeSeedanceDialog">
       <div class="seedance-dialog" @click.stop>
         <div class="seedance-dialog-header">
-          <span class="seedance-dialog-title">{{ isByteforProvider ? '创建 Bytefor 角色' : `创建 ${seedanceCharacterLibraryName} 2.0 角色` }}</span>
+          <span class="seedance-dialog-title">{{ isByteforProvider ? translateUi('uiMessages.m13685cbe85d6') : translateUi('uiMessages.ma2023b995fc5', { value1: (seedanceCharacterLibraryName) }) }}</span>
           <button class="seedance-dialog-close" @click="closeSeedanceDialog">✕</button>
         </div>
         
         <div class="seedance-dialog-body">
           <!-- 角色名称输入 -->
           <div class="seedance-name-section">
-            <div class="seedance-section-label">角色名称 <span class="seedance-required">*</span></div>
+            <div class="seedance-section-label">{{ translateUi('uiMessages.m519006fe536c') }} <span class="seedance-required">*</span></div>
             <input
               ref="characterNameRef"
               v-model="characterName"
               type="text"
               class="seedance-input seedance-name-input"
-              placeholder="输入角色名称"
+              :placeholder="translateUi('uiMessages.m1b6295fda569')"
             />
           </div>
           
@@ -1380,13 +1382,13 @@ function handleMenuClick(event) {
           <!-- 加载中 -->
           <div v-if="seedanceGroupsLoading" class="seedance-loading">
             <span class="seedance-spinner"></span>
-            <span>加载角色分组...</span>
+            <span>{{ translateUi('uiMessages.maca933a2170d') }}</span>
           </div>
           
           <template v-else>
             <!-- 有分组时显示列表 -->
             <div v-if="seedanceGroups.length > 0" class="seedance-groups">
-              <div class="seedance-section-label">选择角色分组</div>
+              <div class="seedance-section-label">{{ translateUi('uiMessages.mb325a2077809') }}</div>
               <div 
                 v-for="group in seedanceGroups" 
                 :key="group.Id"
@@ -1410,12 +1412,12 @@ function handleMenuClick(event) {
                 @click="toggleNewGroupInput"
               >
                 <span class="seedance-group-icon">＋</span>
-                <span class="seedance-group-name">创建新分组</span>
+                <span class="seedance-group-name">{{ translateUi('uiMessages.m9411e6f392ab') }}</span>
               </div>
               
               <div v-if="showNewGroupInput" class="seedance-new-group-form">
                 <div class="seedance-section-label">
-                  {{ seedanceGroups.length === 0 ? '暂无分组，请先创建' : '新分组名称' }}
+                  {{ seedanceGroups.length === 0 ? translateUi('uiMessages.m745628acab2a') : translateUi('uiMessages.m44ca101d5ff1') }}
                 </div>
                 <div class="seedance-input-row">
                   <input
@@ -1423,7 +1425,7 @@ function handleMenuClick(event) {
                     v-model="newGroupName"
                     type="text"
                     class="seedance-input"
-                    placeholder="输入分组名称"
+                    :placeholder="translateUi('uiMessages.m6621657b142d')"
                     @keyup.enter="createNewGroupAndAsset"
                   />
                   <button 
@@ -1431,7 +1433,7 @@ function handleMenuClick(event) {
                     :disabled="!newGroupName.trim() || !characterName.trim()"
                     @click="createNewGroupAndAsset"
                   >
-                    创建并添加
+                    {{ translateUi('uiMessages.m1cc9fca9c823') }}
                   </button>
                 </div>
               </div>

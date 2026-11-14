@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * KeyframeEditor.vue - 关键帧截取编辑器
  * 
@@ -104,7 +106,7 @@ async function captureCurrentFrame() {
 
 // 裁剪比例预设
 const cropPresets = [
-  { value: 'original', label: '原比例', ratio: null },
+  { value: 'original', get label() { return translateUi('uiMessages.mcaa9fd1b75e2') }, ratio: null },
   { value: '1:1', label: '1:1', ratio: 1 },
   { value: '16:9', label: '16:9', ratio: 16/9 },
   { value: '9:16', label: '9:16', ratio: 9/16 },
@@ -244,7 +246,7 @@ async function markKeyframe() {
     console.log('[KeyframeEditor] 添加关键帧:', currentTime.value, '总数:', keyframes.value.length)
   } catch (e) {
     console.error('[KeyframeEditor] 截取关键帧失败:', e.message)
-    alert(`无法截取关键帧：${e.message || '该视频来源暂不支持帧截取功能'}`)
+    alert(translateUi('uiMessages.m06c8c26125fb', { value1: (e.message || translateUi('uiMessages.m52ffb062d130')) }))
   }
 }
 
@@ -495,12 +497,12 @@ onUnmounted(() => {
         <!-- 标题栏 -->
         <div class="editor-header">
           <div class="header-left">
-            <h3>关键帧截取</h3>
-            <span class="header-hint">空格播放/暂停，M标记关键帧，Ctrl+Z撤销</span>
+            <h3>{{ translateUi('uiMessages.m570d8248b24c') }}</h3>
+            <span class="header-hint">{{ translateUi('uiMessages.m00fdff60cbc4') }}</span>
           </div>
           <div class="header-right">
             <span class="keyframe-count">{{ keyframes.length }} / {{ MAX_KEYFRAMES }}</span>
-            <button class="header-btn" @click="handleClose" title="关闭">
+            <button class="header-btn" @click="handleClose" :title="translateUi('common.close')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
@@ -565,8 +567,8 @@ onUnmounted(() => {
                 {{ preset.label }}
               </button>
               <div class="crop-actions">
-                <button class="crop-action-btn cancel" @click="exitCropMode">取消</button>
-                <button class="crop-action-btn confirm" @click="applyCrop">应用</button>
+                <button class="crop-action-btn cancel" @click="exitCropMode">{{ translateUi('common.cancel') }}</button>
+                <button class="crop-action-btn confirm" @click="applyCrop">{{ translateUi('directorStudio.inspector.apply') }}</button>
               </div>
             </div>
           </div>
@@ -574,7 +576,7 @@ onUnmounted(() => {
           <!-- 关键帧列表 -->
           <div class="keyframes-panel">
             <div class="panel-header">
-              <span>已标记的关键帧</span>
+              <span>{{ translateUi('uiMessages.m7148b3c4e16e') }}</span>
             </div>
             <div class="keyframes-list">
               <div 
@@ -584,15 +586,15 @@ onUnmounted(() => {
                 :class="{ selected: selectedKeyframeIndex === index }"
                 @click="selectKeyframe(index)"
               >
-                <img :src="kf.thumbnail" alt="关键帧" class="keyframe-thumbnail" />
+                <img :src="kf.thumbnail" :alt="translateUi('uiMessages.m178fd037ae24')" class="keyframe-thumbnail" />
                 <div class="keyframe-info">
                   <span class="keyframe-time">{{ formatTime(kf.time) }}</span>
-                  <span v-if="kf.cropArea" class="keyframe-cropped">已裁剪</span>
+                  <span v-if="kf.cropArea" class="keyframe-cropped">{{ translateUi('uiMessages.m2b65185a1b00') }}</span>
                 </div>
                 <div class="keyframe-actions">
                   <button 
                     class="kf-action-btn" 
-                    title="裁剪"
+                    :title="translateUi('uiMessages.m184506303bf5')"
                     @click.stop="selectKeyframe(index); enterCropMode()"
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -602,7 +604,7 @@ onUnmounted(() => {
                   </button>
                   <button 
                     class="kf-action-btn delete" 
-                    title="删除"
+                    :title="translateUi('common.delete')"
                     @click.stop="removeKeyframe(index)"
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -615,8 +617,8 @@ onUnmounted(() => {
               <!-- 空状态 -->
               <div v-if="keyframes.length === 0" class="keyframes-empty">
                 <div class="empty-icon">🎬</div>
-                <div class="empty-text">按 M 键标记关键帧</div>
-                <div class="empty-hint">最多可标记 {{ MAX_KEYFRAMES }} 个</div>
+                <div class="empty-text">{{ translateUi('uiMessages.m581b8525e8d2') }}</div>
+                <div class="empty-hint">{{ translateUi('uiMessages.m0227f0fe9538', { value1: (MAX_KEYFRAMES) }) }}</div>
               </div>
             </div>
           </div>
@@ -660,17 +662,17 @@ onUnmounted(() => {
           
           <!-- 控制按钮 -->
           <div class="timeline-controls">
-            <button class="control-btn" @click="seekStep(-1)" title="后退1秒">
+            <button class="control-btn" @click="seekStep(-1)" :title="translateUi('uiMessages.m81e19b919b86')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M11 19l-7-7 7-7M18 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </button>
-            <button class="control-btn" @click="seekStep(-0.1)" title="后退0.1秒">
+            <button class="control-btn" @click="seekStep(-0.1)" :title="translateUi('uiMessages.ma063f2bc067b')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M15 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </button>
-            <button class="control-btn play-pause" @click="togglePlay" :title="isPlaying ? '暂停' : '播放'">
+            <button class="control-btn play-pause" @click="togglePlay" :title="isPlaying ? translateUi('common.pause') : translateUi('uiMessages.mc3396195e91c')">
               <svg v-if="!isPlaying" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M8 5v14l11-7z"/>
               </svg>
@@ -679,33 +681,33 @@ onUnmounted(() => {
                 <rect x="14" y="4" width="4" height="16" rx="1"/>
               </svg>
             </button>
-            <button class="control-btn" @click="seekStep(0.1)" title="前进0.1秒">
+            <button class="control-btn" @click="seekStep(0.1)" :title="translateUi('uiMessages.ma14def3aa341')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </button>
-            <button class="control-btn" @click="seekStep(1)" title="前进1秒">
+            <button class="control-btn" @click="seekStep(1)" :title="translateUi('uiMessages.m8073485b319b')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M13 5l7 7-7 7M6 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </button>
             <div class="controls-divider"></div>
-            <button class="control-btn mark-btn" @click="markKeyframe" :disabled="keyframes.length >= MAX_KEYFRAMES" title="标记关键帧（M）">
+            <button class="control-btn mark-btn" @click="markKeyframe" :disabled="keyframes.length >= MAX_KEYFRAMES" :title="translateUi('uiMessages.mb5d7697e3a21')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
-              <span>标记</span>
+              <span>{{ translateUi('uiMessages.m269635727321') }}</span>
             </button>
-            <button class="control-btn undo-btn" @click="undo" :disabled="undoStack.length === 0" title="撤销（Ctrl+Z）">
+            <button class="control-btn undo-btn" @click="undo" :disabled="undoStack.length === 0" :title="translateUi('uiMessages.m59db5a5da060')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M3 10h10a5 5 0 0 1 5 5v2M3 10l4-4M3 10l4 4" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
-              <span>撤销</span>
+              <span>{{ translateUi('canvas.undo') }}</span>
             </button>
             <div class="controls-divider"></div>
             <!-- 播放速度选择器 -->
             <div class="speed-selector" @click.stop>
-              <button class="control-btn speed-btn" @click="toggleSpeedMenu" title="播放速度">
+              <button class="control-btn speed-btn" @click="toggleSpeedMenu" :title="translateUi('uiMessages.mc114a632b201')">
                 <span class="speed-value">{{ playbackRate }}x</span>
               </button>
               <div v-if="showSpeedMenu" class="speed-menu">
@@ -726,7 +728,7 @@ onUnmounted(() => {
         <!-- 底部操作栏 -->
         <div class="editor-footer">
           <button class="footer-btn secondary" @click="handleClose">
-            返回
+            {{ translateUi('common.back') }}
           </button>
           <button 
             class="footer-btn primary" 
@@ -736,7 +738,7 @@ onUnmounted(() => {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            创建 {{ keyframes.length }} 个关键帧节点
+            {{ translateUi('uiMessages.me1e0b88e0cba', { value1: (keyframes.length) }) }}
           </button>
         </div>
       </div>

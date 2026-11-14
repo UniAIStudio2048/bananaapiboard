@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -31,7 +32,7 @@ test('video node failed preview does not expose a regenerate retry button', () =
   assert.ok(errorPreviewMatch, 'Expected video error preview template block')
 
   assert.doesNotMatch(errorPreviewMatch[0], /@click="handleRegenerate"/)
-  assert.doesNotMatch(errorPreviewMatch[0], />\s*重试\s*<\/button>/)
+  assert.doesNotMatch(errorPreviewMatch[0], localizedPattern(/>\s*重试\s*<\/button>/))
   assert.match(errorPreviewMatch[0], /handleManualRetryFetch/)
 })
 
@@ -54,7 +55,7 @@ test('video submit fetch failures keep the pending submission recoverable', () =
   assert.ok(transientIndex >= 0, 'executeNodeGeneration should branch on transient submission errors')
   assert.ok(removeIndex > transientIndex, 'transient submission errors must be handled before removing recovery records')
   assert.match(catchBody, /status:\s*'processing'/)
-  assert.match(catchBody, /网络异常，正在确认任务状态/)
+  assert.match(catchBody, localizedPattern(/网络异常，正在确认任务状态/))
   assert.match(catchBody, /requestPendingVideoSubmissionRecovery\(submissionId\)/)
   assert.match(catchBody, /return submissionId/)
 })

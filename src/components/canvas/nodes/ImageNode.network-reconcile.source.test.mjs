@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -30,7 +31,7 @@ test('native fetch failures enter image history reconciliation instead of termin
   assert.match(executeBody, /const targetNode = canvasStore\.nodes\.find\(n => n\.id === nodeId\)/)
   assert.match(executeBody, /const submittedAt = targetNode\?\.data\?\.processingStartedAt \|\| Date\.now\(\)/)
   assert.match(executeBody, /if \(!isNativeFetchNetworkError\(error\)\) \{[\s\S]*?status: 'error'[\s\S]*?return \{ error: error\.message, detail: errorDetail \}[\s\S]*?\}/)
-  assert.match(executeBody, /status: 'processing'[\s\S]*progress: '网络波动，正在核对结果\.\.\.'[\s\S]*_reconciling: true/)
+  assert.match(executeBody, localizedPattern(/status: 'processing'[\s\S]*progress: '网络波动，正在核对结果\.\.\.'[\s\S]*_reconciling: true/))
   assert.match(executeBody, /await reconcileNodeFromHistory\(nodeId,\s*\{\s*prompt: finalPrompt,\s*userPrompt,\s*submittedAt,\s*model: selectedModel\.value\s*\}\)/)
 })
 
@@ -54,12 +55,12 @@ test('history reconciliation uses current space, tolerant prompt matching, and s
   assert.match(matchBody, /isHistoryModelMatch\(a\.item\.model,\s*model\)/)
   assert.match(reconcileBody, /status: 'success'[\s\S]*_reconciling: false[\s\S]*output:\s*\{ type: 'image', urls: \[matched\.url\], url: matched\.url \}/)
   assert.match(reconcileBody, /invalidateCanvasHistory\(\)/)
-  assert.match(reconcileBody, /网络异常，未能确认生成结果，请查看历史记录/)
+  assert.match(reconcileBody, localizedPattern(/网络异常，未能确认生成结果，请查看历史记录/))
 })
 
 test('successful reconciliation returns a non-error result to avoid aggregate failure overwrite', () => {
   const executeBody = functionBody(source, 'executeNodeGeneration')
 
   assert.match(executeBody, /const reconciled = await reconcileNodeFromHistory\(nodeId,/)
-  assert.match(executeBody, /return reconciled\s*\?\s*\{ reconciled: true \}\s*:\s*\{ error: '网络异常，未能确认生成结果，请查看历史记录', detail: errorDetail \}/)
+  assert.match(executeBody, localizedPattern(/return reconciled\s*\?\s*\{ reconciled: true \}\s*:\s*\{ error: '网络异常，未能确认生成结果，请查看历史记录', detail: errorDetail \}/))
 })

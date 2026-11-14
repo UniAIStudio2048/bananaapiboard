@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, ref } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import { getWorkflowShareNodePreview } from '@/utils/workflowSharePreview'
@@ -11,17 +13,17 @@ const props = defineProps({
 const failedMedia = ref(new Set())
 const preview = computed(() => getWorkflowShareNodePreview({ id: props.id, data: props.data }))
 const textLabels = {
-  prompt: '提示词',
-  positivePrompt: '正向提示词',
-  negativePrompt: '反向提示词',
-  text: '文本',
-  content: '内容',
-  description: '描述',
-  inputText: '输入文本',
-  systemPrompt: '系统提示词',
-  userPrompt: '用户提示词',
-  script: '脚本',
-  lyrics: '歌词'
+  get prompt() { return translateUi('canvas.audioNode.prompt') },
+  get positivePrompt() { return translateUi('uiMessages.me379d7ca067a') },
+  get negativePrompt() { return translateUi('uiMessages.m38216daa7afa') },
+  get text() { return translateUi('canvas.nodeConfig.textInput.label') },
+  get content() { return translateUi('uiMessages.m7a688306423b') },
+  get description() { return translateUi('uiMessages.mdc2ba467fc7a') },
+  get inputText() { return translateUi('uiMessages.m22d0f8c8ee91') },
+  get systemPrompt() { return translateUi('uiMessages.m0894b78b866e') },
+  get userPrompt() { return translateUi('uiMessages.m98a1c0c2c9f6') },
+  get script() { return translateUi('uiMessages.m5d4f709636ee') },
+  get lyrics() { return translateUi('uiMessages.m9dbfa9b42bb3') }
 }
 
 function getTextLabel(fieldName) {
@@ -56,7 +58,7 @@ function isMediaVisible(media) {
           <img
             v-if="media.kind === 'image'"
             :src="media.url"
-            :alt="`${preview.title} 媒体`"
+            :alt="translateUi('uiMessages.m5b9aed6101d2', { value1: (preview.title) })"
             loading="lazy"
             @error="markMediaFailed(media.url)"
           />
@@ -75,16 +77,16 @@ function isMediaVisible(media) {
             @error="markMediaFailed(media.url)"
           ></audio>
         </template>
-        <div v-else class="workflow-share-media-placeholder">媒体仅在原工作区可用</div>
+        <div v-else class="workflow-share-media-placeholder">{{ translateUi('uiMessages.m3c1dde9fcac8') }}</div>
       </section>
 
       <details v-if="preview.parameterJson" class="workflow-share-node-details">
-        <summary>公开参数与结果</summary>
+        <summary>{{ translateUi('uiMessages.m3113b7b8f429') }}</summary>
         <pre>{{ preview.parameterJson }}</pre>
       </details>
 
       <p v-if="preview.textSections.length === 0 && preview.media.length === 0" class="workflow-share-node-empty">
-        只读节点，无可公开展示的详情
+        {{ translateUi('uiMessages.m62fe9fee9554') }}
       </p>
     </div>
     <Handle type="source" :position="Position.Right" class="workflow-share-handle" />

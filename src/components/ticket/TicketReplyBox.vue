@@ -3,7 +3,7 @@
     <textarea
       v-model="content"
       class="reply-input"
-      placeholder="输入回复内容..."
+      :placeholder="translateUi('uiMessages.m419819a2785c')"
       rows="3"
       @keydown.ctrl.enter="handleSubmit"
       @keydown.meta.enter="handleSubmit"
@@ -15,7 +15,7 @@
           type="button"
           class="action-btn"
           @click="triggerFileInput"
-          title="添加附件"
+          :title="translateUi('uiMessages.mc8a47d001848')"
         >
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
@@ -38,7 +38,7 @@
         @click="handleSubmit"
       >
         <span v-if="sending" class="spinner-small"></span>
-        <span v-else>发送</span>
+        <span v-else>{{ translateUi('uiMessages.medecf0ae6e51') }}</span>
       </button>
     </div>
 
@@ -57,6 +57,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, computed } from 'vue'
 import { uploadAttachment } from '@/api/ticket'
 
@@ -88,7 +90,7 @@ function handleFileSelect(event) {
   const files = Array.from(event.target.files)
   for (const file of files) {
     if (file.size > 10 * 1024 * 1024) {
-      alert(`文件 ${file.name} 超过10MB限制`)
+      alert(translateUi('uiMessages.me249f2010e7c', { value1: (file.name) }))
       continue
     }
     attachments.value.push(file)

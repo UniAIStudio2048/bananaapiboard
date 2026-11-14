@@ -1,3 +1,6 @@
+import * as i18nTestRuntime from '../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -10,7 +13,7 @@ function loadFunction(path, name, context) {
   const ast = parse(source, { sourceType: 'module' })
   const fn = ast.program.body.find(node => node.type === 'FunctionDeclaration' && node.id.name === name)
   const body = source.slice(fn.start, fn.end).replace("const { saveWorkflow } = await import('@/api/canvas/workflow')", '')
-  return runInNewContext(`(${body})`, context)
+  return runInNewContext(`(${body})`, Object.assign(context, { translateUi, uiLanguage }))
 }
 
 const mediaNode = () => ({ id: 'media', version: 7, data: {

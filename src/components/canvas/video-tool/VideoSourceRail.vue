@@ -14,7 +14,7 @@
         </span>
         <span class="video-source-rail__name">{{ source.name }}</span>
       </button>
-      <p v-if="normalizedCanvasVideos.length === 0" class="video-source-rail__empty">暂无画布视频</p>
+      <p v-if="normalizedCanvasVideos.length === 0" class="video-source-rail__empty">{{ translateUi('uiMessages.mc92bbc9f7744') }}</p>
     </div>
 
     <div v-else-if="activeTab === 'upload'" class="video-source-rail__upload">
@@ -24,7 +24,7 @@
 
     <div v-else class="video-source-rail__list">
       <button type="button" class="video-source-rail__refresh" :disabled="historyLoading" @click="loadHistoryVideos">
-        {{ historyLoading ? '加载中' : '刷新历史' }}
+        {{ historyLoading ? translateUi('uiMessages.md04fcbda737f') : translateUi('uiMessages.ma2e016a613db') }}
       </button>
       <button v-for="source in historyVideos" :key="source.id" type="button" class="video-source-rail__item" draggable="true" @dragstart="handleDragStart($event, source)" @click="$emit('add-source', source)">
         <span class="video-source-rail__thumb">
@@ -33,12 +33,14 @@
         </span>
         <span class="video-source-rail__name">{{ source.name }}</span>
       </button>
-      <p v-if="!historyLoading && historyVideos.length === 0" class="video-source-rail__empty">暂无历史视频</p>
+      <p v-if="!historyLoading && historyVideos.length === 0" class="video-source-rail__empty">{{ translateUi('uiMessages.m30eaee287231') }}</p>
     </div>
   </aside>
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, ref, watch, reactive } from 'vue'
 import { getHistory } from '@/api/canvas/history'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
@@ -54,15 +56,15 @@ const props = defineProps({
 const emit = defineEmits(['add-source'])
 
 const tabs = [
-  { key: 'canvas', label: '画布' },
-  { key: 'upload', label: '上传' },
-  { key: 'history', label: '历史' }
+  { key: 'canvas', get label() { return translateUi('directorStudio.toolbar.canvas') } },
+  { key: 'upload', get label() { return translateUi('common.upload') } },
+  { key: 'history', get label() { return translateUi('uiMessages.mb0385cfe4b42') } }
 ]
 
 const activeTab = ref('canvas')
 const historyVideos = ref([])
 const historyLoading = ref(false)
-const uploadStatus = ref('选择本地视频上传')
+const uploadStatus = ref(translateUi('uiMessages.m577d8b98a233'))
 
 // 素材列表只展示封面；时长由选中后的主预览确认，避免占满媒体连接。
 const normalizedCanvasVideos = computed(() => props.canvasVideos
@@ -107,7 +109,7 @@ function normalizeSource(item, fallbackId) {
   const metaDuration = Number(item.duration || item.output?.duration || item.data?.output?.duration) || 0
   return {
     id: item.id || fallbackId,
-    name: item.name || item.title || item.prompt || `视频 ${fallbackId}`,
+    name: item.name || item.title || item.prompt || translateUi('uiMessages.mfcf643bb98ef', { value1: (fallbackId) }),
     url,
     thumbnailUrl: item.thumbnailUrl || item.thumbnail_url || item.cover_url || item.output?.thumbnailUrl || item.output?.thumbnail_url || item.data?.output?.thumbnailUrl || item.data?.output?.thumbnail_url,
     duration: metaDuration || 10
@@ -117,7 +119,7 @@ function normalizeSource(item, fallbackId) {
 async function handleUpload(event) {
   const file = event.target.files?.[0]
   if (!file) return
-  uploadStatus.value = '上传中'
+  uploadStatus.value = translateUi('uiMessages.m403b055e56f5')
   const localVideoUrl = URL.createObjectURL(file)
   const durationPromise = probeVideoDuration(localVideoUrl)
     .finally(() => URL.revokeObjectURL(localVideoUrl))
@@ -129,7 +131,7 @@ async function handleUpload(event) {
           maxRetries: 4,
           onProgress: progress => {
             const percent = Math.min(100, Math.max(0, Math.round(Number(progress || 0) * 100)))
-            uploadStatus.value = `上传中 ${percent}%`
+            uploadStatus.value = translateUi('uiMessages.mb5da535a3f1b', { value1: (percent) })
           }
         })
         break
@@ -137,12 +139,12 @@ async function handleUpload(event) {
         const isAbort = error?.name === 'AbortError'
         const isClientError = Number(error?.status) >= 400 && Number(error?.status) < 500
         if (attempt > 0 || isAbort || isClientError) throw error
-        uploadStatus.value = '连接波动，正在重试...'
+        uploadStatus.value = translateUi('uiMessages.mb644039cee74')
         await new Promise(resolve => setTimeout(resolve, 300))
       }
     }
     const url = result.url
-    if (!url) throw new Error('上传完成但未返回视频地址')
+    if (!url) throw new Error(translateUi('uiMessages.m0bbb26a72de5'))
     const dur = await durationPromise
     const source = {
       id: `upload-${Date.now()}`,
@@ -151,10 +153,10 @@ async function handleUpload(event) {
       thumbnailUrl: result.thumbnailUrl || result.thumbnail_url || result.cover_url,
       duration: dur || 10
     }
-    uploadStatus.value = '上传完成'
+    uploadStatus.value = translateUi('uiMessages.m52c6b886b559')
     emit('add-source', source)
   } catch (error) {
-    uploadStatus.value = error.message || '上传失败'
+    uploadStatus.value = error.message || translateUi('errors.uploadFailed')
   } finally {
     event.target.value = ''
   }

@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * GroupToolbar.vue - 编组工具栏
  * 
@@ -26,14 +28,14 @@ const showColorPicker = ref(false)
 
 // 可选颜色（暗色调）
 const colorOptions = [
-  { bg: 'rgba(100, 116, 139, 0.12)', border: 'rgba(100, 116, 139, 0.35)', name: '灰色' },
-  { bg: 'rgba(239, 68, 68, 0.12)', border: 'rgba(239, 68, 68, 0.35)', name: '红色' },
-  { bg: 'rgba(245, 158, 11, 0.12)', border: 'rgba(245, 158, 11, 0.35)', name: '橙色' },
-  { bg: 'rgba(234, 179, 8, 0.12)', border: 'rgba(234, 179, 8, 0.35)', name: '黄色' },
-  { bg: 'rgba(34, 197, 94, 0.12)', border: 'rgba(34, 197, 94, 0.35)', name: '绿色' },
-  { bg: 'rgba(6, 182, 212, 0.12)', border: 'rgba(6, 182, 212, 0.35)', name: '青色' },
-  { bg: 'rgba(59, 130, 246, 0.12)', border: 'rgba(59, 130, 246, 0.35)', name: '蓝色' },
-  { bg: 'rgba(139, 92, 246, 0.12)', border: 'rgba(139, 92, 246, 0.35)', name: '紫色' },
+  { bg: 'rgba(100, 116, 139, 0.12)', border: 'rgba(100, 116, 139, 0.35)', get name() { return translateUi('uiMessages.m051e67d913f4') } },
+  { bg: 'rgba(239, 68, 68, 0.12)', border: 'rgba(239, 68, 68, 0.35)', get name() { return translateUi('uiMessages.m789f61dbfcc7') } },
+  { bg: 'rgba(245, 158, 11, 0.12)', border: 'rgba(245, 158, 11, 0.35)', get name() { return translateUi('uiMessages.maa1e899dd357') } },
+  { bg: 'rgba(234, 179, 8, 0.12)', border: 'rgba(234, 179, 8, 0.35)', get name() { return translateUi('uiMessages.md451c07d739b') } },
+  { bg: 'rgba(34, 197, 94, 0.12)', border: 'rgba(34, 197, 94, 0.35)', get name() { return translateUi('uiMessages.m30c83dc25b12') } },
+  { bg: 'rgba(6, 182, 212, 0.12)', border: 'rgba(6, 182, 212, 0.35)', get name() { return translateUi('uiMessages.md76f2cfec994') } },
+  { bg: 'rgba(59, 130, 246, 0.12)', border: 'rgba(59, 130, 246, 0.35)', get name() { return translateUi('uiMessages.m67035e6b7f82') } },
+  { bg: 'rgba(139, 92, 246, 0.12)', border: 'rgba(139, 92, 246, 0.35)', get name() { return translateUi('uiMessages.m2ed9c6fabac2') } },
 ]
 
 // 当前颜色
@@ -468,7 +470,7 @@ function handleClickOutside(event) {
   <div class="group-toolbar" @click.stop>
     <!-- 背景颜色 -->
     <div class="toolbar-item color-picker-container">
-      <button class="toolbar-btn" @click="toggleColorPicker" title="背景颜色">
+      <button class="toolbar-btn" @click="toggleColorPicker" :title="translateUi('uiMessages.m882fe2e84241')">
         <div class="color-preview" :style="{ background: currentColor }"></div>
       </button>
       
@@ -490,7 +492,7 @@ function handleClickOutside(event) {
     <!-- 布局按钮组 -->
     <div class="layout-btn-group">
       <!-- 宫格布局 -->
-      <button class="toolbar-btn layout-btn" @click="applyGridLayout" title="宫格布局">
+      <button class="toolbar-btn layout-btn" @click="applyGridLayout" :title="translateUi('uiMessages.macfa154f243f')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="3" y="3" width="7" height="7" rx="1"/>
           <rect x="14" y="3" width="7" height="7" rx="1"/>
@@ -500,7 +502,7 @@ function handleClickOutside(event) {
       </button>
       
       <!-- 水平布局 -->
-      <button class="toolbar-btn layout-btn" @click="applyHorizontalLayout" title="水平布局">
+      <button class="toolbar-btn layout-btn" @click="applyHorizontalLayout" :title="translateUi('uiMessages.m7095029387c4')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="2" y="8" width="6" height="8" rx="1"/>
           <rect x="9" y="8" width="6" height="8" rx="1"/>
@@ -509,7 +511,7 @@ function handleClickOutside(event) {
       </button>
       
       <!-- 垂直布局 -->
-      <button class="toolbar-btn layout-btn" @click="applyVerticalLayout" title="垂直布局">
+      <button class="toolbar-btn layout-btn" @click="applyVerticalLayout" :title="translateUi('uiMessages.m7e1dd8a53adf')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="8" y="2" width="8" height="6" rx="1"/>
           <rect x="8" y="9" width="8" height="6" rx="1"/>
@@ -521,29 +523,29 @@ function handleClickOutside(event) {
     <div class="toolbar-divider"></div>
     
     <!-- 整组执行 -->
-    <button class="toolbar-btn execute-btn" @click="executeGroup" title="整组执行">
+    <button class="toolbar-btn execute-btn" @click="executeGroup" :title="translateUi('uiMessages.m5f01741f9375')">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
         <path d="M8 5v14l11-7z"/>
       </svg>
-      <span class="btn-text">整组执行</span>
+      <span class="btn-text">{{ translateUi('uiMessages.m5f01741f9375') }}</span>
     </button>
     
     <div class="toolbar-divider"></div>
     
     <!-- 保存工作流 -->
-    <button class="toolbar-btn" @click="saveWorkflow" title="保存工作流">
+    <button class="toolbar-btn" @click="saveWorkflow" :title="translateUi('canvas.saveWorkflow')">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
         <polyline points="17 21 17 13 7 13 7 21"/>
         <polyline points="7 3 7 8 15 8"/>
       </svg>
-      <span class="btn-text">保存工作流</span>
+      <span class="btn-text">{{ translateUi('canvas.saveWorkflow') }}</span>
     </button>
     
     <div class="toolbar-divider"></div>
     
     <!-- 解组 -->
-    <button class="toolbar-btn" @click="disbandGroup" title="解组">
+    <button class="toolbar-btn" @click="disbandGroup" :title="translateUi('uiMessages.m208b2e807c1b')">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <rect x="3" y="3" width="7" height="7" rx="1"/>
         <rect x="14" y="3" width="7" height="7" rx="1"/>
@@ -551,7 +553,7 @@ function handleClickOutside(event) {
         <rect x="14" y="14" width="7" height="7" rx="1"/>
         <line x1="2" y1="2" x2="22" y2="22" stroke-width="2"/>
       </svg>
-      <span class="btn-text">解组</span>
+      <span class="btn-text">{{ translateUi('uiMessages.m208b2e807c1b') }}</span>
     </button>
   </div>
 </template>

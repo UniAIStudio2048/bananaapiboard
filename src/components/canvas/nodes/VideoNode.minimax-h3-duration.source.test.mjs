@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import test from 'node:test'
@@ -7,7 +8,7 @@ const source = fs.readFileSync(new URL('./VideoNode.vue', import.meta.url), 'utf
 test('MiniMax H3 duration options are not replaced by Seedance video_edit auto duration', () => {
   assert.match(
     source,
-    /if \(isSeedance2Model\.value && selectedSeedance2Mode\.value === 'video_edit'\) \{\s*return \[\{ value: '-1', label: '自动' \}\]/
+    localizedPattern(/if \(isSeedance2Model\.value && selectedSeedance2Mode\.value === 'video_edit'\) \{\s*return \[\{ value: '-1', label: '自动' \}\]/)
   )
 })
 

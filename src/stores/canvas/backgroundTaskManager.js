@@ -327,7 +327,7 @@ function startPolling(taskId) {
         }
       } else {
         const pollTimeout = taskConfig.longRunning
-          ? VIDEO_POLL_TIMEOUT : IMAGE_POLL_TIMEOUT
+          ? VIDEO_POLL_TIMEOUT : (result.usage?.provider === 'minimax-h3-image' ? 12 * 60 * 1000 : IMAGE_POLL_TIMEOUT)
         const taskAge = Date.now() - task.createdAt
         if (taskAge > pollTimeout) {
           const minutes = Math.round(taskAge / 60000)

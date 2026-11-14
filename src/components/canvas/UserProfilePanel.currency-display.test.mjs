@@ -1,3 +1,7 @@
+import * as i18nTestRuntime from '../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
+import { includesUiText } from '../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -33,7 +37,7 @@ function renderFor(key) {
   const { code } = compile(templateSource, {
     mode: 'function', prefixIdentifiers: true, bindingMetadata: bindings
   })
-  return new Function('Vue', code)(Vue)
+  return new Function('translateUi', 'uiLanguage', 'Vue', code)(translateUi, uiLanguage, Vue)
 }
 
 const renderHint = renderFor('user.exchangeRateHint')
@@ -62,9 +66,9 @@ for (const language of ['zh-CN', 'en', 'ug']) {
       for (const text of [hint, placeholder, rechargeHint]) {
         assert.doesNotMatch(text, /\{\w+\}/)
       }
-      for (const text of [hint, rechargeHint]) assert.ok(text.includes(label), `${text} should contain ${label}`)
+      for (const text of [hint, rechargeHint]) assert.ok(includesUiText(text, label), `${text} should contain ${label}`)
       if (language === 'zh-CN') assert.equal(placeholder, '请输入划转金额')
-      else assert.ok(placeholder.includes(label), `${placeholder} should contain ${label}`)
+      else assert.ok(includesUiText(placeholder, label), `${placeholder} should contain ${label}`)
       assert.ok(hint.includes('10'))
       if (language === 'zh-CN') assert.equal(hint, `汇率：1${label} = 10 永久积分`)
       if (language === 'en') assert.equal(hint, `Rate: ${label}1 = 10 permanent points`)

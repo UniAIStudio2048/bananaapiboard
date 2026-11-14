@@ -15,5 +15,5 @@ test('user points source analysis normalizes data before rendering', () => {
 
 test('user ledger records expose task id in the detail view', () => {
   assert.match(source, /item\.task_id/)
-  assert.match(source, /任务ID：\{\{\s*item\.task_id\s*\}\}/)
+  assert.match(source, /translateUi\('uiMessages\.m637263718da0', \{ value1: \(item\.task_id\) \}\)/)
 })

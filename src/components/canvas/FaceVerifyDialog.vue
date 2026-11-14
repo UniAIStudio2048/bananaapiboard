@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, watch } from 'vue'
 import { requestFaceVerifyToken, queryFaceVerifyResult } from '@/api/face-verify'
 
@@ -54,7 +56,7 @@ async function startVerification() {
     window.open(result.h5_url, '_blank', 'width=500,height=700')
     step.value = 'verifying'
   } catch (e) {
-    errorMessage.value = e.message || '获取认证页面失败'
+    errorMessage.value = e.message || translateUi('uiMessages.md9d9920d3179')
     step.value = 'failed'
   }
 }
@@ -76,11 +78,11 @@ async function queryResult() {
         }
       }, 1000)
     } else {
-      errorMessage.value = result.status_message || '认证未通过，请重试'
+      errorMessage.value = result.status_message || translateUi('uiMessages.m5db752322677')
       step.value = 'failed'
     }
   } catch (e) {
-    errorMessage.value = e.message || '查询认证结果失败'
+    errorMessage.value = e.message || translateUi('uiMessages.m7ffae6ec22b0')
     step.value = 'failed'
   } finally {
     querying.value = false
@@ -100,8 +102,8 @@ function retry() {
       <div v-if="visible" class="fv-overlay" @click.self="close">
         <div class="fv-dialog" @click.stop>
           <div class="fv-header">
-            <h3 class="fv-title">真人身份认证</h3>
-            <button class="fv-close" @click="close" aria-label="关闭">
+            <h3 class="fv-title">{{ translateUi('uiMessages.ma7f6271ec41a') }}</h3>
+            <button class="fv-close" @click="close" :aria-label="translateUi('common.close')">
               <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
                 <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               </svg>
@@ -109,7 +111,7 @@ function retry() {
           </div>
 
           <div class="fv-body">
-            <p class="fv-desc">上传真人角色素材需要先完成身份认证，请在弹出的页面中完成人脸扫描验证。</p>
+            <p class="fv-desc">{{ translateUi('uiMessages.mb71a03f2a89a') }}</p>
 
             <div class="fv-status-area">
               <!-- 初始状态 -->
@@ -121,14 +123,14 @@ function retry() {
                     <path d="M14 36c2-4 6-6 10-6s8 2 10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                   </svg>
                 </div>
-                <p class="fv-hint">点击下方按钮开始身份认证流程</p>
-                <button class="fv-btn fv-btn-primary" @click="startVerification">开始认证</button>
+                <p class="fv-hint">{{ translateUi('uiMessages.m2e9b62ea7ecd') }}</p>
+                <button class="fv-btn fv-btn-primary" @click="startVerification">{{ translateUi('uiMessages.m1db3ae4cf9d7') }}</button>
               </template>
 
               <!-- 加载中 -->
               <template v-if="step === 'loading'">
                 <div class="fv-spinner"></div>
-                <p class="fv-hint">正在准备认证页面...</p>
+                <p class="fv-hint">{{ translateUi('uiMessages.mfb7928832d44') }}</p>
               </template>
 
               <!-- 认证中 -->
@@ -141,13 +143,13 @@ function retry() {
                     <circle cx="24" cy="22" r="9" stroke="currentColor" stroke-width="1" stroke-dasharray="3 3" opacity="0.5"/>
                   </svg>
                 </div>
-                <p class="fv-hint">认证页面已打开，请在新窗口中完成人脸扫描</p>
+                <p class="fv-hint">{{ translateUi('uiMessages.mdfa7952ef9ae') }}</p>
                 <button class="fv-btn fv-btn-primary" @click="queryResult" :disabled="querying">
                   <template v-if="querying">
                     <span class="fv-btn-spinner"></span>
-                    查询中...
+                    {{ translateUi('uiMessages.m192533042f7f') }}
                   </template>
-                  <template v-else>查询认证结果</template>
+                  <template v-else>{{ translateUi('uiMessages.m7b74c65df021') }}</template>
                 </button>
               </template>
 
@@ -159,8 +161,8 @@ function retry() {
                     <path d="M15 24l6 6 12-12" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
                 </div>
-                <p class="fv-hint fv-success-text">认证通过</p>
-                <p class="fv-countdown">{{ countdown }} 秒后自动关闭</p>
+                <p class="fv-hint fv-success-text">{{ translateUi('uiMessages.m2480657a75dd') }}</p>
+                <p class="fv-countdown">{{ translateUi('uiMessages.m37fba973beef', { value1: (countdown) }) }}</p>
               </template>
 
               <!-- 认证失败 -->
@@ -171,14 +173,14 @@ function retry() {
                     <path d="M17 17l14 14M31 17L17 31" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round"/>
                   </svg>
                 </div>
-                <p class="fv-error-text">{{ errorMessage || '认证失败' }}</p>
-                <button class="fv-btn fv-btn-primary" @click="retry">重新认证</button>
+                <p class="fv-error-text">{{ errorMessage || translateUi('uiMessages.mef094f0fd28e') }}</p>
+                <button class="fv-btn fv-btn-primary" @click="retry">{{ translateUi('uiMessages.m35a2ff292bb1') }}</button>
               </template>
             </div>
           </div>
 
           <div class="fv-footer">
-            <button class="fv-btn fv-btn-secondary" @click="close">关闭</button>
+            <button class="fv-btn fv-btn-secondary" @click="close">{{ translateUi('common.close') }}</button>
           </div>
         </div>
       </div>

@@ -1,7 +1,8 @@
+import { t as translateUi } from '../../../i18n/index.js'
 // The editor reads its database snapshot synchronously; every write is sent to
 // the workflow's versioned writer immediately, without browser storage.
 let values = {}
-let persist = () => { throw new Error('编辑器数据库尚未连接') }
+let persist = () => { throw new Error(translateUi('uiMessages.m9bc0e05c888b')) }
 let flush = async () => {}
 let binding = 0
 
@@ -14,7 +15,7 @@ export function bindEditorStorage(snapshot, write, wait = async () => {}) {
 }
 
 export function bindAccountEditorStorage(draftSnapshot, account, writeDraft, writePreferences, wait = async () => {}) {
-  if (!/^[a-f0-9]{64}$/.test(account.namespace)) throw new Error('剪辑账号尚未确认')
+  if (!/^[a-f0-9]{64}$/.test(account.namespace)) throw new Error(translateUi('uiMessages.m4552e904e2cc'))
   const prefixes = {
     textPresets: 'media-video-text-presets:v1:media-canvas-preferences:v1:',
     recentStickers: 'media-video-sticker-recent:v1:media-canvas-preferences:v1:',

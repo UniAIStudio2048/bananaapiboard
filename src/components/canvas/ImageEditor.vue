@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * ImageEditor.vue - 图片编辑器组件
  * 基于 TUI Image Editor 实现
@@ -43,72 +45,72 @@ const currentTool = ref(props.initialTool)
 
 // 中文本地化
 const localeZh = {
-  Crop: '裁剪',
-  Delete: '删除',
-  DeleteAll: '全部删除',
-  Undo: '撤销',
-  Redo: '重做',
-  Reset: '重置',
-  Flip: '翻转',
-  Rotate: '旋转',
-  Draw: '涂鸦',
-  Shape: '形状',
-  Icon: '图标',
-  Text: '文字',
-  Mask: '蒙版',
-  Filter: '滤镜',
-  Bold: '粗体',
-  Italic: '斜体',
-  Underline: '下划线',
-  Left: '左对齐',
-  Center: '居中',
-  Right: '右对齐',
-  Color: '颜色',
-  'Text size': '字号',
-  Custom: '自定义',
-  Square: '正方形',
-  Apply: '应用',
-  Cancel: '取消',
-  'Flip X': '水平翻转',
-  'Flip Y': '垂直翻转',
-  Range: '范围',
-  Stroke: '描边',
-  Fill: '填充',
-  Circle: '圆形',
-  Triangle: '三角形',
-  Rectangle: '矩形',
-  Free: '自由',
-  Straight: '直线',
-  Arrow: '箭头',
-  'Arrow-2': '箭头2',
-  'Arrow-3': '箭头3',
-  'Star-1': '星形1',
-  'Star-2': '星形2',
-  Polygon: '多边形',
-  Location: '位置',
-  Heart: '心形',
-  Bubble: '气泡',
-  'Custom icon': '自定义图标',
-  Load: '加载',
-  Download: '下载',
-  'Load Mask Image': '加载蒙版',
-  Grayscale: '灰度',
-  Blur: '模糊',
-  Sharpen: '锐化',
-  Emboss: '浮雕',
-  'Remove White': '去白',
-  Distance: '距离',
-  Brightness: '亮度',
-  Noise: '噪点',
-  'Color Filter': '颜色滤镜',
-  Threshold: '阈值',
-  Invert: '反色',
-  Sepia: '棕褐色',
-  Sepia2: '棕褐色2',
-  'Blend Color': '混合颜色',
-  Multiply: '乘法',
-  Tint: '色调',
-  'Gradient transparency': '渐变透明'
+  get Crop() { return translateUi('uiMessages.m184506303bf5') },
+  get Delete() { return translateUi('canvas.delete') },
+  get DeleteAll() { return translateUi('uiMessages.m9b2ccbb48e31') },
+  get Undo() { return translateUi('canvas.undoShortcut') },
+  get Redo() { return translateUi('canvas.redo') },
+  get Reset() { return translateUi('common.reset') },
+  get Flip() { return translateUi('uiMessages.m3733e06a5224') },
+  get Rotate() { return translateUi('directorStudio.inspector.rotation') },
+  get Draw() { return translateUi('uiMessages.mc444a8125ada') },
+  get Shape() { return translateUi('uiMessages.mc2f71c1b10ef') },
+  get Icon() { return translateUi('uiMessages.m0d720eeea264') },
+  get Text() { return translateUi('uiMessages.m14b69bd6eeb0') },
+  get Mask() { return translateUi('uiMessages.me7c802f4a183') },
+  get Filter() { return translateUi('uiMessages.m32319e81a408') },
+  get Bold() { return translateUi('canvas.textNode.bold') },
+  get Italic() { return translateUi('canvas.textNode.italic') },
+  get Underline() { return translateUi('canvas.textNode.underline') },
+  get Left() { return translateUi('uiMessages.m2bd74486069f') },
+  get Center() { return translateUi('uiMessages.m4cc3885c182e') },
+  get Right() { return translateUi('uiMessages.m331c711e0660') },
+  get Color() { return translateUi('directorStudio.inspector.color') },
+  'Text size': translateUi('uiMessages.mf71561b5af0a'),
+  get Custom() { return translateUi('uiMessages.m4eafa9e925b3') },
+  get Square() { return translateUi('imageGen.square') },
+  get Apply() { return translateUi('user.applyCoupon') },
+  get Cancel() { return translateUi('canvas.cancel') },
+  'Flip X': translateUi('uiMessages.m44775fbf3342'),
+  'Flip Y': translateUi('uiMessages.mfcd75ef0a054'),
+  get Range() { return translateUi('uiMessages.mae72b532f4b8') },
+  get Stroke() { return translateUi('uiMessages.madcb8080365d') },
+  get Fill() { return translateUi('uiMessages.m05fb7cba476b') },
+  get Circle() { return translateUi('uiMessages.m81639a8a9bce') },
+  get Triangle() { return translateUi('uiMessages.m3ecb21308383') },
+  get Rectangle() { return translateUi('uiMessages.m88b75a101595') },
+  get Free() { return translateUi('uiMessages.md1047eed5dd5') },
+  get Straight() { return translateUi('onboarding.settings.edgeStyleStraight') },
+  get Arrow() { return translateUi('uiMessages.m83fa01a2d780') },
+  'Arrow-2': translateUi('uiMessages.m1beae3614daa'),
+  'Arrow-3': translateUi('uiMessages.m9f62df73e4de'),
+  'Star-1': translateUi('uiMessages.m6065234896ad'),
+  'Star-2': translateUi('uiMessages.m5fd4102caaee'),
+  get Polygon() { return translateUi('uiMessages.m388216f2d6f6') },
+  get Location() { return translateUi('directorStudio.inspector.position') },
+  get Heart() { return translateUi('uiMessages.mc2e1f17f72c1') },
+  get Bubble() { return translateUi('uiMessages.mb4b35dae92ac') },
+  'Custom icon': translateUi('uiMessages.m70ffa5d85100'),
+  get Load() { return translateUi('uiMessages.m8f8f90778463') },
+  get Download() { return translateUi('canvas.assetPanel.directory.download') },
+  'Load Mask Image': translateUi('uiMessages.m58b76aacf243'),
+  get Grayscale() { return translateUi('uiMessages.m71b7f9dc68ea') },
+  get Blur() { return translateUi('uiMessages.m36bab7a3de7f') },
+  get Sharpen() { return translateUi('uiMessages.mfc538f246da7') },
+  get Emboss() { return translateUi('uiMessages.mcef5b18134bf') },
+  'Remove White': translateUi('uiMessages.ma0db6da5a754'),
+  get Distance() { return translateUi('uiMessages.m3865483de52d') },
+  get Brightness() { return translateUi('uiMessages.m8e2f643ad160') },
+  get Noise() { return translateUi('uiMessages.m68efe2f78fe8') },
+  'Color Filter': translateUi('uiMessages.mc59815b5d020'),
+  get Threshold() { return translateUi('uiMessages.md35480d7d7af') },
+  get Invert() { return translateUi('uiMessages.mc9fe2bcf441c') },
+  get Sepia() { return translateUi('uiMessages.m4425d6003a10') },
+  get Sepia2() { return translateUi('uiMessages.m14a97bc2dd62') },
+  'Blend Color': translateUi('uiMessages.mbcc860f7653f'),
+  get Multiply() { return translateUi('uiMessages.mf3c8694d8297') },
+  get Tint() { return translateUi('uiMessages.m5bddf6a1c0f5') },
+  'Gradient transparency': translateUi('uiMessages.mb02d0dd03524')
 }
 
 // 自定义深色主题
@@ -418,43 +420,43 @@ defineExpose({
           <!-- 顶部操作栏 -->
           <div class="editor-header">
             <div class="header-left">
-              <button class="header-btn" @click="handleClose" title="关闭">
+              <button class="header-btn" @click="handleClose" :title="translateUi('common.close')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M18 6L6 18M6 6l12 12"/>
                 </svg>
-                <span>关闭</span>
+                <span>{{ translateUi('common.close') }}</span>
               </button>
             </div>
             
             <div class="header-center">
-              <span class="editor-title">图片编辑</span>
+              <span class="editor-title">{{ translateUi('uiMessages.md721fd5257b8') }}</span>
             </div>
             
             <div class="header-right">
-              <button class="header-btn" @click="handleUndo" title="撤销">
+              <button class="header-btn" @click="handleUndo" :title="translateUi('canvas.undo')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M3 10h10a5 5 0 0 1 5 5v2M3 10l4-4M3 10l4 4"/>
                 </svg>
               </button>
-              <button class="header-btn" @click="handleRedo" title="重做">
+              <button class="header-btn" @click="handleRedo" :title="translateUi('canvas.redo')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 10H11a5 5 0 0 0-5 5v2M21 10l-4-4M21 10l-4 4"/>
                 </svg>
               </button>
-              <button class="header-btn" @click="handleReset" title="重置">
+              <button class="header-btn" @click="handleReset" :title="translateUi('common.reset')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M4 4v5h5M20 20v-5h-5"/>
                   <path d="M20.49 9A9 9 0 0 0 5.64 5.64L4 7m16 10l-1.64 1.36A9 9 0 0 1 3.51 15"/>
                 </svg>
               </button>
               <div class="header-divider"></div>
-              <button class="header-btn primary" @click="handleSave" title="保存">
+              <button class="header-btn primary" @click="handleSave" :title="translateUi('common.save')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
                   <polyline points="17,21 17,13 7,13 7,21"/>
                   <polyline points="7,3 7,8 15,8"/>
                 </svg>
-                <span>保存</span>
+                <span>{{ translateUi('common.save') }}</span>
               </button>
             </div>
           </div>
@@ -464,7 +466,7 @@ defineExpose({
             <!-- 加载状态 -->
             <div v-if="isLoading" class="editor-loading">
               <div class="loading-spinner"></div>
-              <span>加载编辑器...</span>
+              <span>{{ translateUi('uiMessages.m0c3f2eedbe31') }}</span>
             </div>
             
             <!-- TUI 编辑器容器 -->

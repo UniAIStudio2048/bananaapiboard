@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
@@ -11,5 +12,5 @@ test('canvas task queries localize backend external media errors before task nor
 })
 
 test('canvas video submission displays the localized backend error contract', () => {
-  assert.match(videoNodeSource, /resolveExternalMediaErrorMessage\(data, '生成失败'\)/)
+  assert.match(videoNodeSource, localizedPattern(/resolveExternalMediaErrorMessage\(data, '生成失败'\)/))
 })

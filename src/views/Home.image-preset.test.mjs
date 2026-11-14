@@ -1,3 +1,4 @@
+import { localizedPattern } from '../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -19,8 +20,8 @@ test('beginner mode loads the same image presets used by canvas image nodes', ()
 
 test('beginner mode renders tenant and user presets in a select dropdown', () => {
   assert.match(source, /<select[\s\S]*v-model="selectedImagePresetId"[\s\S]*@change="handleImagePresetChange"/)
-  assert.match(source, /<optgroup label="平台预设">[\s\S]*v-for="preset in tenantImagePresetOptions"/)
-  assert.match(source, /<optgroup label="我的预设">[\s\S]*v-for="preset in userImagePresetOptions"/)
+  assert.match(source, localizedPattern(/<optgroup label="平台预设">[\s\S]*v-for="preset in tenantImagePresetOptions"/))
+  assert.match(source, localizedPattern(/<optgroup label="我的预设">[\s\S]*v-for="preset in userImagePresetOptions"/))
   assert.match(source, /incrementPresetUseCount\(selected\.rawId\)/)
 })
 

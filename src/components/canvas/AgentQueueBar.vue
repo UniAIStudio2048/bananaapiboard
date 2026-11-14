@@ -6,18 +6,18 @@
         <button
           type="button"
           class="agent-queue-bar__action"
-          aria-label="立即插入这条消息"
+          :aria-label="translateUi('uiMessages.ma601de4d5de3')"
           @click="$emit('insert', item)"
         >
-          立即插入
+          {{ translateUi('uiMessages.m289c47c1dea3') }}
         </button>
         <button
           type="button"
           class="agent-queue-bar__action"
-          aria-label="删除这条排队消息"
+          :aria-label="translateUi('uiMessages.m1a7461dfd349')"
           @click="$emit('remove', item)"
         >
-          删
+          {{ translateUi('uiMessages.m8d3ba65b9421') }}
         </button>
       </li>
     </ul>
@@ -25,6 +25,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 defineProps({
   items: { type: Array, default: () => [] },
   activeTurnRunning: { type: Boolean, default: false },

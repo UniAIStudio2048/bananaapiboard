@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi, currentLanguage as uiLanguage } from '@/i18n'
+
 import { computed, markRaw, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Background } from '@vue-flow/background'
@@ -35,12 +37,12 @@ const canClone = computed(() => Boolean(shareData.value?.canClone && shareData.v
 const nodeTypes = { 'workflow-share-node': markRaw(WorkflowShareNode) }
 
 function getErrorMessage(error) {
-  if (error?.status === 404) return '分享链接不存在或已失效。'
-  if (error?.status === 403 && error?.code === 'share_tenant_mismatch') return '请登录分享所属站点后再试。'
-  if (error?.status === 403) return '该分享链接当前不可访问。'
-  if (error?.status === 429) return '访问过于频繁，请稍后再试。'
-  if (error?.status === 413) return '工作流分享内容过大，暂时无法展示。'
-  return '工作流分享加载失败，请稍后重试。'
+  if (error?.status === 404) return translateUi('uiMessages.m8c602cc82a25')
+  if (error?.status === 403 && error?.code === 'share_tenant_mismatch') return translateUi('uiMessages.mb9e67874a079')
+  if (error?.status === 403) return translateUi('uiMessages.m5ad4f6189d55')
+  if (error?.status === 429) return translateUi('uiMessages.ma3f0d28183bf')
+  if (error?.status === 413) return translateUi('uiMessages.m8393680e4326')
+  return translateUi('uiMessages.m5efb9069557a')
 }
 
 function setShareMeta(name, content) {
@@ -73,7 +75,7 @@ function restoreShareMeta() {
 
 async function loadShare() {
   if (!token.value) {
-    pageError.value = '分享链接无效。'
+    pageError.value = translateUi('uiMessages.m862cbdb64354')
     loading.value = false
     return
   }
@@ -121,18 +123,18 @@ async function cloneWorkflow() {
       pendingClone.value = true
       showLoginModal.value = true
     } else if (error?.status === 403 && error?.code === 'share_tenant_mismatch') {
-      cloneError.value = '请登录分享所属站点后再试。'
+      cloneError.value = translateUi('uiMessages.mb9e67874a079')
     } else if (error?.status === 403) {
-      cloneError.value = '当前账号无权克隆此工作流。'
+      cloneError.value = translateUi('uiMessages.m0fbea8c1fe53')
     } else if (error?.status === 409) {
       cloneIntentKey.value = ''
-      cloneError.value = '分享内容已更新，请刷新页面后重试。'
+      cloneError.value = translateUi('uiMessages.m7389ee67a930')
     } else if (error?.status === 413) {
-      cloneError.value = '工作流过大，无法克隆到个人空间。'
+      cloneError.value = translateUi('uiMessages.md85d8241ea83')
     } else if (error?.status === 429) {
-      cloneError.value = '克隆请求过于频繁，请稍后再试。'
+      cloneError.value = translateUi('uiMessages.mf7da702fd1bb')
     } else {
-      cloneError.value = '克隆失败，请稍后重试。'
+      cloneError.value = translateUi('uiMessages.mc2f1b435480a')
     }
   } finally {
     cloneLoading.value = false
@@ -182,16 +184,16 @@ onBeforeUnmount(restoreShareMeta)
   <main class="workflow-share-page">
     <div v-if="loading" class="workflow-share-state">
       <div class="workflow-share-spinner"></div>
-      <p>正在加载公开工作流…</p>
+      <p>{{ translateUi('uiMessages.m935878eff178') }}</p>
     </div>
 
     <div v-else-if="pageError" class="workflow-share-state">
       <div class="workflow-share-state-icon">⌁</div>
-      <h1>无法打开分享</h1>
+      <h1>{{ translateUi('uiMessages.ma53637b28b4c') }}</h1>
       <p>{{ pageError }}</p>
       <div class="workflow-share-state-actions">
-        <button type="button" @click="refreshShare">重新加载</button>
-        <button type="button" @click="goHome">返回首页</button>
+        <button type="button" @click="refreshShare">{{ translateUi('uiMessages.m7bdd5ce1e298') }}</button>
+        <button type="button" @click="goHome">{{ translateUi('uiMessages.md66f4359dae3') }}</button>
       </div>
     </div>
 
@@ -199,33 +201,33 @@ onBeforeUnmount(restoreShareMeta)
       <header class="workflow-share-topbar">
         <div class="workflow-share-brand">
           <span class="workflow-share-brand-mark">⌘</span>
-          <span>公开工作流</span>
+          <span>{{ translateUi('uiMessages.maafea718ff56') }}</span>
         </div>
         <div class="workflow-share-heading">
-          <h1>{{ workflow.name || '未命名工作流' }}</h1>
-          <p v-if="workflow.updated_at">更新于 {{ new Date(workflow.updated_at).toLocaleString('zh-CN') }}</p>
+          <h1>{{ workflow.name || translateUi('uiMessages.m9e1ed202e684') }}</h1>
+          <p v-if="workflow.updated_at">{{ translateUi('uiMessages.mf987642f0ddb', { value1: (new Date(workflow.updated_at).toLocaleString(uiLanguage)) }) }}</p>
         </div>
         <div class="workflow-share-top-actions">
-          <span class="workflow-share-readonly-pill">只读预览</span>
-          <button class="workflow-share-refresh" type="button" :disabled="loading" @click="refreshShare">刷新</button>
+          <span class="workflow-share-readonly-pill">{{ translateUi('uiMessages.mc0ded62056b5') }}</span>
+          <button class="workflow-share-refresh" type="button" :disabled="loading" @click="refreshShare">{{ translateUi('common.refresh') }}</button>
           <button v-if="canClone" class="workflow-share-clone" type="button" :disabled="cloneLoading" @click="handleClone">
-            {{ cloneLoading ? '克隆中…' : '克隆到我的空间' }}
+            {{ cloneLoading ? translateUi('uiMessages.m4a06bf472f40') : translateUi('uiMessages.me2426bb5cab5') }}
           </button>
-          <span v-else class="workflow-share-clone-disabled">当前分享不可克隆</span>
+          <span v-else class="workflow-share-clone-disabled">{{ translateUi('uiMessages.m0431cfea5560') }}</span>
         </div>
       </header>
 
       <section class="workflow-share-info">
         <p v-if="workflow.description" class="workflow-share-description">{{ workflow.description }}</p>
-        <p v-else class="workflow-share-description workflow-share-description-muted">该工作流没有描述。</p>
+        <p v-else class="workflow-share-description workflow-share-description-muted">{{ translateUi('uiMessages.ma63e108fb035') }}</p>
         <div class="workflow-share-counts">
-          <span>{{ nodes.length }} 个节点</span>
-          <span>{{ edges.length }} 条连接</span>
-          <span>滚轮缩放 · 拖动画布平移</span>
+          <span>{{ translateUi('uiMessages.m4d72684f638f', { value1: (nodes.length) }) }}</span>
+          <span>{{ translateUi('uiMessages.m9fe42552a83e', { value1: (edges.length) }) }}</span>
+          <span>{{ translateUi('uiMessages.mfbb00847193f') }}</span>
         </div>
       </section>
 
-      <section class="workflow-share-flow-shell" aria-label="工作流只读画布">
+      <section class="workflow-share-flow-shell" :aria-label="translateUi('uiMessages.mfe1f83f8d940')">
         <VueFlow
           id="workflow-share-preview"
           :nodes="nodes"

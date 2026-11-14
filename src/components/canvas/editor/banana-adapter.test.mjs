@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../../i18n/index.js'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -9,7 +10,7 @@ const declaration = parse(source, { sourceType: 'module' }).program.body.find(no
 function fixture(overrides = {}) {
   const calls = []
   const context = {
-    URLSearchParams,
+    URLSearchParams, translateUi,
     request: async path => { const params = Object.fromEntries(new URLSearchParams(path.split('?')[1])); calls.push(params); return { assets: [{ type: params.type === 'all' ? 'image' : params.type, url: '/uploads/asset.png', name: '素材' }], total: 65 } },
     getHistory: async params => { calls.push(params); return { history: [{ id: 'same-id', type: 'image', url: '/image.png' }, { id: 'same-id', type: 'video', url: '/video.mp4' }] } },
     useTeamStore: () => ({ getSpaceParams: scope => ({ spaceType: scope, teamId: scope === 'team' ? 'team-a' : null }) }),

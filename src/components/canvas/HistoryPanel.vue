@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * HistoryPanel.vue - 历史记录面板
  * 使用真正的虚拟滚动实现，只渲染可视区域的内容
@@ -59,7 +61,7 @@ const spaceFilter = useCanvasSpaceFilter(teamStore)
 const retentionDays = ref(null)
 const retentionHint = computed(() => retentionDays.value === null
   ? ''
-  : retentionDays.value === 0 ? '历史记录永久保留' : `历史记录保留 ${retentionDays.value} 天`)
+  : retentionDays.value === 0 ? translateUi('uiMessages.ma769e6f4d508') : translateUi('uiMessages.m2f01fe7760d7', { value1: (retentionDays.value) }))
 
 watch(() => props.visible, async (visible) => {
   if (!visible) return
@@ -731,10 +733,10 @@ async function copyHistoryPrompt(e, item) {
 
   try {
     await navigator.clipboard.writeText(prompt)
-    showToast('提示词已复制', 'success')
+    showToast(translateUi('uiMessages.m07ccffa34aa4'), 'success')
   } catch (error) {
     console.error('[HistoryPanel] 复制提示词失败:', error)
-    showToast('复制失败，请手动复制', 'error')
+    showToast(translateUi('uiMessages.m97f4308501ff'), 'error')
   }
 }
 
@@ -1353,7 +1355,7 @@ async function handleAddToAssets(item) {
   
   if (!item || !item.url) {
     console.warn('[HistoryPanel] 无效的项目，无法加入资产')
-    showToast('无效的项目', 'error')
+    showToast(translateUi('uiMessages.maea6f5848c59'), 'error')
     return
   }
   
@@ -1382,7 +1384,7 @@ async function handleAddToAssets(item) {
     showToast(t('canvas.contextMenu.assetSaved', { type: t(`canvas.nodes.${item.type}`) }), 'success')
   } catch (error) {
     console.error('[HistoryPanel] 加入资产失败:', error)
-    showToast('加入资产失败：' + (error.message || '未知错误'), 'error')
+    showToast(translateUi('uiMessages.md35fe001fd2f') + (error.message || translateUi('canvas.unknownError')), 'error')
   } finally {
     savingAsset.value = false
   }
@@ -1903,13 +1905,13 @@ onUnmounted(() => {
       <div class="history-panel canvas-panel" :class="{ fullscreen: isFullscreen || selectionMode }"
         :role="selectionMode ? 'dialog' : undefined"
         :aria-modal="selectionMode ? 'true' : undefined"
-        :aria-label="selectionMode ? '从生成历史选择' : undefined"
+        :aria-label="selectionMode ? translateUi('uiMessages.m73c8136b0056') : undefined"
       >
         <!-- 头部 -->
         <div class="panel-header">
           <div class="header-title">
             <History :size="20" aria-hidden="true" />
-            <span>{{ selectionMode ? '从生成历史选择' : t('canvas.historyPanel.title') }}</span>
+            <span>{{ selectionMode ? translateUi('uiMessages.m73c8136b0056') : t('canvas.historyPanel.title') }}</span>
           </div>
           <div class="header-actions">
             <!-- 批量选择按钮 -->
@@ -1918,7 +1920,7 @@ onUnmounted(() => {
               class="header-btn"
               :class="{ active: isSelectMode }"
               @click="toggleSelectMode"
-              :title="isSelectMode ? '退出选择' : '批量选择'"
+              :title="isSelectMode ? translateUi('uiMessages.m63de082c7269') : translateUi('uiMessages.m9ab296886086')"
             >
               <SquareCheck :size="18" aria-hidden="true" />
             </button>
@@ -1928,13 +1930,13 @@ onUnmounted(() => {
               class="header-btn"
               :class="{ active: isFullscreen }"
               @click="toggleFullscreen"
-              :title="isFullscreen ? '退出全屏' : '全屏显示'"
+              :title="isFullscreen ? translateUi('uiMessages.m0f1505b6ad3f') : translateUi('uiMessages.m2ea6efe45979')"
             >
               <Maximize2 v-if="!isFullscreen" :size="18" aria-hidden="true" />
               <Minimize2 v-else :size="18" aria-hidden="true" />
             </button>
             <!-- 关闭按钮 -->
-            <button ref="pickerCloseRef" class="close-btn" aria-label="关闭历史记录" @click="$emit('close')">
+            <button ref="pickerCloseRef" class="close-btn" :aria-label="translateUi('uiMessages.m9a8d3f051023')" @click="$emit('close')">
               <X :size="18" aria-hidden="true" />
             </button>
           </div>
@@ -1944,9 +1946,9 @@ onUnmounted(() => {
         <div v-if="isSelectMode && !selectionMode" class="batch-action-bar">
           <div class="select-info">
             <button class="select-all-btn" @click="toggleSelectAll">
-              {{ selectedItems.size === filteredHistory.length ? '取消全选' : '全选' }}
+              {{ selectedItems.size === filteredHistory.length ? translateUi('common.deselectAll') : translateUi('common.selectAll') }}
             </button>
-            <span class="select-count">已选 {{ selectedItems.size }} 项</span>
+            <span class="select-count">{{ translateUi('uiMessages.mc762e8837022', { value1: (selectedItems.size) }) }}</span>
           </div>
           <button 
             class="batch-download-btn" 
@@ -1959,16 +1961,16 @@ onUnmounted(() => {
               <line x1="12" y1="15" x2="12" y2="3"/>
             </svg>
             <span v-if="batchDownloading">
-              下载中 {{ batchDownloadProgress.current }}/{{ batchDownloadProgress.total }}
+              {{ translateUi('uiMessages.m5d34205ac629', { value1: (batchDownloadProgress.current), value2: (batchDownloadProgress.total) }) }}
             </span>
-            <span v-else>批量下载</span>
+            <span v-else>{{ translateUi('uiMessages.m61522095240d') }}</span>
           </button>
           <button 
             class="batch-copy-btn" 
             :disabled="selectedItems.size === 0 || batchCopying"
             @click="handleBatchCopyToSpace"
           >
-            {{ batchCopying ? '复制中...' : '复制到空间' }}
+            {{ batchCopying ? translateUi('uiMessages.m9c195f89cf41') : translateUi('uiMessages.m6a9819d3c84f') }}
           </button>
         </div>
 
@@ -2181,8 +2183,8 @@ onUnmounted(() => {
                       v-if="item.prompt"
                       class="overlay-copy-prompt"
                       @click.stop="copyHistoryPrompt($event, item)"
-                      title="复制提示词"
-                      aria-label="复制提示词"
+                      :title="translateUi('uiMessages.m3ed2c259da32')"
+                      :aria-label="translateUi('uiMessages.m3ed2c259da32')"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
@@ -2216,11 +2218,11 @@ onUnmounted(() => {
 
         <!-- 底部统计 -->
         <div v-if="selectionMode" class="picker-footer">
-          <span>已选择 {{ pickerItems.size }} 项</span>
+          <span>{{ translateUi('uiMessages.mdb1c80d27797', { value1: (pickerItems.size) }) }}</span>
           <div class="picker-footer-actions">
-            <button type="button" @click="$emit('close')">取消</button>
+            <button type="button" @click="$emit('close')">{{ translateUi('common.cancel') }}</button>
             <button type="button" class="picker-confirm" :disabled="pickerItems.size === 0" @click="confirmHistorySelection">
-              添加到画布
+              {{ translateUi('canvas.assetPanel.addToCanvas') }}
             </button>
           </div>
         </div>
@@ -2283,7 +2285,7 @@ onUnmounted(() => {
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
           </svg>
-          <span>复制到空间</span>
+          <span>{{ translateUi('uiMessages.m6a9819d3c84f') }}</span>
         </div>
         <div class="context-menu-divider"></div>
         <div v-if="canDeleteHistory" class="context-menu-item danger" @click="handleDelete(null, contextMenuItem)">
@@ -2307,7 +2309,7 @@ onUnmounted(() => {
       >
         <div class="history-preview-modal">
           <!-- 顶部关闭按钮 -->
-          <button class="close-preview-btn" @click="closePreview" title="关闭 (ESC)">
+          <button class="close-preview-btn" @click="closePreview" :title="translateUi('uiMessages.ma0168ae06f99')">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"/>
               <line x1="6" y1="6" x2="18" y2="18"/>
@@ -2319,8 +2321,8 @@ onUnmounted(() => {
             type="button"
             :disabled="!canPreviewPrevious"
             @click.stop="switchHistoryPreview(-1)"
-            title="上一张"
-            aria-label="上一张"
+            :title="translateUi('uiMessages.mbcf200709dbc')"
+            :aria-label="translateUi('uiMessages.mbcf200709dbc')"
           >
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
               <path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -2332,8 +2334,8 @@ onUnmounted(() => {
             type="button"
             :disabled="!canPreviewNext"
             @click.stop="switchHistoryPreview(1)"
-            title="下一张"
-            aria-label="下一张"
+            :title="translateUi('uiMessages.mdcd4eb027369')"
+            :aria-label="translateUi('uiMessages.mdcd4eb027369')"
           >
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
               <path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -2461,7 +2463,7 @@ onUnmounted(() => {
             </svg>
           </div>
           <div class="delete-modal-title">{{ t('canvas.historyPanel.deleteConfirm') }}</div>
-          <div class="delete-modal-desc">此操作无法撤销</div>
+          <div class="delete-modal-desc">{{ translateUi('uiMessages.m1f1a8e3dece2') }}</div>
           <div class="delete-modal-preview" v-if="deleteTarget">
             <img 
               v-if="deleteTarget.type === 'image' && getPreviewContent(deleteTarget)" 
@@ -2474,10 +2476,10 @@ onUnmounted(() => {
           </div>
           <div class="delete-modal-actions">
             <button class="modal-btn cancel-btn" @click="cancelDelete">
-              取消
+              {{ translateUi('common.cancel') }}
             </button>
             <button class="modal-btn confirm-btn" @click="confirmDelete">
-              确认删除
+              {{ translateUi('uiMessages.ma3ea3c17b401') }}
             </button>
           </div>
         </div>

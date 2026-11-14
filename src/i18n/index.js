@@ -48,13 +48,18 @@ loadedLanguages.add('zh-CN')
 // 获取初始语言
 function getInitialLanguage() {
   // 1. 优先从 localStorage 获取用户选择的语言
-  const savedLang = localStorage.getItem('language')
+  const savedLang = typeof localStorage !== 'undefined' ? localStorage.getItem('language') : null
   if (savedLang && LANGUAGE_CODES.includes(savedLang)) {
     return savedLang
   }
   
   // 2. 检测浏览器语言
-  const browserLang = navigator.language || navigator.userLanguage
+  const browserLang = typeof navigator !== 'undefined' ? (navigator.language || navigator.userLanguage || '') : ''
+
+  // 香港、澳门及 Hant 脚本均使用繁体，不能按 zh 前缀匹配到简体。
+  if (/^zh-(?:hant(?:-|$)|hk(?:-|$)|mo(?:-|$)|tw(?:-|$))/i.test(browserLang)) {
+    return 'zh-TW'
+  }
   
   // 精确匹配
   if (LANGUAGE_CODES.includes(browserLang)) {
@@ -101,6 +106,10 @@ async function initI18n() {
   // 预加载默认语言作为回退
   if (currentLanguage.value !== DEFAULT_LANGUAGE) {
     await loadLanguageModule(DEFAULT_LANGUAGE)
+  }
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = currentLanguage.value
+    document.documentElement.dir = (currentLanguage.value === 'ar' || currentLanguage.value === 'ug') ? 'rtl' : 'ltr'
   }
 }
 

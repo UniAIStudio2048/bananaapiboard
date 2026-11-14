@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -13,7 +14,7 @@ const nodeFiles = [
 
 test('translation button has one action and calls the dedicated prompt translation API', () => {
   assert.match(componentSource, /translatePrompt/)
-  assert.match(componentSource, /翻译提示词（中译英 \/ 英译中）/)
+  assert.match(componentSource, localizedPattern(/翻译提示词（中译英 \/ 英译中）/))
   assert.match(componentSource, /class="prompt-translate-icon"/)
   assert.match(componentSource, /https:\/\/filescos\.nananobanana\.cn\/_global_\/ui-assets\/canvas-icons\/6cf6f931-a6b1-4ce4-b566-2949c0c8980f\.png/)
   assert.match(componentSource, /https:\/\/filescos\.nananobanana\.cn\/_global_\/ui-assets\/canvas-icons\/d417c9eb-d6e4-4b86-8470-20e5bc070c94\.png/)

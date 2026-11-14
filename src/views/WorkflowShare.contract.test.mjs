@@ -1,3 +1,4 @@
+import { localizedPattern } from '../i18n/sourceAssertions.mjs'
 import { strict as assert } from 'node:assert'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -9,13 +10,13 @@ const nodeSource = readFileSync(join(__dirname, '..', 'components', 'canvas', 'W
 
 assert.match(source, /normalizeWorkflowSharePayload/)
 assert.match(source, /shareData\.value\?\.canClone/)
-assert.doesNotMatch(source, /只读保护提示|workflow-share-warnings|v-for="warning in warnings"/)
+assert.doesNotMatch(source, localizedPattern(/只读保护提示|workflow-share-warnings|v-for="warning in warnings"/))
 assert.match(source, /noindex, nofollow, noarchive/)
 assert.match(source, /no-referrer/)
 assert.doesNotMatch(source, /components\/canvas\/nodes\//)
 assert.doesNotMatch(source, /CanvasBoard|SaveWorkflowDialog|useCanvasStore/)
 assert.match(nodeSource, /white-space:\s*pre-wrap/)
-assert.match(nodeSource, /媒体仅在原工作区可用/)
-assert.match(nodeSource, /公开参数与结果/)
+assert.match(nodeSource, localizedPattern(/媒体仅在原工作区可用/))
+assert.match(nodeSource, localizedPattern(/公开参数与结果/))
 
 console.log('WorkflowShare contract tests passed')

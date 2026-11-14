@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * CanvasContextMenu.vue - 画布右键菜单（空白区域）
  * 
@@ -236,7 +238,7 @@ function handleMenuClick(event) {
   >
     <!-- 当有节点被选中时，显示选中操作菜单 -->
     <template v-if="selectedCount > 0">
-      <div class="canvas-context-menu-title">选中 {{ selectedCount }} 个节点</div>
+      <div class="canvas-context-menu-title">{{ translateUi('uiMessages.m7e1dc3c8cb17', { value1: (selectedCount) }) }}</div>
       
       <!-- 编组选项（需要至少2个节点） -->
       <div 
@@ -245,7 +247,7 @@ function handleMenuClick(event) {
         @click="handleGroup"
       >
         <Group class="icon" aria-hidden="true" />
-        编组
+        {{ translateUi('canvas.nodeTypes.group') }}
         <span class="shortcut">Ctrl+G</span>
       </div>
       
@@ -253,7 +255,7 @@ function handleMenuClick(event) {
       
       <div class="canvas-context-menu-item" @click="handleCopy">
         <Copy class="icon" aria-hidden="true" />
-        复制选中
+        {{ translateUi('directorStudio.toolbar.copySelected') }}
         <span class="shortcut">Ctrl+C</span>
       </div>
       <div
@@ -262,7 +264,7 @@ function handleMenuClick(event) {
         @click="hasDownloadableMedia && handleDownloadSelectedMedia()"
       >
         <Download class="icon" aria-hidden="true" />
-        下载选中媒体
+        {{ translateUi('uiMessages.me07950b95396') }}
       </div>
       <div 
         class="canvas-context-menu-item"
@@ -270,7 +272,7 @@ function handleMenuClick(event) {
         @click="handlePaste"
       >
         <ClipboardPaste class="icon" aria-hidden="true" />
-        粘贴
+        {{ translateUi('directorStudio.inspector.paste') }}
         <span class="shortcut">Ctrl+V</span>
       </div>
       
@@ -278,7 +280,7 @@ function handleMenuClick(event) {
       
       <div class="canvas-context-menu-item delete-item" @click="handleDeleteSelected">
         <Trash2 class="icon" aria-hidden="true" />
-        删除选中
+        {{ translateUi('directorStudio.toolbar.deleteSelected') }}
         <span class="shortcut">Delete</span>
       </div>
     </template>
@@ -286,29 +288,29 @@ function handleMenuClick(event) {
     <!-- 默认菜单（没有多选节点时） -->
     <template v-else>
       <!-- 上传 -->
-      <div class="canvas-context-menu-title">上传资源</div>
+      <div class="canvas-context-menu-title">{{ translateUi('uiMessages.mb290930bf64e') }}</div>
       <div class="canvas-context-menu-item" @click="handleUploadImage">
         <Image class="icon" aria-hidden="true" />
-        上传图片
+        {{ translateUi('imageGen.uploadImage') }}
         <span class="shortcut"></span>
       </div>
       <div class="canvas-context-menu-item" @click="handleUploadVideo">
         <Film class="icon" aria-hidden="true" />
-        上传视频
+        {{ translateUi('canvas.videoNode.uploadVideo') }}
         <span class="shortcut"></span>
       </div>
       <div class="canvas-context-menu-item" @click="handleUploadAudio">
         <AudioLines class="icon" aria-hidden="true" />
-        上传音频
+        {{ translateUi('canvas.audioNode.upload') }}
         <span class="shortcut"></span>
       </div>
       <button type="button" class="canvas-context-menu-item history-menu-item" @click="handleSelectHistory">
         <History class="icon" aria-hidden="true" />
-        从生成历史选择
+        {{ translateUi('uiMessages.m73c8136b0056') }}
       </button>
       <div class="canvas-context-menu-item" @click="handlePasteFromClipboard">
         <ClipboardPaste class="icon" aria-hidden="true" />
-        从剪贴板粘贴
+        {{ translateUi('uiMessages.mff6abae1898a') }}
         <span class="shortcut">{{ hasClipboard ? '' : 'Ctrl+V' }}</span>
       </div>
 
@@ -317,21 +319,21 @@ function handleMenuClick(event) {
       <!-- 添加节点 -->
       <div class="canvas-context-menu-item" @click="handleAddNode">
         <Plus class="icon" aria-hidden="true" />
-        添加节点
-        <span class="shortcut">双击</span>
+        {{ translateUi('canvas.addNode') }}
+        <span class="shortcut">{{ translateUi('canvas.emptyState.doubleClick') }}</span>
       </div>
       
       <div class="canvas-context-menu-divider"></div>
       
       <!-- 编辑操作 -->
-      <div class="canvas-context-menu-title">编辑</div>
+      <div class="canvas-context-menu-title">{{ translateUi('common.edit') }}</div>
       <div 
         class="canvas-context-menu-item" 
         :class="{ disabled: !canUndo }"
         @click="canUndo && handleUndo()"
       >
         <Undo2 class="icon" aria-hidden="true" />
-        撤销
+        {{ translateUi('canvas.undo') }}
         <span class="shortcut">Ctrl+Z</span>
       </div>
       <div 
@@ -340,7 +342,7 @@ function handleMenuClick(event) {
         @click="canRedo && handleRedo()"
       >
         <Redo2 class="icon" aria-hidden="true" />
-        重做
+        {{ translateUi('canvas.redo') }}
         <span class="shortcut">Ctrl+Y</span>
       </div>
       
@@ -352,7 +354,7 @@ function handleMenuClick(event) {
         @click="hasSelectedNodes && handleCopy()"
       >
         <Copy class="icon" aria-hidden="true" />
-        复制节点
+        {{ translateUi('canvas.contextMenu.copyNode') }}
         <span class="shortcut">Ctrl+C</span>
       </div>
       <div 
@@ -361,7 +363,7 @@ function handleMenuClick(event) {
         @click="hasClipboard && handlePaste()"
       >
         <ClipboardPaste class="icon" aria-hidden="true" />
-        粘贴节点
+        {{ translateUi('canvas.contextMenu.pasteNode') }}
         <span class="shortcut">Ctrl+V</span>
       </div>
       
@@ -369,34 +371,34 @@ function handleMenuClick(event) {
       
       <div class="canvas-context-menu-item" @click="handleSelectAll">
         <Scan class="icon" aria-hidden="true" />
-        全选
+        {{ translateUi('common.selectAll') }}
         <span class="shortcut">Ctrl+A</span>
       </div>
       
       <div class="canvas-context-menu-divider"></div>
       
       <!-- 快捷键提示 -->
-      <div class="canvas-context-menu-title">交互提示</div>
+      <div class="canvas-context-menu-title">{{ translateUi('uiMessages.mc8d85f90c95a') }}</div>
       <div class="canvas-context-menu-hint">
         <div class="hint-item">
-          <span class="hint-key">Shift + 拖动</span>
-          <span class="hint-desc">框选节点</span>
+          <span class="hint-key">{{ translateUi('uiMessages.m115ff9b92dac') }}</span>
+          <span class="hint-desc">{{ translateUi('canvas.infiniteLeftDragDesc') }}</span>
         </div>
         <div class="hint-item">
-          <span class="hint-key">空格 + 拖动</span>
-          <span class="hint-desc">平移画布</span>
+          <span class="hint-key">{{ translateUi('uiMessages.mffa703c250ed') }}</span>
+          <span class="hint-desc">{{ translateUi('canvas.leftDragDesc') }}</span>
         </div>
         <div class="hint-item">
-          <span class="hint-key">滚轮</span>
-          <span class="hint-desc">缩放画布</span>
+          <span class="hint-key">{{ translateUi('uiMessages.mb2e538a7903b') }}</span>
+          <span class="hint-desc">{{ translateUi('uiMessages.m03f64bc1d3dc') }}</span>
         </div>
         <div class="hint-item">
-          <span class="hint-key">Shift + 滚轮</span>
-          <span class="hint-desc">左右平移</span>
+          <span class="hint-key">{{ translateUi('uiMessages.ma49874efc284') }}</span>
+          <span class="hint-desc">{{ translateUi('uiMessages.m1387edfb34f0') }}</span>
         </div>
         <div class="hint-item">
-          <span class="hint-key">Ctrl + 滚轮</span>
-          <span class="hint-desc">上下平移</span>
+          <span class="hint-key">{{ translateUi('uiMessages.m520c7b94b1a2') }}</span>
+          <span class="hint-desc">{{ translateUi('uiMessages.md93c352f6971') }}</span>
         </div>
       </div>
     </template>

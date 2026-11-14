@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../i18n/index.js'
 /**
  * Canvas 项目 API
  */
@@ -26,7 +27,7 @@ export async function getProjectList(params = {}) {
   })
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.message || '获取项目列表失败')
+    throw new Error(error.message || translateUi('uiMessages.mbdb2ee185726'))
   }
   return response.json()
 }
@@ -41,7 +42,7 @@ export async function createProject(data) {
   })
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.message || '创建项目失败')
+    throw new Error(error.message || translateUi('uiMessages.mbd71a5a12e6c'))
   }
   return response.json()
 }
@@ -55,7 +56,7 @@ export async function getProject(id) {
   })
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.message || '获取项目详情失败')
+    throw new Error(error.message || translateUi('uiMessages.m549bee683c76'))
   }
   return response.json()
 }
@@ -70,7 +71,7 @@ export async function updateProject(id, data) {
   })
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.message || '更新项目失败')
+    throw new Error(error.message || translateUi('uiMessages.mccea400ddf6e'))
   }
   return response.json()
 }
@@ -84,7 +85,7 @@ export async function deleteProject(id) {
   })
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.message || '删除项目失败')
+    throw new Error(error.message || translateUi('uiMessages.m0fc85039279b'))
   }
   return response.json()
 }
@@ -99,7 +100,7 @@ export async function moveWorkflowToProject(workflowId, projectId) {
   })
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.message || '移动失败')
+    throw new Error(error.message || translateUi('uiMessages.m372bcad96156'))
   }
   return response.json()
 }
@@ -114,7 +115,7 @@ export async function transferWorkflowSpace(workflowId, data) {
   })
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.message || '移动工作流失败')
+    throw new Error(error.message || translateUi('uiMessages.mfc63ada5a92c'))
   }
   return response.json()
 }
@@ -129,7 +130,7 @@ export async function transferProjectSpace(projectId, data) {
   })
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.message || '移动项目失败')
+    throw new Error(error.message || translateUi('uiMessages.m2811a114e863'))
   }
   return response.json()
 }
@@ -141,7 +142,7 @@ export async function copyWorkflowToSpace(workflowId, data) {
   })
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.message || '创建工作流副本失败')
+    throw new Error(error.message || translateUi('uiMessages.m937d719c9475'))
   }
   return response.json()
 }
@@ -153,7 +154,7 @@ export async function copyProjectToSpace(projectId, data) {
   })
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.message || '创建项目副本失败')
+    throw new Error(error.message || translateUi('uiMessages.m1e1f490cb27e'))
   }
   return response.json()
 }

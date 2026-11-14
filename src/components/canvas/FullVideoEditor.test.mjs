@@ -1,3 +1,7 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
+import * as i18nTestRuntime from '../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -18,7 +22,7 @@ function fixture(props = {}) {
     addNode(node) { calls.added.push(node) },
     applyWorkflowSaveVersions(workflow) { current.savedNodeVersions = { ...workflow.node_versions } }
   }
-  const state = runInNewContext(`${body}\n;({ status, error, createResult, close, retrySave, setActiveTab: value => { activeTab = value } })`, {
+  const state = runInNewContext(`${body}\n;({ status, error, createResult, close, retrySave, setActiveTab: value => { activeTab = value } })`, { translateUi, uiLanguage,
     ref: value => ({ value }), onMounted: callback => { mounted = callback }, onBeforeUnmount: callback => { unmount = callback },
     defineProps: () => ({ nodeId: 'source', initialSource: { url: '/video.mp4' }, loadDraft: async () => null, saveDraft: async () => {}, ...props }), defineEmits: () => () => { calls.closed++ },
     useCanvasStore: () => store, createVideoEditDraftWriter,
@@ -84,7 +88,7 @@ test('加载期间切换画布会中止挂载，不绑定到切换后的画布',
   const h = fixture({ loadDraft: () => new Promise(resolve => { resolveDraft = resolve }) })
   const pending = h.mount()
   h.switchTab(); resolveDraft(null); await pending
-  assert.match(h.state.error.value, /画布已切换/)
+  assert.match(h.state.error.value, localizedPattern(/画布已切换/))
   assert.equal(h.calls.bind, 0)
 })
 

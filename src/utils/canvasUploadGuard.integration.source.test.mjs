@@ -1,3 +1,4 @@
+import { localizedPattern } from '../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
@@ -27,7 +28,7 @@ for (const file of files) {
   const source = fs.readFileSync(new URL(file, import.meta.url), 'utf8')
   assert.match(source, /import\s*\{[^}]*findBlockingCanvasUploads[^}]*\}\s*from\s*['"]@\/utils\/canvasUploadGuard['"]/s, `${file} imports guard`)
   assert.match(source, /findBlockingCanvasUploads\(/, `${file} invokes guard`)
-  assert.match(source, /素材仍在上传，请等待完成后重试/, `${file} shows stable blocking message`)
+  assert.match(source, localizedPattern(/素材仍在上传，请等待完成后重试/), `${file} shows stable blocking message`)
 }
 
 const canvasSource = fs.readFileSync(new URL('../views/Canvas.vue', import.meta.url), 'utf8')

@@ -1,3 +1,4 @@
+import { localizedPattern } from '../i18n/sourceAssertions.mjs'
 import { readFileSync } from 'node:fs'
 import { strict as assert } from 'node:assert'
 import { dirname, join } from 'node:path'
@@ -8,7 +9,7 @@ const source = readFileSync(join(__dirname, 'CommunityHome.vue'), 'utf8')
 
 assert.match(
   source,
-  /@click="enterBeginnerMode"[\s\S]*进入新手模式/,
+  localizedPattern(/@click="enterBeginnerMode"[\s\S]*进入新手模式/),
   'community user menu should expose the beginner mode entry'
 )
 

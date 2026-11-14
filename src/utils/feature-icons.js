@@ -1,72 +1,73 @@
+import { t as translateUi } from '../i18n/index.js'
 /**
  * 特色功能图标数据（与租户管理端 9000 一致的 SVG 图标系统）
  */
 const iconList = [
   // AI 特效
-  { name: 'motion-transfer', label: '动作迁移', paths: ['M10 7v6', 'M6 20l4-7h0l4 7'], circles: [[10, 5, 2]], lines: [[15, 7, 20, 7]], polylines: ['17 4 20 7 17 10'] },
-  { name: 'flame', label: '爆款复刻', paths: ['M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z'] },
-  { name: 'spotlight', label: '打光', circles: [[12, 12, 4]], paths: ['M12 2v2', 'M12 20v2', 'M4.93 4.93l1.41 1.41', 'M17.66 17.66l1.41 1.41', 'M2 12h2', 'M20 12h2', 'M6.34 17.66l-1.41 1.41', 'M19.07 4.93l-1.41 1.41'] },
-  { name: 'multi-angle', label: '多角度切换', paths: ['M21 12a9 9 0 1 1-6.22-8.56'], rects: [[9, 9, 6, 6, 1]], polylines: ['22 4 22 10 16 10'] },
-  { name: 'face-swap', label: '换脸', paths: ['M3 7V5a2 2 0 0 1 2-2h2', 'M17 3h2a2 2 0 0 1 2 2v2', 'M21 17v2a2 2 0 0 1-2 2h-2', 'M7 21H5a2 2 0 0 1-2-2v-2', 'M8 14s1.5 2 4 2 4-2 4-2'], circles: [[9, 9, 1.5], [15, 9, 1.5]] },
-  { name: 'style-transfer', label: '风格迁移', paths: ['M12 22C6.5 22 2 17.5 2 12S6.5 2 12 2s10 4.5 10 10c0 .926-.127 1.822-.364 2.674-.22.792-.997 1.326-1.816 1.326H17a2 2 0 0 0-1.414 3.414l.5.5A1 1 0 0 1 15.5 22H12z'], circles: [[7.5, 11.5, 1.5], [12, 7.5, 1.5], [16.5, 11.5, 1.5]] },
-  { name: 'img2img', label: '图生图', paths: ['M15 2H6a2 2 0 0 0-2 2v8', 'M18 14H9a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2z'], rects: [[4, 2, 12, 10, 2]], circles: [[8, 5, 1]] },
-  { name: 'txt2img', label: '文生图', paths: ['M4 7V4h16v3', 'M9 20h6', 'M12 4v8', 'M17 15l4 4-4 4'], lines: [[14, 19, 21, 19]] },
-  { name: 'bg-remove', label: '抠图', paths: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M20 6l2-2', 'M22 10l-2-2'], circles: [[9, 7, 4]], lines: [[18, 4, 22, 8]] },
-  { name: 'inpainting', label: '局部重绘', paths: ['M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7', 'M18.375 2.625a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4Z'] },
-  { name: 'upscale', label: '超分辨率', paths: ['M15 3h6v6', 'M9 21H3v-6', 'M21 3l-7 7', 'M3 21l7-7'] },
-  { name: 'photo-restore', label: '老照片修复', paths: ['M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8', 'M3 3v5h5'], polylines: ['12 7 12 12 16 14'] },
-  { name: 'virtual-tryon', label: '模特换装', paths: ['M20.38 3.46L16 2l-4 4-4-4-4.38 1.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23Z'] },
-  { name: 'id-photo', label: '证件照', paths: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'], rects: [[1, 1, 22, 22, 2]], circles: [[9, 8, 3]], lines: [[17, 8, 22, 8], [17, 12, 22, 12]] },
-  { name: 'sketch2img', label: '涂鸦生图', paths: ['M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z', 'M15 5l4 4'] },
-  { name: 'comic-style', label: '漫画风', paths: ['M7.9 20A9 9 0 1 0 4 16.1L2 22Z', 'M8 12h.01', 'M12 12h.01', 'M16 12h.01'] },
-  { name: 'portrait', label: 'AI写真', paths: ['M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z', 'M12 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M2 13h1', 'M21 13h1'] },
-  { name: 'bg-change', label: '换背景', paths: ['M2 22l5-5', 'M17 2l5 5', 'M2 22l10-10', 'M22 7l-5 5'], rects: [[3, 3, 18, 18, 2]] },
-  { name: 'expression', label: '表情迁移', paths: ['M8 14s1.5 2 4 2 4-2 4-2', 'M17 4l3 3-3 3'], circles: [[12, 12, 10]], lines: [[9, 9, 9.01, 9], [15, 9, 15.01, 9], [14, 7, 20, 7]] },
+  { name: 'motion-transfer', get label() { return translateUi('uiMessages.m161dfb026132') }, paths: ['M10 7v6', 'M6 20l4-7h0l4 7'], circles: [[10, 5, 2]], lines: [[15, 7, 20, 7]], polylines: ['17 4 20 7 17 10'] },
+  { name: 'flame', get label() { return translateUi('uiMessages.m4595795b5e80') }, paths: ['M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z'] },
+  { name: 'spotlight', get label() { return translateUi('uiMessages.m9df3d83c5f35') }, circles: [[12, 12, 4]], paths: ['M12 2v2', 'M12 20v2', 'M4.93 4.93l1.41 1.41', 'M17.66 17.66l1.41 1.41', 'M2 12h2', 'M20 12h2', 'M6.34 17.66l-1.41 1.41', 'M19.07 4.93l-1.41 1.41'] },
+  { name: 'multi-angle', get label() { return translateUi('uiMessages.m400db46c325d') }, paths: ['M21 12a9 9 0 1 1-6.22-8.56'], rects: [[9, 9, 6, 6, 1]], polylines: ['22 4 22 10 16 10'] },
+  { name: 'face-swap', get label() { return translateUi('uiMessages.m1cf951b6cc14') }, paths: ['M3 7V5a2 2 0 0 1 2-2h2', 'M17 3h2a2 2 0 0 1 2 2v2', 'M21 17v2a2 2 0 0 1-2 2h-2', 'M7 21H5a2 2 0 0 1-2-2v-2', 'M8 14s1.5 2 4 2 4-2 4-2'], circles: [[9, 9, 1.5], [15, 9, 1.5]] },
+  { name: 'style-transfer', get label() { return translateUi('canvas.templates.styleTransfer.name') }, paths: ['M12 22C6.5 22 2 17.5 2 12S6.5 2 12 2s10 4.5 10 10c0 .926-.127 1.822-.364 2.674-.22.792-.997 1.326-1.816 1.326H17a2 2 0 0 0-1.414 3.414l.5.5A1 1 0 0 1 15.5 22H12z'], circles: [[7.5, 11.5, 1.5], [12, 7.5, 1.5], [16.5, 11.5, 1.5]] },
+  { name: 'img2img', get label() { return translateUi('canvas.imageNode.imageToImage') }, paths: ['M15 2H6a2 2 0 0 0-2 2v8', 'M18 14H9a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2z'], rects: [[4, 2, 12, 10, 2]], circles: [[8, 5, 1]] },
+  { name: 'txt2img', get label() { return translateUi('canvas.nodeConfig.textToImage.label') }, paths: ['M4 7V4h16v3', 'M9 20h6', 'M12 4v8', 'M17 15l4 4-4 4'], lines: [[14, 19, 21, 19]] },
+  { name: 'bg-remove', get label() { return translateUi('uiMessages.mb84dd748d185') }, paths: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M20 6l2-2', 'M22 10l-2-2'], circles: [[9, 7, 4]], lines: [[18, 4, 22, 8]] },
+  { name: 'inpainting', get label() { return translateUi('canvas.nodeConfig.imageRepaint.label') }, paths: ['M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7', 'M18.375 2.625a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4Z'] },
+  { name: 'upscale', get label() { return translateUi('uiMessages.m909e8c29d9ed') }, paths: ['M15 3h6v6', 'M9 21H3v-6', 'M21 3l-7 7', 'M3 21l7-7'] },
+  { name: 'photo-restore', get label() { return translateUi('uiMessages.m5884cf53b7ce') }, paths: ['M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8', 'M3 3v5h5'], polylines: ['12 7 12 12 16 14'] },
+  { name: 'virtual-tryon', get label() { return translateUi('uiMessages.m070825c6449e') }, paths: ['M20.38 3.46L16 2l-4 4-4-4-4.38 1.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23Z'] },
+  { name: 'id-photo', get label() { return translateUi('uiMessages.m140c723720fb') }, paths: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'], rects: [[1, 1, 22, 22, 2]], circles: [[9, 8, 3]], lines: [[17, 8, 22, 8], [17, 12, 22, 12]] },
+  { name: 'sketch2img', get label() { return translateUi('uiMessages.me4df3fd4c060') }, paths: ['M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z', 'M15 5l4 4'] },
+  { name: 'comic-style', get label() { return translateUi('uiMessages.mb02d26137fda') }, paths: ['M7.9 20A9 9 0 1 0 4 16.1L2 22Z', 'M8 12h.01', 'M12 12h.01', 'M16 12h.01'] },
+  { name: 'portrait', get label() { return translateUi('uiMessages.m1c1d67a1e3a8') }, paths: ['M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z', 'M12 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M2 13h1', 'M21 13h1'] },
+  { name: 'bg-change', get label() { return translateUi('uiMessages.m0d5f5f4b8a6e') }, paths: ['M2 22l5-5', 'M17 2l5 5', 'M2 22l10-10', 'M22 7l-5 5'], rects: [[3, 3, 18, 18, 2]] },
+  { name: 'expression', get label() { return translateUi('uiMessages.m7ca15edf7f9c') }, paths: ['M8 14s1.5 2 4 2 4-2 4-2', 'M17 4l3 3-3 3'], circles: [[12, 12, 10]], lines: [[9, 9, 9.01, 9], [15, 9, 15.01, 9], [14, 7, 20, 7]] },
 
   // AI / 创意
-  { name: 'sparkles', label: '星光', paths: ['M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z'] },
-  { name: 'wand', label: '魔法棒', paths: ['M15 4V2', 'M15 16v-2', 'M8 9h2', 'M20 9h2', 'M17.8 11.8L19 13', 'M15 9h.01', 'M17.8 6.2L19 5', 'm3 21 9-9', 'M12.2 6.2L11 5'] },
-  { name: 'brain', label: '大脑', paths: ['M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z', 'M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z', 'M12 5v14'] },
-  { name: 'zap', label: '闪电', polygons: ['13 2 3 14 12 14 11 22 21 10 12 10 13 2'] },
-  { name: 'lightbulb', label: '灯泡', paths: ['M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5', 'M9 18h6', 'M10 22h4'] },
-  { name: 'rocket', label: '火箭', paths: ['M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z', 'M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z', 'M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0', 'M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5'] },
+  { name: 'sparkles', get label() { return translateUi('uiMessages.mb1a23d9586da') }, paths: ['M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z'] },
+  { name: 'wand', get label() { return translateUi('uiMessages.mfa6eb95191fb') }, paths: ['M15 4V2', 'M15 16v-2', 'M8 9h2', 'M20 9h2', 'M17.8 11.8L19 13', 'M15 9h.01', 'M17.8 6.2L19 5', 'm3 21 9-9', 'M12.2 6.2L11 5'] },
+  { name: 'brain', get label() { return translateUi('uiMessages.m4af8f4c6dd2e') }, paths: ['M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z', 'M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z', 'M12 5v14'] },
+  { name: 'zap', get label() { return translateUi('uiMessages.ma8c1b5b5b172') }, polygons: ['13 2 3 14 12 14 11 22 21 10 12 10 13 2'] },
+  { name: 'lightbulb', get label() { return translateUi('uiMessages.mdab3ad1f980b') }, paths: ['M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5', 'M9 18h6', 'M10 22h4'] },
+  { name: 'rocket', get label() { return translateUi('uiMessages.mb4772164ebce') }, paths: ['M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z', 'M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z', 'M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0', 'M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5'] },
 
   // 图像
-  { name: 'image', label: '图片', paths: ['M21 15l-5-5L5 21'], rects: [[3, 3, 18, 18, 2]], circles: [[8.5, 8.5, 1.5]] },
-  { name: 'camera', label: '相机', paths: ['M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z'], circles: [[12, 13, 3]] },
-  { name: 'palette', label: '调色板', paths: ['M12 22C6.5 22 2 17.5 2 12S6.5 2 12 2s10 4.5 10 10c0 .926-.127 1.822-.364 2.674-.22.792-.997 1.326-1.816 1.326H17a2 2 0 0 0-1.414 3.414l.5.5A1 1 0 0 1 15.5 22H12z'], circles: [[7.5, 11.5, 1.5], [12, 7.5, 1.5], [16.5, 11.5, 1.5]] },
-  { name: 'paintbrush', label: '画笔', paths: ['M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3Z', 'M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7', 'M14.5 17.5 4.5 15'] },
-  { name: 'layers', label: '图层', polygons: ['12 2 2 7 12 12 22 7 12 2'], polylines: ['2 17 12 22 22 17', '2 12 12 17 22 12'] },
-  { name: 'eye', label: '眼睛', paths: ['M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0'], circles: [[12, 12, 3]] },
+  { name: 'image', get label() { return translateUi('canvas.nodeConfig.imageInput.label') }, paths: ['M21 15l-5-5L5 21'], rects: [[3, 3, 18, 18, 2]], circles: [[8.5, 8.5, 1.5]] },
+  { name: 'camera', get label() { return translateUi('uiMessages.mdacf07026026') }, paths: ['M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z'], circles: [[12, 13, 3]] },
+  { name: 'palette', get label() { return translateUi('uiMessages.m57d2858750d2') }, paths: ['M12 22C6.5 22 2 17.5 2 12S6.5 2 12 2s10 4.5 10 10c0 .926-.127 1.822-.364 2.674-.22.792-.997 1.326-1.816 1.326H17a2 2 0 0 0-1.414 3.414l.5.5A1 1 0 0 1 15.5 22H12z'], circles: [[7.5, 11.5, 1.5], [12, 7.5, 1.5], [16.5, 11.5, 1.5]] },
+  { name: 'paintbrush', get label() { return translateUi('uiMessages.m05731b92ad31') }, paths: ['M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3Z', 'M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7', 'M14.5 17.5 4.5 15'] },
+  { name: 'layers', get label() { return translateUi('uiMessages.mf2926eb3bb7c') }, polygons: ['12 2 2 7 12 12 22 7 12 2'], polylines: ['2 17 12 22 22 17', '2 12 12 17 22 12'] },
+  { name: 'eye', get label() { return translateUi('uiMessages.m9069cc8f2c62') }, paths: ['M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0'], circles: [[12, 12, 3]] },
 
   // 视频
-  { name: 'video', label: '视频', paths: ['m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5'], rects: [[2, 6, 14, 12, 2]] },
-  { name: 'film', label: '胶片', paths: ['M7 2v20', 'M17 2v20'], rects: [[2, 2, 20, 20, 2]], lines: [[2, 12, 22, 12], [2, 7, 7, 7], [2, 17, 7, 17], [17, 7, 22, 7], [17, 17, 22, 17]] },
-  { name: 'play', label: '播放', polygons: ['6 3 20 12 6 21 6 3'] },
-  { name: 'clapperboard', label: '场记板', paths: ['M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z', 'M6.2 5.3l3.8 3.8', 'M12.4 3.4l3.8 3.8'], rects: [[2, 11, 20, 11, 2]] },
+  { name: 'video', get label() { return translateUi('canvas.nodeConfig.videoInput.label') }, paths: ['m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5'], rects: [[2, 6, 14, 12, 2]] },
+  { name: 'film', get label() { return translateUi('uiMessages.ma97cb6107f92') }, paths: ['M7 2v20', 'M17 2v20'], rects: [[2, 2, 20, 20, 2]], lines: [[2, 12, 22, 12], [2, 7, 7, 7], [2, 17, 7, 17], [17, 7, 22, 7], [17, 17, 22, 17]] },
+  { name: 'play', get label() { return translateUi('uiMessages.mc3396195e91c') }, polygons: ['6 3 20 12 6 21 6 3'] },
+  { name: 'clapperboard', get label() { return translateUi('uiMessages.mb6378622e1e0') }, paths: ['M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z', 'M6.2 5.3l3.8 3.8', 'M12.4 3.4l3.8 3.8'], rects: [[2, 11, 20, 11, 2]] },
 
   // 设计
-  { name: 'layout', label: '布局', paths: ['M9 3v18', 'M9 9h12'], rects: [[3, 3, 18, 18, 2]] },
-  { name: 'grid', label: '网格', paths: ['M3 3h7v7H3z', 'M14 3h7v7h-7z', 'M14 14h7v7h-7z', 'M3 14h7v7H3z'] },
-  { name: 'type', label: '文字', paths: ['M4 7V4h16v3', 'M9 20h6', 'M12 4v16'] },
-  { name: 'shapes', label: '形状', paths: ['M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z'], circles: [[7, 17.5, 3.5]], rects: [[14, 14, 7, 7, 1]] },
+  { name: 'layout', get label() { return translateUi('uiMessages.mfaa2f2ed6735') }, paths: ['M9 3v18', 'M9 9h12'], rects: [[3, 3, 18, 18, 2]] },
+  { name: 'grid', get label() { return translateUi('directorStudio.inspector.grid') }, paths: ['M3 3h7v7H3z', 'M14 3h7v7h-7z', 'M14 14h7v7h-7z', 'M3 14h7v7H3z'] },
+  { name: 'type', get label() { return translateUi('uiMessages.m14b69bd6eeb0') }, paths: ['M4 7V4h16v3', 'M9 20h6', 'M12 4v16'] },
+  { name: 'shapes', get label() { return translateUi('uiMessages.mc2f71c1b10ef') }, paths: ['M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z'], circles: [[7, 17.5, 3.5]], rects: [[14, 14, 7, 7, 1]] },
 
   // 工具
-  { name: 'settings', label: '设置', paths: ['M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z'], circles: [[12, 12, 3]] },
-  { name: 'sliders', label: '滑块', lines: [[4, 21, 4, 14], [4, 10, 4, 3], [12, 21, 12, 12], [12, 8, 12, 3], [20, 21, 20, 16], [20, 12, 20, 3]], circles: [[4, 12, 2], [12, 10, 2], [20, 14, 2]] },
-  { name: 'scissors', label: '剪刀', paths: ['M20 4 8.12 15.88', 'M14.47 14.48 20 20', 'M8.12 8.12 12 12'], circles: [[6, 6, 3], [6, 18, 3]] },
+  { name: 'settings', get label() { return translateUi('common.settings') }, paths: ['M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z'], circles: [[12, 12, 3]] },
+  { name: 'sliders', get label() { return translateUi('uiMessages.ma7c3e94cbb35') }, lines: [[4, 21, 4, 14], [4, 10, 4, 3], [12, 21, 12, 12], [12, 8, 12, 3], [20, 21, 20, 16], [20, 12, 20, 3]], circles: [[4, 12, 2], [12, 10, 2], [20, 14, 2]] },
+  { name: 'scissors', get label() { return translateUi('uiMessages.m003e6674d0fe') }, paths: ['M20 4 8.12 15.88', 'M14.47 14.48 20 20', 'M8.12 8.12 12 12'], circles: [[6, 6, 3], [6, 18, 3]] },
 
   // 通用
-  { name: 'star', label: '星星', polygons: ['12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'] },
-  { name: 'heart', label: '爱心', paths: ['M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'] },
-  { name: 'crown', label: '皇冠', paths: ['M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L20.266 6.5a.5.5 0 0 1 .734.462V18.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6.96a.5.5 0 0 1 .734-.461L7.094 9.164a1 1 0 0 0 1.516-.294z'] },
-  { name: 'infinity', label: '无穷', paths: ['M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4Zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4Z'] },
-  { name: 'music', label: '音乐', paths: ['M9 18V5l12-2v13'], circles: [[6, 18, 3], [18, 16, 3]] },
-  { name: 'smile', label: '笑脸', circles: [[12, 12, 10]], paths: ['M8 14s1.5 2 4 2 4-2 4-2'], lines: [[9, 9, 9.01, 9], [15, 9, 15.01, 9]] },
+  { name: 'star', get label() { return translateUi('uiMessages.m6a9fec7faf97') }, polygons: ['12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'] },
+  { name: 'heart', get label() { return translateUi('uiMessages.md04d7e388401') }, paths: ['M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'] },
+  { name: 'crown', get label() { return translateUi('uiMessages.mb1ced418dede') }, paths: ['M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L20.266 6.5a.5.5 0 0 1 .734.462V18.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6.96a.5.5 0 0 1 .734-.461L7.094 9.164a1 1 0 0 0 1.516-.294z'] },
+  { name: 'infinity', get label() { return translateUi('uiMessages.mb1f647d7f0c7') }, paths: ['M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4Zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4Z'] },
+  { name: 'music', get label() { return translateUi('uiMessages.mdb9514212493') }, paths: ['M9 18V5l12-2v13'], circles: [[6, 18, 3], [18, 16, 3]] },
+  { name: 'smile', get label() { return translateUi('uiMessages.m7fabd46b0d68') }, circles: [[12, 12, 10]], paths: ['M8 14s1.5 2 4 2 4-2 4-2'], lines: [[9, 9, 9.01, 9], [15, 9, 15.01, 9]] },
 
   // 社交（community_features 表实际使用的图标，与租户管理端规范图标集对齐）
-  { name: 'globe', label: '地球', paths: ['M22 12a10 10 0 0 1-10 10', 'M12 2a14.5 14.5 0 0 0 0 20', 'M12 2a14.5 14.5 0 0 1 0 20'], circles: [[12, 12, 10]], lines: [[2, 12, 22, 12]] },
-  { name: 'users', label: '用户组', paths: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M22 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'], circles: [[9, 7, 4]] },
+  { name: 'globe', get label() { return translateUi('uiMessages.meeef861b8767') }, paths: ['M22 12a10 10 0 0 1-10 10', 'M12 2a14.5 14.5 0 0 0 0 20', 'M12 2a14.5 14.5 0 0 1 0 20'], circles: [[12, 12, 10]], lines: [[2, 12, 22, 12]] },
+  { name: 'users', get label() { return translateUi('uiMessages.m963ead08d78d') }, paths: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M22 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'], circles: [[9, 7, 4]] },
 ]
 
 const iconMap = {}

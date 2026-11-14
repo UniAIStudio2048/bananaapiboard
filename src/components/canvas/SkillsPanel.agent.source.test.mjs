@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
@@ -13,12 +14,12 @@ test('installation panel uses tenant Skill branding instead of fixed Banana name
 })
 
 test('Canvas Skills panel exposes only external-agent and manual installation', () => {
-  assert.match(panel, /<h2 id="skills-panel-title">安装到 AI Agent<\/h2>/)
-  assert.match(panel, /通过 AI Agent 安装/)
-  assert.match(panel, /手动安装/)
-  assert.doesNotMatch(panel, /创建我的 Skill/)
-  assert.doesNotMatch(panel, /我的 Skill/)
-  assert.doesNotMatch(panel, /通用|收藏|搜索 Skill 名称或描述/)
+  assert.match(panel, localizedPattern(/<h2 id="skills-panel-title">安装到 AI Agent<\/h2>/))
+  assert.match(panel, localizedPattern(/通过 AI Agent 安装/))
+  assert.match(panel, localizedPattern(/手动安装/))
+  assert.doesNotMatch(panel, localizedPattern(/创建我的 Skill/))
+  assert.doesNotMatch(panel, localizedPattern(/我的 Skill/))
+  assert.doesNotMatch(panel, localizedPattern(/通用|收藏|搜索 Skill 名称或描述/))
   assert.doesNotMatch(panel, /getMySkills|createMySkill|updateMySkill|disableMySkill/)
 })
 

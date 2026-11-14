@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../../i18n/index.js'
 import { editorStorage } from './storage'
 import { stickerCountries } from './sticker-countries'
 
@@ -5,14 +6,14 @@ export type StickerCategory='all'|'logos'|'icons'|'emoji'|'flags'|'shapes'
 export interface Sticker {id:string;name:string;category:Exclude<StickerCategory,'all'>}
 const groups:Record<'logos'|'icons'|'emoji',string[]>={logos:['simple-icons','logos','skill-icons','devicon','fa-brands'],icons:['mdi','ic','ph','heroicons','lucide','tabler','fe','bi'],emoji:['noto','twemoji','fluent-emoji','fluent-emoji-flat','emojione','openmoji']}
 const defaults:Record<'icons'|'logos'|'emoji',string[]>={logos:['logos:google-icon','logos:github-icon','logos:youtube-icon','logos:apple','logos:facebook','logos:twitter','logos:instagram-icon','logos:chrome'],icons:['mdi:home','mdi:star','mdi:heart','mdi:check-circle','mdi:account','mdi:camera','mdi:music','mdi:map-marker','mdi:calendar','mdi:lightning-bolt','mdi:cog','mdi:rocket'],emoji:['noto:grinning-face','noto:smiling-face-with-heart-eyes','noto:fire','noto:rocket','noto:party-popper','noto:clapping-hands','noto:sparkles','noto:red-heart','noto:thumbs-up','noto:eyes','noto:thinking-face','noto:hundred-points']}
-const shapes=[['circle','圆形'],['square','方形'],['triangle','三角形'],['star','星形'],['hexagon','六边形'],['diamond','菱形']] as const
+const shapes=[['circle','uiMessages.m81639a8a9bce'],['square','uiMessages.m936d73e9c365'],['triangle','uiMessages.m3ecb21308383'],['star','uiMessages.m59983f97d2e0'],['hexagon','uiMessages.m8d27753418ba'],['diamond','uiMessages.m960748c01415']] as const
 const idPattern=/^[a-z0-9]+(?:-[a-z0-9]+)*:[a-z0-9]+(?:-[a-z0-9]+)*$/
 const zhNames=typeof Intl.DisplayNames==='function'?new Intl.DisplayNames(['zh-CN'],{type:'region'}):undefined
 function categoryOf(id:string):Sticker['category']|undefined {const prefix=id.split(':')[0];if(prefix==='shape')return 'shapes';if(prefix==='flag')return 'flags';return (Object.keys(groups) as (keyof typeof groups)[]).find(group=>groups[group].includes(prefix))}
 export function stickerFromId(id:string):Sticker|undefined {
  if(!idPattern.test(id))return undefined
  const category=categoryOf(id),name=id.split(':')[1];if(!category)return undefined
- if(category==='shapes'){const shape=shapes.find(item=>item[0]===name);return shape?{id,name:shape[1],category}:undefined}
+ if(category==='shapes'){const shape=shapes.find(item=>item[0]===name);return shape?{id,name:translateUi(shape[1]),category}:undefined}
  if(category==='flags'){const code=name.replace(/-4x3$/,'').toUpperCase(),country=stickerCountries.find(item=>item[0]===code);return country&&name===`${code.toLowerCase()}-4x3`?{id,name:zhNames?.of(code)??country[1],category}:undefined}
  return {id,name:name.replaceAll('-',' '),category}
 }

@@ -1,3 +1,4 @@
+import { localizedPattern } from '../i18n/sourceAssertions.mjs'
 import { readFileSync } from 'node:fs'
 import { strict as assert } from 'node:assert'
 import { dirname, join } from 'node:path'
@@ -30,7 +31,7 @@ for (const hook of controlHooks) {
 assert.match(source, /canvas-asset-toggle-btn[\s\S]*?@click="openAssetPanel"/)
 assert.match(source, /import\s*\{[^}]*FolderOpen[^}]*\}\s*from\s*['"]@lucide\/vue['"]/)
 assert.match(source, /canvas-asset-toggle-btn[\s\S]*?<FolderOpen\b[^>]*aria-hidden="true"[^>]*\/>/)
-assert.match(source, /canvas-asset-toggle-btn[\s\S]*?<span class="canvas-control-label">资产管理<\/span>/)
+assert.match(source, localizedPattern(/canvas-asset-toggle-btn[\s\S]*?<span class="canvas-control-label">资产管理<\/span>/))
 assert.match(source, /canvas-organize-btn[\s\S]*?@click="requestCanvasOrganization"/)
 assert.match(source, /canvas-edge-toggle-btn[\s\S]*?@click="toggleEdgesHidden"/)
 assert.match(source, /canvas-grid-snap-btn[\s\S]*?@click="toggleGridSnap"/)
@@ -40,7 +41,7 @@ assert.match(source, /lastVisibleEdgeStyle[\s\S]*canvas-edge-style-change/)
 
 assert.match(source, /class="canvas-zoom-trigger"/)
 assert.match(source, /v-if="showZoomMenu"[\s\S]*class="canvas-zoom-menu"/)
-assert.match(source, /缩放至50%[\s\S]*缩放至100%[\s\S]*缩放至500%/)
+assert.match(source, localizedPattern(/缩放至50%[\s\S]*缩放至100%[\s\S]*缩放至500%/))
 assert.doesNotMatch(source, /class="canvas-zoom-slider"/)
 assert.match(source, /function\s+commitZoomInput\s*\(/)
 assert.match(source, /function\s+fitCanvasToScreen\s*\(/)
@@ -53,7 +54,7 @@ assert.match(source, /isEditableShortcutTarget\(event\.target\)/)
 assert.match(source, /async\s+function\s+requestCanvasOrganization\s*\(/)
 assert.match(source, /function\s+keepOrganizedCanvas\s*\(/)
 assert.match(source, /function\s+restoreOrganizedCanvas\s*\(/)
-assert.match(source, /画布已整理[\s\S]*保留[\s\S]*恢复原样/)
+assert.match(source, localizedPattern(/画布已整理[\s\S]*保留[\s\S]*恢复原样/))
 assert.match(source, /buildOrganizationSignature\(canvasStore\.nodes,\s*canvasStore\.edges\)/)
 assert.match(source, /canvasStore\.saveHistory\(\{\s*force:\s*true\s*\}\)/)
 assert.match(source, /cancelHistory:\s*\(\)\s*=>\s*canvasStore\.cancelLatestHistory\(\)/)

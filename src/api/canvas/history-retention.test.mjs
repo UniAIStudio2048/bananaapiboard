@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../i18n/index.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -10,7 +11,7 @@ test('retention request uses tenant/auth headers, bypasses cache, and preserves 
   assert.ok(start >= 0 && end > start)
   const calls = []
   let response = { ok: true, json: async () => ({ retentionDays: 0 }) }
-  const get = new Function('fetch', 'getApiUrl', 'getAuthHeaders', `${source.slice(start, end).replace('export ', '')}; return getHistoryRetention`)(
+  const get = new Function('translateUi', 'fetch', 'getApiUrl', 'getAuthHeaders', `${source.slice(start, end).replace('export ', '')}; return getHistoryRetention`).bind(null, translateUi)(
     async (...args) => { calls.push(args); return response }, path => path, () => ({ Authorization: 'Bearer test', 'X-Tenant-ID': 'tenant' })
   )
   assert.equal(await get(), 0)
@@ -24,7 +25,7 @@ test('retention request uses tenant/auth headers, bypasses cache, and preserves 
 })
 test('history footer and empty state display configured days or permanent retention', () => {
   const expression = panel.slice(panel.indexOf('const retentionHint = computed('), panel.indexOf('\nwatch(() => props.visible'))
-  const render = value => new Function('computed', 'retentionDays', `${expression}; return retentionHint`)(fn => fn(), { value })
+  const render = value => new Function('translateUi', 'computed', 'retentionDays', `${expression}; return retentionHint`)(translateUi, fn => fn(), { value })
   assert.equal(render(30), '历史记录保留 30 天')
   assert.equal(render(3), '历史记录保留 3 天')
   assert.equal(render(0), '历史记录永久保留')

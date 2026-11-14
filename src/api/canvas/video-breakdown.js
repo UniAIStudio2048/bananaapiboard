@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../i18n/index.js'
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 
 export async function requestVideoBreakdown(path, body, { signal, method } = {}) {
@@ -9,6 +10,6 @@ export async function requestVideoBreakdown(path, body, { signal, method } = {})
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(180000)]) : AbortSignal.timeout(180000)
   })
   const data = await response.json()
-  if (!response.ok) throw Object.assign(new Error(data.message || '逐帧拉片请求失败'), { status: response.status })
+  if (!response.ok) throw Object.assign(new Error(data.message || translateUi('uiMessages.mf92344cf3c87')), { status: response.status })
   return data
 }

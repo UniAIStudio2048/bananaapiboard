@@ -1,3 +1,7 @@
+import * as i18nTestRuntime from '../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -40,7 +44,7 @@ function harness({ upload, publish } = {}) {
   }
   for (const name of ['inferMediaTypeFromFile', 'inferMediaTypeFromUrl', 'normalizeMediaType', 'getMediaRequiredMessage', 'close', 'uploadWorkMedia', 'handlePublish']) {
     const node = ast.program.body.find(item => item.type === 'FunctionDeclaration' && item.id.name === name)
-    context[name] = runInNewContext(`(${script.slice(node.start, node.end)})`, context)
+    context[name] = runInNewContext(`(${script.slice(node.start, node.end)})`, Object.assign(context, { translateUi, uiLanguage }))
   }
   return { context, uploads, published, emitted }
 }
@@ -90,7 +94,7 @@ test('an upload failure prevents publication and preserves files for a successfu
   h.context.workFiles.value = files
   await h.context.handlePublish()
   assert.equal(h.published.length, 0)
-  assert.match(h.context.error.value, /上传服务暂不可用/)
+  assert.match(h.context.error.value, localizedPattern(/上传服务暂不可用/))
   assert.equal(h.context.workFiles.value, files)
   assert.equal(h.context.loading.value, false)
   fail = false
@@ -104,7 +108,7 @@ test('a missing URL from any image stops publication instead of publishing a par
   h.context.workFiles.value = [image('first.png'), image('second.png')]
   await h.context.handlePublish()
   assert.equal(h.published.length, 0)
-  assert.match(h.context.error.value, /上传/)
+  assert.match(h.context.error.value, localizedPattern(/上传/))
 })
 
 for (const [code, status, expected] of [

@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
@@ -24,7 +26,7 @@ const selectedIndex = ref(0)
 const options = computed(() => {
   return props.markers.map(marker => ({
     label: marker.label,
-    text: marker.displayLabel ? `${marker.displayLabel}位置` : `${marker.label}位置`,
+    text: marker.displayLabel ? translateUi('uiMessages.mcd0a441ffc18', { value1: (marker.displayLabel) }) : translateUi('uiMessages.mcd0a441ffc18', { value1: (marker.label) }),
     value: marker.label,
     displayLabel: marker.displayLabel,
     imageIndex: marker.imageIndex
@@ -97,13 +99,13 @@ onUnmounted(() => {
           <span class="mention-label">{{ option.label }}</span>
           <span class="mention-text">{{ option.text }}</span>
           <span v-if="option.imageIndex !== undefined" class="mention-image-badge">
-            图{{ option.imageIndex + 1 }}
+            {{ translateUi('uiMessages.m2f7cdebbb4b3', { value1: (option.imageIndex + 1) }) }}
           </span>
         </div>
       </div>
       <div class="mention-dropdown-hint">
         <span class="text-xs text-slate-500 dark:text-slate-400">
-          ↑↓ 选择 · Enter 确认 · Esc 取消
+          {{ translateUi('uiMessages.maa3c0e109c49') }}
         </span>
       </div>
     </div>

@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -12,7 +13,7 @@ test('AudioNode exposes a fullscreen audio preview beside the download action', 
   assert.ok(toolbar, 'audio toolbar should exist')
   assert.match(
     toolbar[0],
-    /title="下载"[\s\S]*?handleToolbarDownload[\s\S]*?title="全屏预览"[\s\S]*?handleToolbarPreview/
+    localizedPattern(/title="下载"[\s\S]*?handleToolbarDownload[\s\S]*?title="全屏预览"[\s\S]*?handleToolbarPreview/)
   )
 
   assert.match(source, /<Teleport to="body">[\s\S]*?v-if="isFullscreenPreview"[\s\S]*?<audio[\s\S]*?:src="audioUrl"[\s\S]*?controls[\s\S]*?autoplay/)

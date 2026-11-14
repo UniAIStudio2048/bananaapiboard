@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -9,7 +10,7 @@ test('真人认证上传入口直接打开扫码流程并使用默认分组名�
 
   assert.match(handler, /supportsLiveness\.value/)
   assert.match(handler, /createGroupType\.value = 'LivenessFace'/)
-  assert.match(handler, /createGroupForm\.value = \{ Name: '默认真人人像分组', Description: '' \}/)
+  assert.match(handler, localizedPattern(/createGroupForm\.value = \{ Name: '默认真人人像分组', Description: '' \}/))
   assert.match(handler, /showCreateGroupModal\.value = true/)
   assert.match(handler, /await handleCreateGroupLiveness\(\)/)
   assert.doesNotMatch(handler, /checkFaceVerifyStatus/)

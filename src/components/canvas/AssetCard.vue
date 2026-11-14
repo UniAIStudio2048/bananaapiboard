@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, ref } from 'vue'
 import CachedImage from '@/components/CachedImage.vue'
 import { getMediaUrl } from '@/config/tenant'
@@ -196,7 +198,7 @@ function handleFavorite(event) {
       <div v-else-if="asset.type === 'audio'" class="audio-preview" :class="{ unavailable: audioUnavailable }">
         <div v-if="audioUnavailable" class="audio-unavailable-hint">
           <span class="unavailable-icon">!</span>
-          <span>文件不可用</span>
+          <span>{{ translateUi('uiMessages.m25924f78da00') }}</span>
         </div>
         <div v-else class="audio-wave">
           <span></span><span></span><span></span><span></span><span></span>
@@ -205,12 +207,12 @@ function handleFavorite(event) {
 
       <div v-else-if="isCharacter" class="character-preview">
         <div v-if="characterStatus === 'failed'" class="character-state-overlay">
-          <strong>创建失败</strong>
+          <strong>{{ translateUi('uiMessages.m7e6a71efbf63') }}</strong>
           <span v-if="characterFailReason">{{ characterFailReason }}</span>
         </div>
         <div v-else-if="characterStatus === 'pending' || characterStatus === 'processing'" class="character-state-overlay pending">
           <span class="pending-spinner"></span>
-          <strong>创建中...</strong>
+          <strong>{{ translateUi('uiMessages.m687d8f3ba99e') }}</strong>
         </div>
         <div
           v-if="previewUrl"
@@ -243,7 +245,7 @@ function handleFavorite(event) {
       class="favorite-overlay"
       :class="{ active: asset.is_favorite }"
       type="button"
-      :title="asset.is_favorite ? '取消收藏' : '收藏'"
+      :title="asset.is_favorite ? translateUi('uiMessages.mdca60869e7d2') : translateUi('canvas.assetPanel.favorite')"
       @click="handleFavorite"
     >
       {{ asset.is_favorite ? '★' : '☆' }}
@@ -565,50 +567,50 @@ function handleFavorite(event) {
   white-space: nowrap;
 }
 
-:global(:root.canvas-theme-light) .asset-card,
-:global(html.canvas-theme-light) .asset-card,
-:global(body.canvas-theme-light) .asset-card,
-:global(.canvas-theme-light) .asset-card {
+:root.canvas-theme-light .asset-card,
+html.canvas-theme-light .asset-card,
+body.canvas-theme-light .asset-card,
+.canvas-theme-light .asset-card {
   border-color: rgba(0, 0, 0, 0.08);
   background: rgba(0, 0, 0, 0.025);
 }
 
-:global(:root.canvas-theme-light) .asset-card:hover,
-:global(html.canvas-theme-light) .asset-card:hover,
-:global(body.canvas-theme-light) .asset-card:hover,
-:global(.canvas-theme-light) .asset-card:hover {
+:root.canvas-theme-light .asset-card:hover,
+html.canvas-theme-light .asset-card:hover,
+body.canvas-theme-light .asset-card:hover,
+.canvas-theme-light .asset-card:hover {
   border-color: rgba(0, 0, 0, 0.14);
   background: rgba(0, 0, 0, 0.045);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.1);
 }
 
-:global(:root.canvas-theme-light) .asset-card-title,
-:global(html.canvas-theme-light) .asset-card-title,
-:global(body.canvas-theme-light) .asset-card-title,
-:global(.canvas-theme-light) .asset-card-title {
+:root.canvas-theme-light .asset-card-title,
+html.canvas-theme-light .asset-card-title,
+body.canvas-theme-light .asset-card-title,
+.canvas-theme-light .asset-card-title {
   color: #111827 !important;
 }
 
-:global(:root.canvas-theme-light) .asset-card-info,
-:global(html.canvas-theme-light) .asset-card-info,
-:global(body.canvas-theme-light) .asset-card-info,
-:global(.canvas-theme-light) .asset-card-info {
+:root.canvas-theme-light .asset-card-info,
+html.canvas-theme-light .asset-card-info,
+body.canvas-theme-light .asset-card-info,
+.canvas-theme-light .asset-card-info {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.82));
   border-top-color: rgba(15, 23, 42, 0.08);
   box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.08);
 }
 
-:global(:root.canvas-theme-light) .asset-card-meta,
-:global(html.canvas-theme-light) .asset-card-meta,
-:global(body.canvas-theme-light) .asset-card-meta,
-:global(.canvas-theme-light) .asset-card-meta {
+:root.canvas-theme-light .asset-card-meta,
+html.canvas-theme-light .asset-card-meta,
+body.canvas-theme-light .asset-card-meta,
+.canvas-theme-light .asset-card-meta {
   color: rgba(17, 24, 39, 0.56) !important;
 }
 
-:global(:root.canvas-theme-light) .text-preview,
-:global(html.canvas-theme-light) .text-preview,
-:global(body.canvas-theme-light) .text-preview,
-:global(.canvas-theme-light) .text-preview {
+:root.canvas-theme-light .text-preview,
+html.canvas-theme-light .text-preview,
+body.canvas-theme-light .text-preview,
+.canvas-theme-light .text-preview {
   color: #111827 !important;
 }
 </style>

@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../../i18n/index.js'
 import { getApiUrl, getMediaUrl, getTenantHeaders } from '@/config/tenant'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
 import { getHistory } from '@/api/canvas/history'
@@ -13,7 +14,7 @@ async function request(path, method = 'GET', body) {
     }, ...(body === undefined ? {} : { body: JSON.stringify(body) })
   })
   const result = await response.json()
-  if (!response.ok) throw new Error(result.message || '视频剪辑请求失败')
+  if (!response.ok) throw new Error(result.message || translateUi('uiMessages.m164639209dcf'))
   return result
 }
 
@@ -21,7 +22,7 @@ export function createBananaEditorApi() {
   return {
     async source(_project, resource) {
       const url = getMediaUrl(resource)
-      if (!/^https?:\/\//.test(url) && !url.startsWith('/')) throw new Error('素材地址无效')
+      if (!/^https?:\/\//.test(url) && !url.startsWith('/')) throw new Error(translateUi('uiMessages.m96fa7940224b'))
       return url
     },
     async checkProjectAccess() { /* Access is enforced by the versioned workflow and job APIs. */ },
@@ -55,12 +56,12 @@ export function createBananaEditorLibrary() {
       const { modality } = validateMediaUploadFile(file)
       const result = await uploadCanvasMedia(file, modality)
       const url = result.url || result.data?.url
-      if (!url) throw new Error('上传未返回素材地址')
+      if (!url) throw new Error(translateUi('uiMessages.mc35b916f0f20'))
       update({ upload: { resource_uuid: url } })
       return true
     },
     async loadFolders(scope) {
-      update({ folderScope: scope, folderStatus: 'ready', folders: [{ uuid: scope, name: scope === 'team' ? '团队资产' : '个人资产' }], activeFolderUuid: scope })
+      update({ folderScope: scope, folderStatus: 'ready', folders: [{ uuid: scope, name: scope === 'team' ? translateUi('uiMessages.mb2340fb2c475') : translateUi('uiMessages.m9ec10ddf5fc8') }], activeFolderUuid: scope })
       await library.loadAssetPage(1, snapshot.assets.filter)
     },
     async openFolder(id) { update({ activeFolderUuid: id }); await library.loadAssetPage(1) },
@@ -86,7 +87,7 @@ export function createBananaEditorLibrary() {
     },
     async loadHistoryTask(id) {
       const row = historyRows.find(row => `${row.type}:${row.id}` === id)
-      if (!row) throw new Error('历史素材不存在')
+      if (!row) throw new Error(translateUi('uiMessages.mf772a1087162'))
       update({ tasks: [...snapshot.tasks.filter(task => task.uuid !== id), { uuid: id, resources: [{ uuid: row.url, name: row.name || row.type, type: row.type }] }] })
     }
   }

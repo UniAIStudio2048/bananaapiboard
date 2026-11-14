@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 defineOptions({
   inheritAttrs: false
 })
@@ -50,25 +52,25 @@ onMounted(() => {
 // LLM 类型配置 - 黑白灰简洁风格
 const LLM_TYPES = {
   'llm-prompt-enhance': {
-    label: '提示词优化',
+    get label() { return translateUi('canvas.templates.nodeTitle.promptOptimize') },
     icon: 'llm',
-    description: 'AI 优化提示词，生成更专业的描述',
+    get description() { return translateUi('uiMessages.mfd018de85d4c') },
     inputType: 'text',
     outputType: 'text',
     action: 'prompt-enhance'
   },
   'llm-image-describe': {
-    label: '图片描述',
+    get label() { return translateUi('canvas.templates.nodeTitle.imageDescription') },
     icon: 'image-describe',
-    description: '分析图片，生成详细提示词',
+    get description() { return translateUi('uiMessages.mf25cd3d9b151') },
     inputType: 'image',
     outputType: 'text',
     action: 'image-describe'
   },
   'llm-content-expand': {
-    label: '内容扩写',
+    get label() { return translateUi('canvas.nodeConfig.contentExpand.label') },
     icon: 'expand',
-    description: 'AI 扩展内容，增加细节',
+    get description() { return translateUi('uiMessages.m54def85a6e98') },
     inputType: 'text',
     outputType: 'text',
     action: 'content-expand'
@@ -230,7 +232,7 @@ function handleResizeEnd() {
 // 执行 LLM
 async function handleExecute() {
   if (!canExecute.value) {
-    alert('请先连接输入')
+    alert(translateUi('uiMessages.mb611b5cac7ae'))
     return
   }
   
@@ -255,7 +257,7 @@ async function handleExecute() {
         result = await expandContent(inheritedText.value)
         break
       default:
-        throw new Error('未知的 LLM 类型')
+        throw new Error(translateUi('uiMessages.mc8608f9f3cb7'))
     }
     
     canvasStore.updateNodeData(props.id, {
@@ -301,7 +303,7 @@ async function copyOutput() {
   if (outputText.value) {
     try {
       await navigator.clipboard.writeText(outputText.value)
-      alert('已复制到剪贴板')
+      alert(translateUi('tips.copied'))
     } catch (e) {
       console.error('复制失败', e)
     }
@@ -345,8 +347,8 @@ watch(() => props.data.executeTriggered, (newVal, oldVal) => {
         {{ data.title || typeConfig.label }}
       </div>
       <div class="canvas-node-actions">
-        <button class="canvas-node-action-btn" title="复制" @click="copyOutput" v-if="outputText">📋</button>
-        <button class="canvas-node-action-btn" title="更多">≡</button>
+        <button class="canvas-node-action-btn" :title="translateUi('common.copy')" @click="copyOutput" v-if="outputText">📋</button>
+        <button class="canvas-node-action-btn" :title="translateUi('common.more')">≡</button>
       </div>
     </div>
     
@@ -354,40 +356,40 @@ watch(() => props.data.executeTriggered, (newVal, oldVal) => {
     <div class="canvas-node-content" :style="contentStyle">
       <!-- 输入预览 -->
       <div class="llm-input-section" v-if="!outputText">
-        <div class="section-label">输入</div>
+        <div class="section-label">{{ translateUi('uiMessages.m2087c777c06f') }}</div>
         
         <!-- 文本输入预览 -->
         <div v-if="typeConfig.inputType === 'text'" class="input-preview">
           <div v-if="inheritedText" class="inherited-text">
             {{ inheritedText.slice(0, 100) }}{{ inheritedText.length > 100 ? '...' : '' }}
           </div>
-          <div v-else class="empty-hint">等待文本输入...</div>
+          <div v-else class="empty-hint">{{ translateUi('uiMessages.m5f17e3c27937') }}</div>
         </div>
         
         <!-- 图片输入预览 -->
         <div v-else-if="typeConfig.inputType === 'image'" class="input-preview">
           <div v-if="inheritedImages.length" class="image-preview">
-            <img :src="inheritedImages[0]" alt="输入图片" />
+            <img :src="inheritedImages[0]" :alt="translateUi('uiMessages.m10bcb7954a7f')" />
           </div>
-          <div v-else class="empty-hint">等待图片输入...</div>
+          <div v-else class="empty-hint">{{ translateUi('uiMessages.mc0208a76d9a8') }}</div>
         </div>
       </div>
       
       <!-- 输出预览 -->
       <div class="llm-output-section" v-if="outputText">
-        <div class="section-label">输出</div>
+        <div class="section-label">{{ translateUi('canvas.nodeTypes.output') }}</div>
         <div class="output-text">{{ outputText }}</div>
       </div>
       
       <!-- 加载状态 -->
       <div v-if="data.status === 'processing'" class="llm-loading">
         <div class="canvas-loading-spinner"></div>
-        <span>AI 处理中...</span>
+        <span>{{ translateUi('uiMessages.m29d664d5e5c9') }}</span>
       </div>
       
       <!-- 错误状态 -->
       <div v-if="data.status === 'error'" class="llm-error">
-        <span class="error-text">{{ data.error || '处理失败' }}</span>
+        <span class="error-text">{{ data.error || translateUi('uiMessages.mae173945fb80') }}</span>
       </div>
       
       <!-- 操作按钮 -->
@@ -400,7 +402,7 @@ watch(() => props.data.executeTriggered, (newVal, oldVal) => {
           :disabled="!canExecute || data.status === 'processing'"
           @click="handleExecute"
         >
-          {{ data.status === 'processing' ? '...' : '→ 执行' }}
+          {{ data.status === 'processing' ? '...' : translateUi('uiMessages.m6e6929f738c7') }}
         </button>
         
         <button 
@@ -408,7 +410,7 @@ watch(() => props.data.executeTriggered, (newVal, oldVal) => {
           class="canvas-node-btn secondary"
           @click="handleRedo"
         >
-          ⟲ 重新执行
+          {{ translateUi('uiMessages.mf394b8d53507') }}
         </button>
       </div>
       
@@ -449,7 +451,7 @@ watch(() => props.data.executeTriggered, (newVal, oldVal) => {
     <button 
       v-if="outputText"
       class="node-add-btn nodrag"
-      title="创建下一个节点"
+      :title="translateUi('uiMessages.m9f844252995d')"
       @click="handleAddClick"
     >
       +

@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
@@ -14,7 +15,7 @@ function availablePresetsBlock() {
 
 test('image node lists no preset, user presets, then tenant presets', () => {
   const block = availablePresetsBlock()
-  const noPresetIndex = block.indexOf("name: '无预设'")
+  const noPresetIndex = block.indexOf("get name() { return translateUi('uiMessages.md2109b4b642e') }")
   const userPresetIndex = block.indexOf('presets.push(...userPresets.value.map')
   const tenantPresetIndex = block.indexOf('tenantPresets.value.map')
 
@@ -23,14 +24,14 @@ test('image node lists no preset, user presets, then tenant presets', () => {
   assert.ok(tenantPresetIndex >= 0, 'tenant presets should be included')
   assert.ok(noPresetIndex < userPresetIndex, 'no preset should be first')
   assert.ok(userPresetIndex < tenantPresetIndex, 'user presets should precede tenant presets')
-  assert.doesNotMatch(block, /divider-tenant|租户平台预设/, 'tenant presets should not have a visible group heading')
+  assert.doesNotMatch(block, localizedPattern(/divider-tenant|租户平台预设/), 'tenant presets should not have a visible group heading')
 })
 
 test('image node exposes preset management from the no-preset gear popover', () => {
   assert.match(source, /class="preset-dropdown-scroll"[\s\S]*v-for="preset in availablePresets"/)
   assert.match(source, /class="preset-none-option"[\s\S]*togglePresetActions/)
   assert.match(source, /class="preset-actions-popover"[\s\S]*action-manage[\s\S]*action-new/)
-  assert.match(source, /class="preset-actions-trigger"[\s\S]*aria-label="预设管理"/)
+  assert.match(source, localizedPattern(/class="preset-actions-trigger"[\s\S]*aria-label="预设管理"/))
 })
 
 test('image preset panels use the same dark surface as the video ratio panel', () => {

@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * Pose3DViewer.vue - 3D姿态识别和可视化组件
  * 
@@ -141,21 +143,21 @@ const angleDescription = computed(() => {
   const elevation = cameraAngle.value.elevation
   
   // 方位描述
-  let azimuthDesc = '正面'
-  if (azimuth >= 337.5 || azimuth < 22.5) azimuthDesc = '正面'
-  else if (azimuth >= 22.5 && azimuth < 67.5) azimuthDesc = '左前方'
-  else if (azimuth >= 67.5 && azimuth < 112.5) azimuthDesc = '左侧'
-  else if (azimuth >= 112.5 && azimuth < 157.5) azimuthDesc = '左后方'
-  else if (azimuth >= 157.5 && azimuth < 202.5) azimuthDesc = '背面'
-  else if (azimuth >= 202.5 && azimuth < 247.5) azimuthDesc = '右后方'
-  else if (azimuth >= 247.5 && azimuth < 292.5) azimuthDesc = '右侧'
-  else if (azimuth >= 292.5 && azimuth < 337.5) azimuthDesc = '右前方'
+  let azimuthDesc = translateUi('uiMessages.m740f5e8102e0')
+  if (azimuth >= 337.5 || azimuth < 22.5) azimuthDesc = translateUi('uiMessages.m740f5e8102e0')
+  else if (azimuth >= 22.5 && azimuth < 67.5) azimuthDesc = translateUi('uiMessages.mf9ce5cdf1abf')
+  else if (azimuth >= 67.5 && azimuth < 112.5) azimuthDesc = translateUi('uiMessages.m6a24b14f33c7')
+  else if (azimuth >= 112.5 && azimuth < 157.5) azimuthDesc = translateUi('uiMessages.m8ddc926d9056')
+  else if (azimuth >= 157.5 && azimuth < 202.5) azimuthDesc = translateUi('uiMessages.m2d270b6ce44a')
+  else if (azimuth >= 202.5 && azimuth < 247.5) azimuthDesc = translateUi('uiMessages.m193b2c4fb210')
+  else if (azimuth >= 247.5 && azimuth < 292.5) azimuthDesc = translateUi('uiMessages.m1cf1d4d0b24b')
+  else if (azimuth >= 292.5 && azimuth < 337.5) azimuthDesc = translateUi('uiMessages.m2506ca306b3c')
   
   // 仰角描述
-  let elevationDesc = '平视'
-  if (elevation < -15) elevationDesc = '仰拍'
-  else if (elevation > 30) elevationDesc = '俯拍'
-  else if (elevation > 15) elevationDesc = '微俯'
+  let elevationDesc = translateUi('uiMessages.m3f2e434feef2')
+  if (elevation < -15) elevationDesc = translateUi('uiMessages.m7c58bdb0934c')
+  else if (elevation > 30) elevationDesc = translateUi('uiMessages.m7d5f06405a4d')
+  else if (elevation > 15) elevationDesc = translateUi('uiMessages.m6415e27d1b5c')
   
   return `${azimuthDesc} · ${elevationDesc}`
 })
@@ -364,12 +366,12 @@ function onPoseResults(results) {
 // 从图片检测姿态
 async function detectPoseFromImage() {
   if (!props.imageUrl) {
-    detectError.value = '请先选择图片'
+    detectError.value = translateUi('uiMessages.m539bda2341fd')
     return
   }
   
   detecting.value = true
-  detectProgress.value = '初始化检测模型...'
+  detectProgress.value = translateUi('uiMessages.m41589ca4ca76')
   detectError.value = ''
   
   try {
@@ -377,11 +379,11 @@ async function detectPoseFromImage() {
     if (!pose) {
       const success = await initMediaPipe()
       if (!success) {
-        throw new Error('姿态检测模型加载失败')
+        throw new Error(translateUi('uiMessages.mba41394a68e0'))
       }
     }
     
-    detectProgress.value = '加载图片...'
+    detectProgress.value = translateUi('uiMessages.m68703348e037')
     
     // 创建图片元素
     const img = new Image()
@@ -389,29 +391,29 @@ async function detectPoseFromImage() {
     
     await new Promise((resolve, reject) => {
       img.onload = resolve
-      img.onerror = () => reject(new Error('图片加载失败'))
+      img.onerror = () => reject(new Error(translateUi('uiMessages.m572993f5820a')))
       img.src = props.imageUrl
     })
     
-    detectProgress.value = '检测人物姿态...'
+    detectProgress.value = translateUi('uiMessages.m5638f67a60eb')
     
     // 发送到 MediaPipe 处理
     await pose.send({ image: img })
     
-    detectProgress.value = '渲染3D骨架...'
+    detectProgress.value = translateUi('uiMessages.ma277b3c46fa0')
     
     // 等待结果处理完成
     await new Promise(resolve => setTimeout(resolve, 500))
     
     if (detectedPoses.value.length === 0) {
-      detectError.value = '未检测到人物姿态，请尝试其他图片'
+      detectError.value = translateUi('uiMessages.mbbbffa91d099')
     } else {
-      detectProgress.value = `检测到 ${detectedPoses.value.length} 个人物`
+      detectProgress.value = translateUi('uiMessages.m8ef5a55d0eb3', { value1: (detectedPoses.value.length) })
     }
     
   } catch (error) {
     console.error('[Pose3D] 检测失败:', error)
-    detectError.value = error.message || '检测失败'
+    detectError.value = error.message || translateUi('uiMessages.m78fc411a3ba9')
   } finally {
     detecting.value = false
   }
@@ -640,12 +642,12 @@ function createSkeleton(landmarks, color, personIndex) {
 
 // ========== 预设视角 ==========
 const viewPresets = [
-  { label: '正面', azimuth: 0, elevation: 0, icon: '👤' },
-  { label: '左侧', azimuth: 90, elevation: 0, icon: '◀' },
-  { label: '背面', azimuth: 180, elevation: 0, icon: '🔙' },
-  { label: '右侧', azimuth: 270, elevation: 0, icon: '▶' },
-  { label: '俯视', azimuth: 0, elevation: 60, icon: '⬇' },
-  { label: '仰视', azimuth: 0, elevation: -30, icon: '⬆' },
+  { get label() { return translateUi('uiMessages.m740f5e8102e0') }, azimuth: 0, elevation: 0, icon: '👤' },
+  { get label() { return translateUi('uiMessages.m6a24b14f33c7') }, azimuth: 90, elevation: 0, icon: '◀' },
+  { get label() { return translateUi('uiMessages.m2d270b6ce44a') }, azimuth: 180, elevation: 0, icon: '🔙' },
+  { get label() { return translateUi('uiMessages.m1cf1d4d0b24b') }, azimuth: 270, elevation: 0, icon: '▶' },
+  { get label() { return translateUi('uiMessages.m6bed5124a74b') }, azimuth: 0, elevation: 60, icon: '⬇' },
+  { get label() { return translateUi('uiMessages.ma3dfc56ca60a') }, azimuth: 0, elevation: -30, icon: '⬆' },
 ]
 
 function applyPreset(preset) {
@@ -800,7 +802,7 @@ onUnmounted(() => {
               <line x1="12" y1="16" x2="9" y2="22"/>
               <line x1="12" y1="16" x2="15" y2="22"/>
             </svg>
-            <span>3D 姿态预览</span>
+            <span>{{ translateUi('uiMessages.mcc3638a2f0f3') }}</span>
             <span class="beta-tag">Beta</span>
           </div>
           <button class="panel-close" @click="handleClose">
@@ -822,7 +824,7 @@ onUnmounted(() => {
           
           <!-- 提示信息 -->
           <div class="viewport-hint">
-            拖动旋转 · 滚轮缩放 · 右键平移
+            {{ translateUi('uiMessages.m09baec38cc1a') }}
           </div>
           
           <!-- 人物图例 -->
@@ -834,7 +836,7 @@ onUnmounted(() => {
               :style="{ '--color': '#' + PERSON_COLORS[index % PERSON_COLORS.length].toString(16).padStart(6, '0') }"
             >
               <span class="legend-dot"></span>
-              <span>人物 {{ index + 1 }}</span>
+              <span>{{ translateUi('uiMessages.m69894e38693b', { value1: (index + 1) }) }}</span>
             </div>
           </div>
         </div>
@@ -843,15 +845,15 @@ onUnmounted(() => {
         <div class="angle-info">
           <div class="angle-description">{{ angleDescription }}</div>
           <div class="angle-values">
-            <span>方位: {{ cameraAngle.azimuth }}°</span>
-            <span>仰角: {{ cameraAngle.elevation }}°</span>
-            <span>距离: {{ cameraAngle.distance }}</span>
+            <span>{{ translateUi('uiMessages.m9e156052adfd', { value1: (cameraAngle.azimuth) }) }}</span>
+            <span>{{ translateUi('uiMessages.m3db637cd654e', { value1: (cameraAngle.elevation) }) }}</span>
+            <span>{{ translateUi('uiMessages.md84b4f843ffd', { value1: (cameraAngle.distance) }) }}</span>
           </div>
         </div>
         
         <!-- 快捷视角 -->
         <div class="preset-section">
-          <div class="preset-label">快捷视角</div>
+          <div class="preset-label">{{ translateUi('uiMessages.mde7c06fea4bc') }}</div>
           <div class="preset-buttons">
             <button 
               v-for="preset in viewPresets" 
@@ -877,7 +879,7 @@ onUnmounted(() => {
             <line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
           <span>{{ detectError }}</span>
-          <button @click="detectPoseFromImage">重试</button>
+          <button @click="detectPoseFromImage">{{ translateUi('common.retry') }}</button>
         </div>
         
         <!-- 操作按钮 -->
@@ -887,25 +889,25 @@ onUnmounted(() => {
               <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
               <path d="M3 3v5h5"/>
             </svg>
-            重置
+            {{ translateUi('common.reset') }}
           </button>
           <button class="action-btn secondary" @click="detectPoseFromImage" :disabled="detecting">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
             </svg>
-            重新检测
+            {{ translateUi('uiMessages.ma13550662fea') }}
           </button>
           <button class="action-btn primary" @click="handleApply" :disabled="detectedPoses.length === 0">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M5 12l5 5L20 7"/>
             </svg>
-            应用角度
+            {{ translateUi('uiMessages.m938415a577cb') }}
           </button>
         </div>
         
         <!-- 提示词预览 -->
         <div class="prompt-preview">
-          <span class="prompt-label">生成提示词：</span>
+          <span class="prompt-label">{{ translateUi('uiMessages.ma4a0b9eec6c1') }}</span>
           <code class="prompt-code">{{ cameraPrompt }}</code>
         </div>
       </div>

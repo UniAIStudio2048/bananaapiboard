@@ -7,7 +7,7 @@
           <img
             v-if="profile?.avatar_url"
             :src="profile.avatar_url"
-            :alt="profile?.username || '作者头像'"
+            :alt="profile?.username || translateUi('uiMessages.m9fe956ddc889')"
             class="h-20 w-20 rounded-full object-cover border border-white/10"
           />
           <div v-else class="flex h-20 w-20 items-center justify-center rounded-full border border-white/10 bg-white/5 text-2xl font-semibold text-white/70">
@@ -38,7 +38,7 @@
 
         <div class="min-w-0 space-y-2 flex-1">
           <div class="space-y-1">
-            <h1 class="truncate text-2xl font-semibold text-white">{{ profile?.username || '未知作者' }}</h1>
+            <h1 class="truncate text-2xl font-semibold text-white">{{ profile?.username || translateUi('uiMessages.mc96ed7ec0b0b') }}</h1>
             <!-- 简介编辑模式 -->
             <div v-if="isSelf && editingBio" class="space-y-2">
               <textarea
@@ -47,7 +47,7 @@
                 maxlength="200"
                 rows="3"
                 class="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white/80 placeholder-white/30 focus:border-white/40 focus:outline-none resize-none"
-                placeholder="写点什么介绍自己吧..."
+                :placeholder="translateUi('uiMessages.mb1c824b995e4')"
                 @keydown.enter.ctrl="saveBio"
               />
               <div class="flex items-center justify-between">
@@ -57,14 +57,14 @@
                     class="rounded-lg px-3 py-1 text-xs text-white/50 hover:text-white/80 transition-colors"
                     @click="cancelBioEdit"
                   >
-                    取消
+                    {{ translateUi('common.cancel') }}
                   </button>
                   <button
                     class="rounded-lg bg-white/10 px-3 py-1 text-xs text-white hover:bg-white/20 transition-colors disabled:opacity-50"
                     :disabled="bioSaving"
                     @click="saveBio"
                   >
-                    {{ bioSaving ? '保存中...' : '保存' }}
+                    {{ bioSaving ? translateUi('common.saving') : translateUi('common.save') }}
                   </button>
                 </div>
               </div>
@@ -73,11 +73,11 @@
             <template v-else>
               <div v-if="isSelf" class="group/bio flex items-start gap-1.5">
                 <p v-if="profile?.bio" class="text-sm leading-6 text-white/60">{{ profile.bio }}</p>
-                <p v-else class="text-sm text-white/35">点击编辑，写点什么介绍自己吧...</p>
+                <p v-else class="text-sm text-white/35">{{ translateUi('uiMessages.m29df4d8e5d50') }}</p>
                 <button
                   class="mt-0.5 shrink-0 rounded p-0.5 text-white/30 hover:text-white/70 opacity-0 group-hover/bio:opacity-100 transition-opacity"
                   @click="startBioEdit"
-                  title="编辑简介"
+                  :title="translateUi('uiMessages.m4c5633dac508')"
                 >
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -86,7 +86,7 @@
               </div>
               <template v-else>
                 <p v-if="profile?.bio" class="text-sm leading-6 text-white/60">{{ profile.bio }}</p>
-                <p v-else class="text-sm text-white/35">这个作者还没有填写简介。</p>
+                <p v-else class="text-sm text-white/35">{{ translateUi('uiMessages.m4af95c4f34f7') }}</p>
               </template>
             </template>
           </div>
@@ -94,19 +94,19 @@
           <div class="flex flex-wrap gap-4 text-sm text-white/70">
             <div>
               <span class="font-semibold text-white">{{ stats.workCount }}</span>
-              <span class="ml-1">作品</span>
+              <span class="ml-1">{{ translateUi('uiMessages.m37a3a796866b') }}</span>
             </div>
             <div>
               <span class="font-semibold text-white">{{ stats.followingCount }}</span>
-              <span class="ml-1">关注</span>
+              <span class="ml-1">{{ translateUi('uiMessages.meb137dee4c0a') }}</span>
             </div>
             <div>
               <span class="font-semibold text-white">{{ stats.followerCount }}</span>
-              <span class="ml-1">粉丝</span>
+              <span class="ml-1">{{ translateUi('uiMessages.m261c51c9f1cd') }}</span>
             </div>
             <div>
               <span class="font-semibold text-white">{{ stats.likeCount }}</span>
-              <span class="ml-1">获赞</span>
+              <span class="ml-1">{{ translateUi('uiMessages.m668342d91d9a') }}</span>
             </div>
           </div>
         </div>
@@ -138,7 +138,7 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
           </svg>
-          发布作品
+          {{ translateUi('uiMessages.m0faf5a113a1b') }}
         </button>
       </div>
     </div>
@@ -146,6 +146,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, computed, nextTick } from 'vue'
 import { uploadAvatar, updateUserProfile } from '@/api/community'
 import FollowButton from './FollowButton.vue'
@@ -187,7 +189,7 @@ async function handleAvatarChange(e) {
   const file = e.target.files?.[0]
   if (!file) return
   if (file.size > 5 * 1024 * 1024) {
-    alert('头像图片不能超过 5MB')
+    alert(translateUi('uiMessages.mdbeb7faa0e10'))
     return
   }
   avatarUploading.value = true
@@ -199,7 +201,7 @@ async function handleAvatarChange(e) {
     }
   } catch (err) {
     console.error('[AuthorHeroCard] 头像上传失败:', err)
-    alert('头像上传失败，请重试')
+    alert(translateUi('uiMessages.m77092f4dd5ec'))
   } finally {
     avatarUploading.value = false
     if (avatarInputRef.value) avatarInputRef.value.value = ''
@@ -234,7 +236,7 @@ async function saveBio() {
     }
   } catch (err) {
     console.error('[AuthorHeroCard] 保存简介失败:', err)
-    alert('保存失败，请重试')
+    alert(translateUi('user.saveFailed'))
   } finally {
     bioSaving.value = false
   }

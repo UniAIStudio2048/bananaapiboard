@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getHomeNotices } from '@/api/community'
@@ -23,7 +25,7 @@ const cardStyle = computed(() => ({
   color: activeNotice.value?.text_color || '#0F172A'
 }))
 
-const badgeText = computed(() => activeNotice.value?.badge_text || '📣 通知')
+const badgeText = computed(() => activeNotice.value?.badge_text || translateUi('uiMessages.mba702e858414'))
 
 function getTenantIdentity() {
   return localStorage.getItem('tenant_id') ||
@@ -143,7 +145,7 @@ onUnmounted(stopRotation)
         </Transition>
       </div>
 
-      <button class="home-notice-close" type="button" aria-label="关闭通知" @click="closeNotice">
+      <button class="home-notice-close" type="button" :aria-label="translateUi('uiMessages.m27413c315695')" @click="closeNotice">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6L6 18" />
         </svg>

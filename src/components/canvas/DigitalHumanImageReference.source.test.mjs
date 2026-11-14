@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
@@ -34,7 +35,7 @@ test('数字人节点选择角色后原地转换为带引用标记的图片节�
 
 test('待选择数字人卡片复用 Seedance 的中性空状态和主题变量', () => {
   assert.doesNotMatch(digitalHumanNodeSource, /<Handle/)
-  assert.match(digitalHumanNodeSource, /class="digital-human-label">HeyGen 数字人/)
+  assert.match(digitalHumanNodeSource, localizedPattern(/class="digital-human-label">HeyGen 数字人/))
   assert.match(digitalHumanNodeSource, /class="digital-human-empty" @click="openSelector"/)
   assert.match(digitalHumanNodeSource, /\.digital-human-card \{[\s\S]*background: var\(--canvas-bg-tertiary, #1a1a1a\);[\s\S]*border: 1px solid var\(--canvas-border-subtle, #2a2a2a\);/)
   assert.match(digitalHumanNodeSource, /\.digital-human-empty \{[\s\S]*color: var\(--canvas-text-tertiary\);/)

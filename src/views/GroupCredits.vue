@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi, currentLanguage as uiLanguage } from '@/i18n'
+
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -20,9 +22,9 @@ onMounted(async () => {
 })
 
 const billingPolicies = [
-  { value: 'legacy', label: '默认规则', note: '先用主用户分配积分，再用套餐和永久积分' },
-  { value: 'team_only', label: '仅团队积分', note: '团队空间内只能使用分配的团队积分' },
-  { value: 'team_first', label: '团队优先', note: '先用团队积分，再按个人积分顺序消费' }
+  { value: 'legacy', get label() { return translateUi('uiMessages.m003f3ed70f09') }, get note() { return translateUi('uiMessages.m517696d7f699') } },
+  { value: 'team_only', get label() { return translateUi('uiMessages.maccc17fb3dde') }, get note() { return translateUi('uiMessages.m27658491229d') } },
+  { value: 'team_first', get label() { return translateUi('uiMessages.md7310f75b1e3') }, get note() { return translateUi('uiMessages.m35760fab01ea') } }
 ]
 
 const teams = ref([])
@@ -82,22 +84,22 @@ const overview = computed(() => ({
 
 function formatPoints(value) {
   const number = Number(value) || 0
-  return number.toLocaleString('zh-CN', { maximumFractionDigits: 2 })
+  return number.toLocaleString(uiLanguage.value, { maximumFractionDigits: 2 })
 }
 
 function formatDate(value) {
   const timestamp = Number(value) || 0
-  if (!timestamp) return '长期有效'
-  return new Date(timestamp).toLocaleDateString('zh-CN')
+  if (!timestamp) return translateUi('uiMessages.m824fe235445d')
+  return new Date(timestamp).toLocaleDateString(uiLanguage.value)
 }
 
 function formatLedgerType(type) {
   const labels = {
-    allocate: '分配',
-    consume: '消费',
-    revoke: '收回',
-    expire: '到期',
-    refund: '退款'
+    allocate: translateUi('uiMessages.mfc135337a267'),
+    consume: translateUi('uiMessages.m80716311485a'),
+    revoke: translateUi('uiMessages.m6923cef57f25'),
+    expire: translateUi('uiMessages.m1f29b74ad60c'),
+    refund: translateUi('pointsType.refund')
   }
   return labels[type] || type || '-'
 }
@@ -167,10 +169,10 @@ async function savePolicy(policy) {
   try {
     const data = await updateGroupBillingPolicy(team.id, policy)
     team.billingPolicy = data.billingPolicy || policy
-    showStatus('策略已保存')
+    showStatus(translateUi('uiMessages.mbe1274dfeb57'))
   } catch (error) {
     team.billingPolicy = previousPolicy
-    showStatus(error.message || '策略保存失败')
+    showStatus(error.message || translateUi('uiMessages.mef937e252d2e'))
   } finally {
     savingPolicy.value = false
   }
@@ -208,7 +210,7 @@ async function submitAllocation() {
   if (!selectedTeam.value || !allocationTarget.value || allocationSubmitting.value) return
   const amount = Number(allocationForm.value.amount)
   if (!Number.isFinite(amount) || amount <= 0) {
-    showStatus('请输入有效积分')
+    showStatus(translateUi('uiMessages.mefcfc2916e5f'))
     return
   }
   allocationSubmitting.value = true
@@ -220,9 +222,9 @@ async function submitAllocation() {
     })
     closeAllocation()
     await Promise.all([loadTeams(), loadMembers()])
-    showStatus('积分已分配')
+    showStatus(translateUi('uiMessages.me210d238ec9b'))
   } catch (error) {
-    showStatus(error.message || '分配失败')
+    showStatus(error.message || translateUi('uiMessages.mdfb321848f1c'))
   } finally {
     allocationSubmitting.value = false
   }
@@ -246,11 +248,11 @@ async function submitRevokeMemberCredits() {
   if (!selectedTeam.value || !revokeMemberTarget.value || revokeMemberSubmitting.value) return
   const amount = Number(revokeMemberForm.value.amount)
   if (!Number.isFinite(amount) || amount <= 0) {
-    showStatus('请输入有效积分')
+    showStatus(translateUi('uiMessages.mefcfc2916e5f'))
     return
   }
   if (amount > Number(revokeMemberTarget.value.active_remaining_points || 0)) {
-    showStatus('收回积分不能超过成员剩余积分')
+    showStatus(translateUi('uiMessages.me8d97001b258'))
     return
   }
   revokeMemberSubmitting.value = true
@@ -259,9 +261,9 @@ async function submitRevokeMemberCredits() {
     showRevokeMemberModal.value = false
     revokeMemberTarget.value = null
     await Promise.all([loadTeams(), loadMembers()])
-    showStatus('未使用积分已收回')
+    showStatus(translateUi('uiMessages.m893133ad5842'))
   } catch (error) {
-    showStatus(error.message || '收回失败')
+    showStatus(error.message || translateUi('uiMessages.me96f76828f4d'))
   } finally {
     revokeMemberSubmitting.value = false
   }
@@ -269,14 +271,14 @@ async function submitRevokeMemberCredits() {
 
 async function revokeMember(member) {
   if (!selectedTeam.value) return
-  const confirmed = window.confirm(`收回 ${member.username || member.email || member.user_id} 的全部未使用团队积分？`)
+  const confirmed = window.confirm(translateUi('uiMessages.mdf8155ae22d3', { value1: (member.username || member.email || member.user_id) }))
   if (!confirmed) return
   try {
     await revokeAllGroupMemberCredits(selectedTeam.value.id, member.user_id)
     await Promise.all([loadTeams(), loadMembers()])
-    showStatus('成员未使用积分已收回')
+    showStatus(translateUi('uiMessages.m51c356194c26'))
   } catch (error) {
-    showStatus(error.message || '收回失败')
+    showStatus(error.message || translateUi('uiMessages.me96f76828f4d'))
   }
 }
 
@@ -309,7 +311,7 @@ async function loadLedger(page = ledgerPagination.value.page) {
       page
     }
   } catch (error) {
-    showStatus(error.message || '流水加载失败')
+    showStatus(error.message || translateUi('uiMessages.mbedba71a20ad'))
   } finally {
     ledgerLoading.value = false
   }
@@ -323,15 +325,15 @@ onMounted(loadTeams)
     <div class="mx-auto flex max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
       <header class="flex flex-col gap-3 border-b border-slate-200 pb-4 dark:border-dark-600 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 class="text-2xl font-semibold">团队积分</h1>
-          <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">管理团队空间内可用的分配积分和计费顺序</p>
+          <h1 class="text-2xl font-semibold">{{ translateUi('user.teamPoints') }}</h1>
+          <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m661a6f11a79a') }}</p>
         </div>
         <button
           type="button"
           class="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 px-3 text-sm font-medium hover:bg-white dark:border-dark-600 dark:hover:bg-dark-700"
           @click="router.push('/canvas')"
         >
-          返回画布
+          {{ translateUi('uiMessages.mbeef286e1e42') }}
         </button>
       </header>
 
@@ -340,23 +342,23 @@ onMounted(loadTeams)
       </div>
 
       <section v-if="loading" class="rounded-lg border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 dark:border-dark-600 dark:bg-dark-800">
-        正在加载团队积分数据
+        {{ translateUi('uiMessages.ma47c119f349c') }}
       </section>
 
       <section v-else-if="isForbidden" class="rounded-lg border border-slate-200 bg-white p-8 text-center dark:border-dark-600 dark:bg-dark-800">
-        <h2 class="text-lg font-semibold">无权访问团队积分管理</h2>
-        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">只有团队 owner 或租户管理员可以管理团队积分。</p>
+        <h2 class="text-lg font-semibold">{{ translateUi('uiMessages.m8cc1c4d963f0') }}</h2>
+        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m2921b58fb296') }}</p>
       </section>
 
       <section v-else-if="!hasTeams" class="rounded-lg border border-slate-200 bg-white p-8 text-center dark:border-dark-600 dark:bg-dark-800">
-        <h2 class="text-lg font-semibold">没有可管理的团队</h2>
-        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">当前账号没有 owned 团队，也不是租户管理员。</p>
+        <h2 class="text-lg font-semibold">{{ translateUi('uiMessages.m84c36cf25920') }}</h2>
+        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.mdcfcb0ddf99b') }}</p>
       </section>
 
       <template v-else>
         <section class="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
           <aside class="rounded-lg border border-slate-200 bg-white p-3 dark:border-dark-600 dark:bg-dark-800">
-            <div class="mb-3 text-xs font-semibold uppercase text-slate-500">团队</div>
+            <div class="mb-3 text-xs font-semibold uppercase text-slate-500">{{ translateUi('uiMessages.macdf17f4e9c4') }}</div>
             <div class="space-y-2">
               <button
                 v-for="team in teams"
@@ -367,7 +369,7 @@ onMounted(loadTeams)
                 @click="selectTeam(team.id)"
               >
                 <span class="block truncate font-medium">{{ team.name }}</span>
-                <span class="mt-1 block text-xs text-slate-500">{{ team.member_count }} 人 · 剩余 {{ formatPoints(team.active_remaining_points) }}</span>
+                <span class="mt-1 block text-xs text-slate-500">{{ translateUi('uiMessages.m0077741cb590', { value1: (team.member_count), value2: (formatPoints(team.active_remaining_points)) }) }}</span>
               </button>
             </div>
           </aside>
@@ -377,7 +379,7 @@ onMounted(loadTeams)
               <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <h2 class="text-lg font-semibold">{{ selectedTeam?.name }}</h2>
-                  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ selectedTeam?.description || '团队空间积分策略' }}</p>
+                  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ selectedTeam?.description || translateUi('uiMessages.me922d28640a3') }}</p>
                 </div>
                 <div class="grid gap-2 sm:grid-cols-3">
                   <button
@@ -398,46 +400,46 @@ onMounted(loadTeams)
 
             <section class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-dark-600 dark:bg-dark-800">
-                <div class="text-xs text-slate-500">成员</div>
+                <div class="text-xs text-slate-500">{{ translateUi('uiMessages.m6e6d6ddbb7c1') }}</div>
                 <div class="mt-2 text-xl font-semibold">{{ overview.memberCount }}</div>
               </div>
               <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-dark-600 dark:bg-dark-800">
-                <div class="text-xs text-slate-500">累计分配</div>
+                <div class="text-xs text-slate-500">{{ translateUi('uiMessages.m260a6961897e') }}</div>
                 <div class="mt-2 text-xl font-semibold">{{ formatPoints(overview.allocated) }}</div>
               </div>
               <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-dark-600 dark:bg-dark-800">
-                <div class="text-xs text-slate-500">当前剩余</div>
+                <div class="text-xs text-slate-500">{{ translateUi('uiMessages.ma322d67a4dcd') }}</div>
                 <div class="mt-2 text-xl font-semibold">{{ formatPoints(overview.remaining) }}</div>
               </div>
               <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-dark-600 dark:bg-dark-800">
-                <div class="text-xs text-slate-500">已消费</div>
+                <div class="text-xs text-slate-500">{{ translateUi('uiMessages.mea602044bfa6') }}</div>
                 <div class="mt-2 text-xl font-semibold">{{ formatPoints(overview.consumed) }}</div>
               </div>
               <div class="rounded-lg border border-slate-200 bg-white p-4 dark:border-dark-600 dark:bg-dark-800">
-                <div class="text-xs text-slate-500">7天内到期</div>
+                <div class="text-xs text-slate-500">{{ translateUi('uiMessages.m0d1949e16769') }}</div>
                 <div class="mt-2 text-xl font-semibold">{{ formatPoints(overview.expiringSoon) }}</div>
               </div>
             </section>
 
             <section class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-dark-600 dark:bg-dark-800">
               <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-dark-600">
-                <h3 class="text-base font-semibold">成员积分</h3>
+                <h3 class="text-base font-semibold">{{ translateUi('uiMessages.med30e88d3051') }}</h3>
                 <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50 dark:border-dark-600 dark:hover:bg-dark-700" @click="openLedger()">
-                  查看团队流水
+                  {{ translateUi('uiMessages.m9ef29c88d7e8') }}
                 </button>
               </div>
-              <div v-if="membersLoading" class="p-6 text-center text-sm text-slate-500">正在加载成员</div>
+              <div v-if="membersLoading" class="p-6 text-center text-sm text-slate-500">{{ translateUi('uiMessages.m50f55dbef720') }}</div>
               <div v-else class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-dark-600">
                   <thead class="bg-slate-50 text-xs uppercase text-slate-500 dark:bg-dark-700">
                     <tr>
-                      <th class="px-4 py-3 text-left">成员</th>
-                      <th class="px-4 py-3 text-left">角色</th>
-                      <th class="px-4 py-3 text-right">累计分配</th>
-                      <th class="px-4 py-3 text-right">剩余</th>
-                      <th class="px-4 py-3 text-right">已消费</th>
-                      <th class="px-4 py-3 text-left">最近到期</th>
-                      <th class="px-4 py-3 text-right">操作</th>
+                      <th class="px-4 py-3 text-left">{{ translateUi('uiMessages.m6e6d6ddbb7c1') }}</th>
+                      <th class="px-4 py-3 text-left">{{ translateUi('user.role') }}</th>
+                      <th class="px-4 py-3 text-right">{{ translateUi('uiMessages.m260a6961897e') }}</th>
+                      <th class="px-4 py-3 text-right">{{ translateUi('uiMessages.md6822b04178d') }}</th>
+                      <th class="px-4 py-3 text-right">{{ translateUi('uiMessages.mea602044bfa6') }}</th>
+                      <th class="px-4 py-3 text-left">{{ translateUi('uiMessages.m97f083027843') }}</th>
+                      <th class="px-4 py-3 text-right">{{ translateUi('uiMessages.med31fbb483ee') }}</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-slate-100 dark:divide-dark-700">
@@ -453,15 +455,15 @@ onMounted(loadTeams)
                       <td class="px-4 py-3">{{ formatDate(member.nearest_expires_at) }}</td>
                       <td class="px-4 py-3">
                         <div class="flex justify-end gap-2">
-                          <button v-if="canAllocate" type="button" class="rounded-md bg-primary-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-primary-700" @click="openAllocation(member)">分配</button>
-                          <button type="button" class="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs hover:bg-slate-50 dark:border-dark-600 dark:hover:bg-dark-700" @click="openLedger(member)">流水</button>
-                          <button type="button" class="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs hover:bg-slate-50 dark:border-dark-600 dark:hover:bg-dark-700" @click="openRevokeMemberCredits(member)">部分收回</button>
-                          <button type="button" class="rounded-md border border-red-200 px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:hover:bg-red-900/20" @click="revokeMember(member)">全部收回</button>
+                          <button v-if="canAllocate" type="button" class="rounded-md bg-primary-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-primary-700" @click="openAllocation(member)">{{ translateUi('uiMessages.mfc135337a267') }}</button>
+                          <button type="button" class="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs hover:bg-slate-50 dark:border-dark-600 dark:hover:bg-dark-700" @click="openLedger(member)">{{ translateUi('uiMessages.m0fb688b74cfb') }}</button>
+                          <button type="button" class="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs hover:bg-slate-50 dark:border-dark-600 dark:hover:bg-dark-700" @click="openRevokeMemberCredits(member)">{{ translateUi('uiMessages.m38c6ee8a0034') }}</button>
+                          <button type="button" class="rounded-md border border-red-200 px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:hover:bg-red-900/20" @click="revokeMember(member)">{{ translateUi('uiMessages.m77d7b6fb827a') }}</button>
                         </div>
                       </td>
                     </tr>
                     <tr v-if="members.length === 0">
-                      <td colspan="7" class="px-4 py-8 text-center text-slate-500">暂无成员</td>
+                      <td colspan="7" class="px-4 py-8 text-center text-slate-500">{{ translateUi('uiMessages.m51c54a24eb22') }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -476,33 +478,33 @@ onMounted(loadTeams)
       <section class="w-full max-w-md rounded-lg bg-white p-5 shadow-xl dark:bg-dark-800">
         <div class="flex items-start justify-between">
           <div>
-            <h3 class="text-lg font-semibold">分配团队积分</h3>
+            <h3 class="text-lg font-semibold">{{ translateUi('uiMessages.m7904fd5b0d29') }}</h3>
             <p class="mt-1 text-sm text-slate-500">{{ allocationTarget?.username || allocationTarget?.email || allocationTarget?.user_id }}</p>
           </div>
           <button type="button" class="rounded-md p-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-dark-700" @click="closeAllocation">✕</button>
         </div>
         <div class="mt-4 space-y-4">
           <label class="block">
-            <span class="text-sm font-medium">积分数量</span>
+            <span class="text-sm font-medium">{{ translateUi('uiMessages.m5da54b27a36f') }}</span>
             <input v-model="allocationForm.amount" type="number" min="0" step="1" class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-dark-600 dark:bg-dark-900" />
           </label>
           <label class="block">
-            <span class="text-sm font-medium">有效期</span>
+            <span class="text-sm font-medium">{{ translateUi('uiMessages.m9c2a28e8f98f') }}</span>
             <select v-model="allocationForm.expiresMode" class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-dark-600 dark:bg-dark-900">
-              <option value="none">长期有效</option>
-              <option value="7d">7 天</option>
-              <option value="30d">30 天</option>
-              <option value="custom">自定义日期</option>
+              <option value="none">{{ translateUi('uiMessages.m824fe235445d') }}</option>
+              <option value="7d">{{ translateUi('uiMessages.m38eefacbb326') }}</option>
+              <option value="30d">{{ translateUi('uiMessages.m84ad2952a308') }}</option>
+              <option value="custom">{{ translateUi('uiMessages.ma953fd81881f') }}</option>
             </select>
           </label>
           <label v-if="allocationForm.expiresMode === 'custom'" class="block">
-            <span class="text-sm font-medium">到期日期</span>
+            <span class="text-sm font-medium">{{ translateUi('uiMessages.m7589d263a38d') }}</span>
             <input v-model="allocationForm.customDate" type="date" class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-dark-600 dark:bg-dark-900" />
           </label>
         </div>
         <div class="mt-5 flex justify-end gap-2">
-          <button type="button" class="rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50 dark:border-dark-600 dark:hover:bg-dark-700" @click="closeAllocation">取消</button>
-          <button type="button" class="rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-60" :disabled="allocationSubmitting" @click="submitAllocation">确认分配</button>
+          <button type="button" class="rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50 dark:border-dark-600 dark:hover:bg-dark-700" @click="closeAllocation">{{ translateUi('common.cancel') }}</button>
+          <button type="button" class="rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-60" :disabled="allocationSubmitting" @click="submitAllocation">{{ translateUi('uiMessages.m2dd50f9d7818') }}</button>
         </div>
       </section>
     </div>
@@ -512,7 +514,7 @@ onMounted(loadTeams)
         <div class="border-b border-slate-200 px-5 py-4 dark:border-dark-600">
           <div class="flex items-start justify-between gap-4">
             <div>
-              <h3 class="text-lg font-semibold">部分收回积分</h3>
+              <h3 class="text-lg font-semibold">{{ translateUi('uiMessages.m54fa2e1046df') }}</h3>
               <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ revokeMemberTarget?.nickname || revokeMemberTarget?.username || revokeMemberTarget?.email || revokeMemberTarget?.user_id }}</p>
             </div>
             <button type="button" class="rounded-md p-1 text-slate-500 hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-dark-700" :disabled="revokeMemberSubmitting" @click="closeRevokeMemberCredits">✕</button>
@@ -520,10 +522,10 @@ onMounted(loadTeams)
         </div>
         <div class="px-5 py-4">
           <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-900/20 dark:text-amber-100">
-            从该成员当前剩余团队积分中收回指定数量，优先收回最近到期的未使用积分。
+            {{ translateUi('uiMessages.m6df9d27b8aa2') }}
           </div>
           <label class="mt-4 block">
-            <span class="text-sm font-medium">收回积分数量</span>
+            <span class="text-sm font-medium">{{ translateUi('uiMessages.me0f80fccbad6') }}</span>
             <input
               v-model="revokeMemberForm.amount"
               type="number"
@@ -531,21 +533,21 @@ onMounted(loadTeams)
               step="1"
               class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-dark-600 dark:bg-dark-900"
               :max="revokeMemberTarget?.active_remaining_points || 0"
-              placeholder="输入要收回的积分"
+              :placeholder="translateUi('uiMessages.m05e93a1aefe1')"
               @keyup.enter="submitRevokeMemberCredits"
             />
-            <span class="mt-1 block text-xs text-slate-500">当前可收回：{{ formatPoints(revokeMemberTarget?.active_remaining_points || 0) }}</span>
+            <span class="mt-1 block text-xs text-slate-500">{{ translateUi('uiMessages.m6f3e052e50b2', { value1: (formatPoints(revokeMemberTarget?.active_remaining_points || 0)) }) }}</span>
           </label>
         </div>
         <div class="flex justify-end gap-2 border-t border-slate-200 px-5 py-4 dark:border-dark-600">
-          <button type="button" class="rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50 dark:border-dark-600 dark:hover:bg-dark-700" :disabled="revokeMemberSubmitting" @click="closeRevokeMemberCredits">取消</button>
+          <button type="button" class="rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50 dark:border-dark-600 dark:hover:bg-dark-700" :disabled="revokeMemberSubmitting" @click="closeRevokeMemberCredits">{{ translateUi('common.cancel') }}</button>
           <button
             type="button"
             class="rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
             :disabled="revokeMemberSubmitting || !(Number(revokeMemberForm.amount) > 0)"
             @click="submitRevokeMemberCredits"
           >
-            {{ revokeMemberSubmitting ? '收回中' : '确认收回' }}
+            {{ revokeMemberSubmitting ? translateUi('uiMessages.m7851cbb5dbf8') : translateUi('uiMessages.m1da18451fd9d') }}
           </button>
         </div>
       </section>
@@ -553,22 +555,22 @@ onMounted(loadTeams)
 
     <aside v-if="ledgerDrawerOpen" class="fixed inset-y-0 right-0 z-40 flex w-full max-w-xl flex-col border-l border-slate-200 bg-white shadow-2xl dark:border-dark-600 dark:bg-dark-800">
       <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-dark-600">
-        <h3 class="text-lg font-semibold">团队积分流水</h3>
+        <h3 class="text-lg font-semibold">{{ translateUi('uiMessages.mf29f83b86aeb') }}</h3>
       </div>
       <div class="flex gap-2 border-b border-slate-200 px-4 py-3 dark:border-dark-600">
         <select v-model="ledgerFilters.type" class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-dark-600 dark:bg-dark-900" @change="loadLedger(1)">
-          <option value="">全部类型</option>
-          <option value="allocate">分配</option>
-          <option value="consume">消费</option>
-          <option value="revoke">收回</option>
-          <option value="expire">到期</option>
-          <option value="refund">退款</option>
+          <option value="">{{ translateUi('uiMessages.m267c4a7a86dd') }}</option>
+          <option value="allocate">{{ translateUi('uiMessages.mfc135337a267') }}</option>
+          <option value="consume">{{ translateUi('uiMessages.m80716311485a') }}</option>
+          <option value="revoke">{{ translateUi('uiMessages.m6923cef57f25') }}</option>
+          <option value="expire">{{ translateUi('uiMessages.m1f29b74ad60c') }}</option>
+          <option value="refund">{{ translateUi('user.ledgerType.refund') }}</option>
         </select>
-        <button type="button" class="rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50 dark:border-dark-600 dark:hover:bg-dark-700" @click="loadLedger(1)">刷新</button>
+        <button type="button" class="rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50 dark:border-dark-600 dark:hover:bg-dark-700" @click="loadLedger(1)">{{ translateUi('common.refresh') }}</button>
       </div>
       <div class="flex-1 overflow-y-auto">
-        <div v-if="ledgerLoading" class="p-6 text-center text-sm text-slate-500">正在加载流水</div>
-        <div v-else-if="ledgerItems.length === 0" class="p-6 text-center text-sm text-slate-500">暂无流水</div>
+        <div v-if="ledgerLoading" class="p-6 text-center text-sm text-slate-500">{{ translateUi('uiMessages.m631f1fc6bf92') }}</div>
+        <div v-else-if="ledgerItems.length === 0" class="p-6 text-center text-sm text-slate-500">{{ translateUi('uiMessages.m23e23d94a7d8') }}</div>
         <div v-else class="divide-y divide-slate-100 dark:divide-dark-700">
           <div v-for="item in ledgerItems" :key="item.ledger_id" class="px-4 py-3">
             <div class="flex items-center justify-between gap-3">
@@ -586,14 +588,14 @@ onMounted(loadTeams)
       </div>
       <div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-sm dark:border-dark-600">
         <div class="flex items-center gap-3">
-          <span>共 {{ ledgerPagination.total }} 条</span>
+          <span>{{ translateUi('uiMessages.m85ad0e047775', { value1: (ledgerPagination.total) }) }}</span>
           <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 dark:border-dark-600 dark:text-slate-300 dark:hover:bg-dark-700" @click="closeLedgerDrawer">
-            收起
+            {{ translateUi('common.less') }}
           </button>
         </div>
         <div class="flex gap-2">
-          <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 disabled:opacity-50 dark:border-dark-600" :disabled="ledgerPagination.page <= 1" @click="loadLedger(ledgerPagination.page - 1)">上一页</button>
-          <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 disabled:opacity-50 dark:border-dark-600" :disabled="ledgerPagination.page * ledgerPagination.pageSize >= ledgerPagination.total" @click="loadLedger(ledgerPagination.page + 1)">下一页</button>
+          <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 disabled:opacity-50 dark:border-dark-600" :disabled="ledgerPagination.page <= 1" @click="loadLedger(ledgerPagination.page - 1)">{{ translateUi('uiMessages.mc9b9ae7a6144') }}</button>
+          <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 disabled:opacity-50 dark:border-dark-600" :disabled="ledgerPagination.page * ledgerPagination.pageSize >= ledgerPagination.total" @click="loadLedger(ledgerPagination.page + 1)">{{ translateUi('uiMessages.m8a8542f69648') }}</button>
         </div>
       </div>
     </aside>

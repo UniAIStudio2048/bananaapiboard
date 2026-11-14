@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../i18n/index.js'
 /**
  * Canvas 历史记录 API
  * 使用与普通模式相同的历史数据源
@@ -66,9 +67,9 @@ export async function getHistoryRetention() {
   const response = await fetch(getApiUrl('/api/history/retention'), {
     credentials: 'include', headers: getAuthHeaders(), cache: 'no-store'
   })
-  if (!response.ok) throw new Error('获取历史记录保留期限失败')
+  if (!response.ok) throw new Error(translateUi('uiMessages.mdb40c7ab283a'))
   const { retentionDays } = await response.json()
-  if (!Number.isSafeInteger(retentionDays) || retentionDays < 0) throw new Error('历史记录保留期限无效')
+  if (!Number.isSafeInteger(retentionDays) || retentionDays < 0) throw new Error(translateUi('uiMessages.m2e35a43ab6c7'))
   return retentionDays
 }
 
@@ -355,7 +356,7 @@ export async function deleteHistory(historyId, type = 'image') {
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '删除历史记录失败')
+    throw new Error(error.error || translateUi('uiMessages.m485af08adbdd'))
   }
   
   return response.json()

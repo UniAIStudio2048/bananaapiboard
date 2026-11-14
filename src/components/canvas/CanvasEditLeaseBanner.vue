@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * 编辑租约只读提示条：工作流正在其他会话编辑时显示持有者，并提供抢占入口。
  */
@@ -19,22 +21,22 @@ const visible = computed(() => props.state?.mode === 'readonly')
 const holderLabel = computed(() => {
   const holder = props.state?.holder
   if (!holder) return ''
-  const device = holder.device || '另一台设备'
+  const device = holder.device || translateUi('uiMessages.m25c27fb1eedc')
   return props.isTeam && holder.userName ? `${holder.userName} · ${device}` : device
 })
 
 const message = computed(() => {
   const reason = props.state?.reason
-  if (reason === 'free') return '编辑者已离开，当前为只读'
-  if (reason === 'taken') return `已在 ${holderLabel.value || '另一台设备'} 继续编辑，当前为只读`
-  return `${holderLabel.value || '另一台设备'} 正在编辑，当前为只读`
+  if (reason === 'free') return translateUi('uiMessages.m118e4eb8b649')
+  if (reason === 'taken') return translateUi('uiMessages.m8fc01764ebea', { value1: (holderLabel.value || translateUi('uiMessages.m25c27fb1eedc')) })
+  return translateUi('uiMessages.m47438d44c0b8', { value1: (holderLabel.value || translateUi('uiMessages.m25c27fb1eedc')) })
 })
 
 const actionLabel = computed(() => {
   const reason = props.state?.reason
-  if (reason === 'free') return '开始编辑'
-  if (reason === 'taken') return '收回编辑权'
-  return '在此设备编辑'
+  if (reason === 'free') return translateUi('uiMessages.ma8206ab14565')
+  if (reason === 'taken') return translateUi('uiMessages.m9b6d30a38893')
+  return translateUi('uiMessages.m7a88c6a2f05d')
 })
 </script>
 

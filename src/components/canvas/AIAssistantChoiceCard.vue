@@ -16,13 +16,15 @@
       </button>
     </div>
     <form v-if="choices.allowInput" class="ai-message-choice-input" @submit.prevent="submitChoiceInput">
-      <input v-model="choiceInput" type="text" :placeholder="choices.inputPlaceholder" :disabled="choiceLocked" aria-label="自定义回复" />
-      <button type="submit" :disabled="choiceLocked || !choiceInput.trim()">发送</button>
+      <input v-model="choiceInput" type="text" :placeholder="choices.inputPlaceholder" :disabled="choiceLocked" :aria-label="translateUi('uiMessages.m4c0b4fc0300f')" />
+      <button type="submit" :disabled="choiceLocked || !choiceInput.trim()">{{ translateUi('uiMessages.medecf0ae6e51') }}</button>
     </form>
   </div>
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, computed } from 'vue'
 
 // 选择卡片独立子组件：选中/输入状态内聚在此，选项选择时只重渲染本卡片，

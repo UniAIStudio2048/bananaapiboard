@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * WorkflowPanel.vue - 统一的工作流面板
  * 整合"我的工作流"和"工作流模板"，支持标签切换
@@ -183,7 +185,7 @@ async function confirmRenameProject(group) {
     await loadWorkflows(true)
   } catch (e) {
     console.error('[WorkflowPanel] 重命名项目失败:', e)
-    alert('操作失败：' + e.message)
+    alert(translateUi('uiMessages.m37cdfdb143a7') + e.message)
   }
 }
 
@@ -211,7 +213,7 @@ async function handleDeleteProject() {
     await loadWorkflows(true)
   } catch (e) {
     console.error('[WorkflowPanel] 删除项目失败:', e)
-    alert('删除失败：' + e.message)
+    alert(translateUi('uiMessages.m0580fcee37e0') + e.message)
   }
 }
 
@@ -340,7 +342,7 @@ const projectTree = computed(() => {
       if (!groups.has('__uncategorized__')) {
         groups.set('__uncategorized__', {
           id: null,
-          name: '未分类',
+          get name() { return translateUi('uiMessages.m54b89f901274') },
           isDefault: false,
           workflows: []
         })
@@ -640,63 +642,63 @@ function getBuiltinTemplates() {
   return [
     {
       id: 'tpl-quick-image',
-      name: '快速出图',
-      description: '文本直接生成图片',
+      name: translateUi('canvas.templates.quickImage.name'),
+      description: translateUi('canvas.templates.quickImage.desc'),
       icon: '⬡',
       category: 'basic',
       nodes: [
-        { id: 'n1', type: 'text-input', position: { x: 100, y: 200 }, data: { title: '输入提示词' } },
-        { id: 'n2', type: 'text-to-image', position: { x: 400, y: 200 }, data: { title: '生成图片' } }
+        { id: 'n1', type: 'text-input', position: { x: 100, y: 200 }, data: { title: translateUi('canvas.templates.nodeTitle.inputPrompt') } },
+        { id: 'n2', type: 'text-to-image', position: { x: 400, y: 200 }, data: { title: translateUi('canvas.templates.nodeTitle.generateImage') } }
       ],
       edges: [{ id: 'e1', source: 'n1', target: 'n2' }]
     },
     {
       id: 'tpl-prompt-enhance',
-      name: '智能优化出图',
-      description: 'AI 优化提示词后生成图片',
+      name: translateUi('canvas.templates.promptEnhance.name'),
+      description: translateUi('canvas.templates.promptEnhance.desc'),
       icon: 'A+',
       category: 'advanced',
       nodes: [
-        { id: 'n1', type: 'text-input', position: { x: 100, y: 200 }, data: { title: '输入想法' } },
-        { id: 'n2', type: 'llm-prompt-enhance', position: { x: 350, y: 200 }, data: { title: '提示词优化', type: 'llm-prompt-enhance' } },
-        { id: 'n3', type: 'text-to-image', position: { x: 600, y: 200 }, data: { title: '生成图片' } }
+        { id: 'n1', type: 'text-input', position: { x: 100, y: 200 }, data: { title: translateUi('canvas.templates.nodeTitle.inputIdea') } },
+        { id: 'n2', type: 'llm-prompt-enhance', position: { x: 350, y: 200 }, data: { title: translateUi('canvas.nodeConfig.promptEnhance.label'), type: 'llm-prompt-enhance' } },
+        { id: 'n3', type: 'text-to-image', position: { x: 600, y: 200 }, data: { title: translateUi('canvas.templates.nodeTitle.generateImage') } }
       ],
       edges: [{ id: 'e1', source: 'n1', target: 'n2' }, { id: 'e2', source: 'n2', target: 'n3' }]
     },
     {
       id: 'tpl-image-to-video',
-      name: '图片转视频',
-      description: '上传图片生成视频',
+      name: translateUi('canvas.emptyState.imageToVideo'),
+      description: translateUi('canvas.templates.imageToVideo.desc'),
       icon: '◈',
       category: 'video',
       nodes: [
-        { id: 'n1', type: 'image-input', position: { x: 100, y: 200 }, data: { title: '上传图片' } },
-        { id: 'n2', type: 'image-to-video', position: { x: 400, y: 200 }, data: { title: '生成视频' } }
+        { id: 'n1', type: 'image-input', position: { x: 100, y: 200 }, data: { title: translateUi('canvas.imageNode.uploadImage') } },
+        { id: 'n2', type: 'image-to-video', position: { x: 400, y: 200 }, data: { title: translateUi('canvas.templates.nodeTitle.generateVideo') } }
       ],
       edges: [{ id: 'e1', source: 'n1', target: 'n2' }]
     },
     {
       id: 'tpl-text-to-video',
-      name: '文字生视频',
-      description: '文本直接生成视频',
+      name: translateUi('canvas.emptyState.textToVideo'),
+      description: translateUi('canvas.templates.textToVideo.desc'),
       icon: '▶',
       category: 'video',
       nodes: [
-        { id: 'n1', type: 'text-input', position: { x: 100, y: 200 }, data: { title: '输入描述' } },
-        { id: 'n2', type: 'text-to-video', position: { x: 400, y: 200 }, data: { title: '生成视频' } }
+        { id: 'n1', type: 'text-input', position: { x: 100, y: 200 }, data: { title: translateUi('canvas.templates.nodeTitle.inputDescription') } },
+        { id: 'n2', type: 'text-to-video', position: { x: 400, y: 200 }, data: { title: translateUi('canvas.templates.nodeTitle.generateVideo') } }
       ],
       edges: [{ id: 'e1', source: 'n1', target: 'n2' }]
     },
     {
       id: 'tpl-style-transfer',
-      name: '风格迁移',
-      description: '图片反推提示词后重新生成',
+      name: translateUi('canvas.templates.styleTransfer.name'),
+      description: translateUi('canvas.templates.styleTransfer.desc'),
       icon: '⟲',
       category: 'advanced',
       nodes: [
-        { id: 'n1', type: 'image-input', position: { x: 100, y: 200 }, data: { title: '参考图片' } },
-        { id: 'n2', type: 'llm-image-describe', position: { x: 350, y: 200 }, data: { title: '图片描述', type: 'llm-image-describe' } },
-        { id: 'n3', type: 'text-to-image', position: { x: 600, y: 200 }, data: { title: '风格生成' } }
+        { id: 'n1', type: 'image-input', position: { x: 100, y: 200 }, data: { title: translateUi('canvas.templates.nodeTitle.referenceImage') } },
+        { id: 'n2', type: 'llm-image-describe', position: { x: 350, y: 200 }, data: { title: translateUi('canvas.nodeConfig.imageDescribe.label'), type: 'llm-image-describe' } },
+        { id: 'n3', type: 'text-to-image', position: { x: 600, y: 200 }, data: { title: translateUi('canvas.templates.nodeTitle.styleGenerate') } }
       ],
       edges: [{ id: 'e1', source: 'n1', target: 'n2' }, { id: 'e2', source: 'n2', target: 'n3' }]
     }
@@ -861,7 +863,7 @@ async function confirmRenameWorkflow(workflow) {
     cancelRenameWorkflow()
   } catch (error) {
     console.error('[WorkflowPanel] 重命名工作流失败:', error)
-    alert('重命名失败：' + error.message)
+    alert(translateUi('uiMessages.m0ab10c33f462') + error.message)
     workflowRenameSaving.value = false
   }
 }
@@ -883,11 +885,11 @@ async function handleLoadMyWorkflow(workflow) {
       emit('close')
     } else {
       console.error('[WorkflowPanel] API 返回格式异常:', JSON.stringify(result)?.substring(0, 200))
-      alert('加载失败：工作流数据为空，请刷新页面重试')
+      alert(translateUi('uiMessages.m561795192667'))
     }
   } catch (error) {
     console.error('[WorkflowPanel] 加载工作流失败:', error)
-    alert('加载失败：' + error.message)
+    alert(translateUi('uiMessages.m01de8216e0d0') + error.message)
   } finally {
     loading.value = false
     isLoadingWorkflow = false
@@ -905,7 +907,7 @@ async function persistSavedWorkflowDescription(workflow) {
     if (!fullWorkflow) {
       const result = await loadWorkflow(workflow.id)
       fullWorkflow = result?.workflow
-      if (!fullWorkflow) throw new Error('工作流数据为空')
+      if (!fullWorkflow) throw new Error(translateUi('uiMessages.md7d2f27c0a90'))
       loadedWorkflowCache.set(workflow.id, fullWorkflow)
     }
 
@@ -987,7 +989,7 @@ async function handleDelete() {
     cancelDelete()
   } catch (error) {
     console.error('[WorkflowPanel] 删除失败:', error)
-    alert('删除失败：' + error.message)
+    alert(translateUi('uiMessages.m0580fcee37e0') + error.message)
   }
 }
 
@@ -1012,7 +1014,7 @@ function handleLoadHistoryWorkflow(historyWorkflow) {
     // 构造工作流对象
     const workflow = {
       id: null, // 历史记录不是已保存的工作流
-      name: historyWorkflow.name + ' (恢复)',
+      name: historyWorkflow.name + translateUi('uiMessages.m128e54fc2687'),
       description: historyWorkflow.description || '',
       nodes: JSON.parse(JSON.stringify(historyWorkflow.nodes)),
       edges: JSON.parse(JSON.stringify(historyWorkflow.edges)),
@@ -1023,7 +1025,7 @@ function handleLoadHistoryWorkflow(historyWorkflow) {
     emit('close')
   } catch (error) {
     console.error('[WorkflowPanel] 恢复历史工作流失败:', error)
-    alert('恢复失败：' + error.message)
+    alert(translateUi('uiMessages.m288bfb28a851') + error.message)
   }
 }
 
@@ -1486,7 +1488,7 @@ defineExpose({
                         <input
                           class="folder-rename-input"
                           v-model="renameInput"
-                          :placeholder="group.id ? '' : '输入项目名称'"
+                          :placeholder="group.id ? '' : translateUi('uiMessages.mfb7c19b6a4c1')"
                           @click.stop
                           @keyup.enter="confirmRenameProject(group)"
                           @keyup.escape="cancelRenameProject"
@@ -1494,14 +1496,14 @@ defineExpose({
                         />
                       </template>
                       <template v-else>
-                        <span class="folder-name">{{ group.name }}<span v-if="group.isDefault" class="folder-default-tag">默认</span></span>
+                        <span class="folder-name">{{ group.name }}<span v-if="group.isDefault" class="folder-default-tag">{{ translateUi('uiMessages.m844b8cc8dff7') }}</span></span>
                       </template>
                       <span class="folder-count">{{ group.workflows.length }}</span>
                       <button
                         v-if="group.id && !group.isDefault"
                         class="folder-delete-btn"
                         @click.stop="showDeleteProject($event, group)"
-                        title="删除项目"
+                        :title="translateUi('directorStudio.projects.delete')"
                       >
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                           <polyline points="3 6 5 6 21 6"/>
@@ -1512,13 +1514,13 @@ defineExpose({
                         v-if="group.id && !group.isDefault"
                         class="folder-move-btn"
                         @click.stop="openMoveResource(group, 'project')"
-                        title="移动项目到其他空间"
+                        :title="translateUi('uiMessages.m40edbcf764b9')"
                       >↗</button>
                       <button
                         v-if="group.id && !group.isDefault"
                         class="folder-move-btn"
                         @click.stop="openMoveResource(group, 'project', 'copy')"
-                        title="创建项目副本"
+                        :title="translateUi('uiMessages.m41077d3eb7c4')"
                       >⧉</button>
                     </div>
 
@@ -1564,8 +1566,8 @@ defineExpose({
                               <span v-if="workflow.workflow_uid">·</span>
                               <span>{{ workflow.node_count }} {{ t('canvas.nodeLabel') }}</span>
                               <span>·</span>
-                              <span class="workflow-time">保存 {{ formatBeijingSaveTime(workflow.updated_at) }}</span>
-                              <span v-if="isWorkflowShared(workflow)" class="workflow-share-badge">已分享</span>
+                              <span class="workflow-time">{{ translateUi('uiMessages.m9e5a2e328a52', { value1: (formatBeijingSaveTime(workflow.updated_at)) }) }}</span>
+                              <span v-if="isWorkflowShared(workflow)" class="workflow-share-badge">{{ translateUi('uiMessages.mf62961edbb8f') }}</span>
                               <template v-if="teamStore.isInTeamSpace.value && workflow.last_updated_by_username">
                                 <span>·</span>
                                 <span class="item-author">
@@ -1582,7 +1584,7 @@ defineExpose({
                           <div class="item-actions">
                             <button
                               class="action-btn share-btn"
-                              title="分享工作流"
+                              :title="translateUi('uiMessages.m1d211c6fcd4c')"
                               @click.stop="openWorkflowShare(workflow)"
                             >
                               ↗
@@ -1610,7 +1612,7 @@ defineExpose({
                             :value="workflow.description || ''"
                             class="workflow-description-input"
                             rows="3"
-                            placeholder="描述内容"
+                            :placeholder="translateUi('uiMessages.m4307c2704577')"
                             @input="handleSavedDescriptionInput(workflow, $event.target.value)"
                             @keydown.stop
                             @mousedown.stop
@@ -1686,7 +1688,7 @@ defineExpose({
                         <div class="item-meta workflow-meta">
                           <span>{{ workflow.nodeCount }} {{ t('canvas.nodeLabel') }}</span>
                           <span>·</span>
-                          <span class="workflow-time">自动保存 {{ formatBeijingSaveTime(workflow.savedAt) }}</span>
+                          <span class="workflow-time">{{ translateUi('uiMessages.mce47126a6ec4', { value1: (formatBeijingSaveTime(workflow.savedAt)) }) }}</span>
                         </div>
                       </div>
 
@@ -1715,7 +1717,7 @@ defineExpose({
                         :value="workflow.description || ''"
                         class="history-description-input"
                         rows="3"
-                        placeholder="描述内容"
+                        :placeholder="translateUi('uiMessages.m4307c2704577')"
                         @input="handleHistoryDescriptionInput(workflow, $event.target.value)"
                         @keydown.stop
                         @mousedown.stop
@@ -1778,7 +1780,7 @@ defineExpose({
 
         <!-- 底部提示 -->
         <div class="panel-footer">
-          <span class="tip">{{ t('canvas.doubleClickOpenDragMerge') }} · 右键更多操作</span>
+          <span class="tip">{{ translateUi('uiMessages.m9a16c1db894c', { value1: (t('canvas.doubleClickOpenDragMerge')) }) }}</span>
         </div>
 
         <!-- 工作流右键菜单 -->
@@ -1795,41 +1797,41 @@ defineExpose({
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                 <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.7 10.7 6.6-3.9M8.7 13.3l6.6 3.9"/>
               </svg>
-              <span>分享工作流</span>
+              <span>{{ translateUi('uiMessages.m1d211c6fcd4c') }}</span>
             </button>
             <button class="context-menu-item" @click="handleWorkflowContextAction('rename')">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                 <path d="M12 20h9"/>
                 <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
               </svg>
-              <span>重命名工作流</span>
+              <span>{{ translateUi('uiMessages.m019f4b1e5571') }}</span>
             </button>
             <button class="context-menu-item" @click="handleWorkflowContextAction('load')">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                 <path d="M5 12h14M12 5l7 7-7 7"/>
               </svg>
-              <span>加载工作流</span>
+              <span>{{ translateUi('uiMessages.mf6a6741cb8c5') }}</span>
             </button>
             <button class="context-menu-item" @click="handleWorkflowContextAction('move')">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                 <path d="M5 12h14M13 6l6 6-6 6"/>
                 <path d="M19 12H9"/>
               </svg>
-              <span>移动工作流</span>
+              <span>{{ translateUi('uiMessages.mcef85c196130') }}</span>
             </button>
             <button class="context-menu-item" @click="handleWorkflowContextAction('copy')">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                 <rect x="9" y="9" width="11" height="11" rx="2"/>
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
               </svg>
-              <span>创建工作流副本</span>
+              <span>{{ translateUi('uiMessages.mc9357e23541a') }}</span>
             </button>
             <button v-if="contextMenu.workflow?.workflow_uid" class="context-menu-item" @click="handleWorkflowContextAction('copy-uid')">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                 <rect x="4" y="4" width="16" height="16" rx="2"/>
                 <path d="M8 8h8M8 12h5M8 16h8"/>
               </svg>
-              <span>复制工作流 ID</span>
+              <span>{{ translateUi('uiMessages.m7c5585e37865') }}</span>
             </button>
           </template>
           <button v-else class="context-menu-item" @click="handleWorkflowContextAction('load')">
@@ -1837,7 +1839,7 @@ defineExpose({
               <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
               <path d="M3 3v5h5"/>
             </svg>
-            <span>恢复工作流</span>
+            <span>{{ translateUi('uiMessages.md1cc81114d3f') }}</span>
           </button>
         </div>
 
@@ -1871,9 +1873,9 @@ defineExpose({
         <Transition name="fade">
           <div v-if="deleteProjectConfirm.visible" class="delete-modal" @click.self="cancelDeleteProject">
             <div class="delete-dialog project-delete-dialog">
-              <p class="delete-title">删除项目「{{ deleteProjectConfirm.group?.name }}」</p>
-              <p class="delete-hint">项目下的工作流将移入默认项目，此操作不可撤销。</p>
-              <p class="delete-hint">请输入项目名称 <strong>{{ deleteProjectConfirm.group?.name }}</strong> 确认删除：</p>
+              <p class="delete-title">{{ translateUi('uiMessages.me57165619aa9', { value1: (deleteProjectConfirm.group?.name) }) }}</p>
+              <p class="delete-hint">{{ translateUi('uiMessages.m9c8c51d9b6ba') }}</p>
+              <p class="delete-hint">{{ translateUi('uiMessages.m0fb3237e881a') }} <strong>{{ deleteProjectConfirm.group?.name }}</strong> {{ translateUi('uiMessages.mff83528d69a8') }}</p>
               <input
                 v-model="deleteProjectConfirm.inputName"
                 class="delete-confirm-input"
@@ -1881,12 +1883,12 @@ defineExpose({
                 @keyup.enter="handleDeleteProject"
               />
               <div class="delete-actions">
-                <button class="btn-cancel" @click="cancelDeleteProject">取消</button>
+                <button class="btn-cancel" @click="cancelDeleteProject">{{ translateUi('common.cancel') }}</button>
                 <button
                   class="btn-confirm"
                   :disabled="deleteProjectConfirm.inputName.trim() !== deleteProjectConfirm.group?.name?.trim()"
                   @click="handleDeleteProject"
-                >确认删除</button>
+                >{{ translateUi('uiMessages.ma3ea3c17b401') }}</button>
               </div>
             </div>
           </div>

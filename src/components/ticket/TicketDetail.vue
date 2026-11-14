@@ -2,13 +2,13 @@
   <div class="ticket-detail">
     <!-- 头部 -->
     <div class="detail-header">
-      <button class="back-btn" @click="$emit('back')" title="返回">
+      <button class="back-btn" @click="$emit('back')" :title="translateUi('common.back')">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M19 12H5M12 19l-7-7 7-7"/>
         </svg>
       </button>
-      <h3 class="header-title">工单详情</h3>
-      <button class="close-btn" @click="$emit('close')" title="关闭">
+      <h3 class="header-title">{{ translateUi('uiMessages.m3a666367b881') }}</h3>
+      <button class="close-btn" @click="$emit('close')" :title="translateUi('common.close')">
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M18 6L6 18M6 6l12 12"/>
         </svg>
@@ -18,7 +18,7 @@
     <!-- 加载状态 -->
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
-      <p>加载中...</p>
+      <p>{{ translateUi('common.loading') }}</p>
     </div>
 
     <!-- 工单内容 -->
@@ -26,21 +26,21 @@
       <!-- 工单信息 -->
       <div class="ticket-info">
         <div class="info-row">
-          <span class="info-label">工单编号</span>
+          <span class="info-label">{{ translateUi('uiMessages.m5af56c997da9') }}</span>
           <span class="info-value">#{{ ticket.ticket_number }}</span>
         </div>
         <div class="info-row">
-          <span class="info-label">状态</span>
+          <span class="info-label">{{ translateUi('uiMessages.m6320b4a8722a') }}</span>
           <span class="ticket-status" :class="`status-${ticket.status}`">
             {{ getStatusLabel(ticket.status) }}
           </span>
         </div>
         <div class="info-row">
-          <span class="info-label">类型</span>
+          <span class="info-label">{{ translateUi('canvas.assetPanel.type') }}</span>
           <span class="info-value">{{ getTypeLabel(ticket.category) }}</span>
         </div>
         <div class="info-row">
-          <span class="info-label">创建时间</span>
+          <span class="info-label">{{ translateUi('canvas.assetPanel.createdAt') }}</span>
           <span class="info-value">{{ formatDateTime(ticket.created_at) }}</span>
         </div>
       </div>
@@ -52,7 +52,7 @@
 
         <!-- 附件 -->
         <div v-if="ticket.attachments && ticket.attachments.length > 0" class="attachments">
-          <div class="attachments-title">附件</div>
+          <div class="attachments-title">{{ translateUi('uiMessages.mc7225dbf105e') }}</div>
           <div class="attachment-list">
             <a
               v-for="(url, index) in ticket.attachments"
@@ -64,7 +64,7 @@
               <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
               </svg>
-              附件 {{ index + 1 }}
+              {{ translateUi('uiMessages.m03465e032fe6', { value1: (index + 1) }) }}
             </a>
           </div>
         </div>
@@ -72,7 +72,7 @@
 
       <!-- 对话记录 -->
       <div class="replies-section">
-        <div class="section-title">对话记录</div>
+        <div class="section-title">{{ translateUi('uiMessages.mb53654e6b37c') }}</div>
         <div class="replies-list">
           <div
             v-for="reply in replies"
@@ -82,7 +82,7 @@
           >
             <div class="reply-header">
               <span class="reply-author">
-                {{ reply.author_type === 'admin' ? '客服' : '我' }}
+                {{ reply.author_type === 'admin' ? translateUi('uiMessages.meae0efe236c3') : translateUi('uiMessages.mb70bb4acc048') }}
               </span>
               <span class="reply-time">{{ formatDateTime(reply.created_at) }}</span>
             </div>
@@ -100,7 +100,7 @@
                 <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
                 </svg>
-                附件{{ index + 1 }}
+                {{ translateUi('uiMessages.ma8b1f7cf7ead', { value1: (index + 1) }) }}
               </a>
             </div>
           </div>
@@ -110,10 +110,10 @@
       <!-- 操作按钮 -->
       <div v-if="ticket.status === 'resolved' && !ticket.rating" class="action-buttons">
         <button class="btn-confirm" @click="handleConfirmResolve">
-          确认解决
+          {{ translateUi('uiMessages.mbaf4e5e9c896') }}
         </button>
         <button class="btn-rate" @click="showRatingDialog = true">
-          评价
+          {{ translateUi('uiMessages.md7085726d285') }}
         </button>
       </div>
 
@@ -146,7 +146,7 @@
     <Transition name="fade">
       <div v-if="showRatingDialog" class="dialog-overlay" @click="showRatingDialog = false">
         <div class="dialog-content" @click.stop>
-          <h3 class="dialog-title">评价工单</h3>
+          <h3 class="dialog-title">{{ translateUi('uiMessages.m22d50bb550de') }}</h3>
 
           <div class="rating-input">
             <div class="rating-stars-input">
@@ -165,15 +165,15 @@
             <textarea
               v-model="ratingForm.comment"
               class="rating-textarea"
-              placeholder="请输入您的评价（可选）"
+              :placeholder="translateUi('uiMessages.m879cb6341b9f')"
               rows="4"
             ></textarea>
           </div>
 
           <div class="dialog-actions">
-            <button class="btn-cancel" @click="showRatingDialog = false">取消</button>
+            <button class="btn-cancel" @click="showRatingDialog = false">{{ translateUi('common.cancel') }}</button>
             <button class="btn-submit" @click="handleRate" :disabled="ratingForm.rating === 0">
-              提交评价
+              {{ translateUi('uiMessages.m21e7d01180c8') }}
             </button>
           </div>
         </div>
@@ -183,6 +183,8 @@
 </template>
 
 <script setup>
+import { t as translateUi, currentLanguage as uiLanguage } from '@/i18n'
+
 import { ref, onMounted, watch } from 'vue'
 import { getTicketDetail, replyTicket, confirmResolve, rateTicket, markAsRead } from '@/api/ticket'
 import TicketReplyBox from './TicketReplyBox.vue'
@@ -230,7 +232,7 @@ async function handleReply(data) {
     emit('updated')
   } catch (e) {
     console.error('回复失败:', e)
-    alert(e.message || '回复失败，请重试')
+    alert(e.message || translateUi('uiMessages.mf5f0ccd97093'))
   }
 }
 
@@ -242,7 +244,7 @@ async function handleConfirmResolve() {
     emit('updated')
   } catch (e) {
     console.error('确认解决失败:', e)
-    alert(e.message || '操作失败，请重试')
+    alert(e.message || translateUi('uiMessages.me113c7d13e87'))
   }
 }
 
@@ -257,17 +259,17 @@ async function handleRate() {
     emit('updated')
   } catch (e) {
     console.error('评价失败:', e)
-    alert(e.message || '评价失败，请重试')
+    alert(e.message || translateUi('uiMessages.m6c8ea85311fb'))
   }
 }
 
 // 获取状态标签
 function getStatusLabel(status) {
   const labels = {
-    pending: '待处理',
-    processing: '处理中',
-    resolved: '已解决',
-    closed: '已关闭'
+    pending: translateUi('canvas.assetPanel.tagPending'),
+    processing: translateUi('videoGen.processing'),
+    resolved: translateUi('uiMessages.mb7aae49b52a3'),
+    closed: translateUi('uiMessages.m6744b4c6a9aa')
   }
   return labels[status] || status
 }
@@ -275,10 +277,10 @@ function getStatusLabel(status) {
 // 获取类型标签
 function getTypeLabel(type) {
   const labels = {
-    bug: '问题反馈',
-    feature: '功能建议',
-    invoice: '开票申请',
-    other: '其他'
+    bug: translateUi('uiMessages.m55a2ce1324c1'),
+    feature: translateUi('uiMessages.m118db8121c01'),
+    invoice: translateUi('uiMessages.m7cc4ddd2fcde'),
+    other: translateUi('uiMessages.md2909f1647e7')
   }
   return labels[type] || type
 }
@@ -287,7 +289,7 @@ function getTypeLabel(type) {
 function formatDateTime(time) {
   if (!time) return ''
   const date = new Date(time)
-  return date.toLocaleString('zh-CN', {
+  return date.toLocaleString(uiLanguage.value, {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

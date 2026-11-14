@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi, currentLanguage as uiLanguage } from '@/i18n'
+
 /**
  * Canvas.vue - 创作者画布主页面
  */
@@ -176,8 +178,8 @@ const editLease = useCanvasEditLease({
   reloadWorkflow: reloadLeaseWorkflow,
   onKicked: (workflowId, holder) => {
     if (getCurrentLeaseWorkflowId() !== workflowId) return
-    const device = holder?.device || '另一台设备'
-    displayToast(`已在 ${device} 继续编辑，当前画布切换为只读`, 'warning', 5000)
+    const device = holder?.device || translateUi('uiMessages.m25c27fb1eedc')
+    displayToast(translateUi('uiMessages.m89dc211c4f14', { value1: (device) }), 'warning', 5000)
   }
 })
 const isEditReadonly = editLease.isReadonly
@@ -243,7 +245,7 @@ const collaborationWriter = createIncrementalWriter({
           return
         }
         canvasStore.markCollaborationStale?.(err?.body?.code || err?.code || 'conflict')
-        displayToast('协作版本已变化，请刷新工作流后继续编辑', 'warning', 5000)
+        displayToast(translateUi('uiMessages.m2b2692418bd0'), 'warning', 5000)
       }
       console.warn('[CanvasCollab] 增量写入暂停:', err?.message || err)
     }
@@ -311,7 +313,7 @@ const currentTeamWorkflow = computed(() => {
   return {
     id: String(currentTab.workflowId),
     teamId: String(teamId),
-    name: currentTab.name || '当前工作流'
+    name: currentTab.name || translateUi('uiMessages.mb030a2ccb43c')
   }
 })
 
@@ -561,8 +563,8 @@ watch(() => canvasStore.nodes.length, (count) => {
   // 🔧 大画布性能模式（30+节点时进入优化模式）- 静默处理
   if (count > 30 && !performanceModeShown) {
     performanceModeShown = true
-    const modeText = performanceMode === 'minimal' ? '最小化渲染' : 
-                     performanceMode === 'reduced' ? '简化渲染' : '优化渲染'
+    const modeText = performanceMode === 'minimal' ? translateUi('uiMessages.m678040ec22b3') :
+                     performanceMode === 'reduced' ? translateUi('uiMessages.mc4977607e40e') : translateUi('uiMessages.m0d164dad2d41')
     console.log(`[Canvas] 🚀 已启用 ${modeText} 模式 (${count} 个节点)`)
     // 静默处理，不显示 toast 提示
   }
@@ -749,7 +751,7 @@ async function handleWorkflowLoaded(workflow) {
     
     if (!workflow || !workflow.nodes) {
       console.error('[Canvas] 工作流数据无效:', workflow)
-      displayToast('工作流数据无效', 'error')
+      displayToast(translateUi('uiMessages.m515a19f5fb5f'), 'error')
       return
     }
     
@@ -760,22 +762,22 @@ async function handleWorkflowLoaded(workflow) {
       
       if (analysis.base64Data.length > 0) {
         try {
-          displayToast('正在迁移旧数据到云存储...', 'info', 30000)
+          displayToast(translateUi('uiMessages.made6f8786d56'), 'info', 30000)
           const result = await migrateWorkflowData(workflow, (current, total, status) => {
             console.log(`[Canvas] 迁移进度: ${current}/${total} - ${status}`)
           })
           workflow.nodes = result.nodes
           closeToast()
           if (result.migratedCount > 0) {
-            displayToast(`已将 ${result.migratedCount} 个文件迁移到云存储`, 'success')
+            displayToast(translateUi('uiMessages.m9738e53f014d', { value1: (result.migratedCount) }), 'success')
           }
         } catch (error) {
           console.error('[Canvas] 数据迁移失败:', error)
           closeToast()
-          displayToast('数据迁移失败: ' + error.message, 'error')
+          displayToast(translateUi('uiMessages.m51ffba4e662f') + error.message, 'error')
         }
       } else if (analysis.blobUrls.length > 0) {
-        displayToast(`${analysis.blobUrls.length} 个本地临时文件已失效，需要重新上传`, 'warning')
+        displayToast(translateUi('uiMessages.m0b2b51dc82c4', { value1: (analysis.blobUrls.length) }), 'warning')
       }
     }
     
@@ -784,7 +786,7 @@ async function handleWorkflowLoaded(workflow) {
       () => canvasStore.openWorkflowInNewTab(workflow)
     )
     if (!tab) {
-      displayToast('标签页已达上限，请关闭一些标签后重试', 'warning')
+      displayToast(translateUi('uiMessages.mc6b9b3400227'), 'warning')
       return
     }
     
@@ -797,7 +799,7 @@ async function handleWorkflowLoaded(workflow) {
     console.log('[Canvas] 工作流加载完成, tab:', tab?.id)
   } catch (error) {
     console.error('[Canvas] 工作流加载异常:', error)
-    displayToast('工作流加载失败: ' + error.message, 'error')
+    displayToast(translateUi('uiMessages.mf96732dff855') + error.message, 'error')
   }
 }
 
@@ -905,7 +907,7 @@ function handleAssetInsert(asset, referencePosition = null) {
     case 'text':
       nodeType = 'text-input'
       nodeData = {
-        title: asset.name || '文本资产',
+        title: asset.name || translateUi('uiMessages.md896dd701835'),
         text: asset.content || '',  // TextNode 使用 text 字段
         fromAsset: true,
         assetId: asset.id
@@ -963,8 +965,8 @@ function handleAssetInsert(asset, referencePosition = null) {
     case 'sora-character':
       nodeType = 'character-card'
       nodeData = {
-        title: asset.name || 'Sora角色',
-        name: asset.name || '未命名角色',
+        title: asset.name || translateUi('uiMessages.m5bc33c18af21'),
+        name: asset.name || translateUi('uiMessages.m440cf6aec248'),
         username: asset.metadata?.username || '',
         avatar: asset.url || asset.thumbnail_url || '',
         fromAsset: true,
@@ -975,7 +977,7 @@ function handleAssetInsert(asset, referencePosition = null) {
     case 'bytefor-character':
       nodeType = asset.type === 'bytefor-character' || asset.libraryType === 'bytefor' ? 'bytefor-character' : 'seedance-character'
       nodeData = {
-        title: asset.assetName || (nodeType === 'bytefor-character' ? 'Bytefor角色' : 'Seedance角色'),
+        title: asset.assetName || (nodeType === 'bytefor-character' ? translateUi('uiMessages.meb2536ef9bc2') : translateUi('uiMessages.mf75444a8035e')),
         assetId: asset.assetId,
         assetUri: asset.assetUri || `asset://${asset.assetId}`,
         assetUrl: asset.assetUrl,
@@ -1181,7 +1183,7 @@ function getEditorShareWorkflow(workflow = {}) {
     ...currentTab,
     ...workflow,
     id: workflow.id || currentTab?.workflowId || canvasStore.workflowMeta?.id || '',
-    name: workflow.name || currentTab?.name || canvasStore.workflowMeta?.name || '工作流',
+    name: workflow.name || currentTab?.name || canvasStore.workflowMeta?.name || translateUi('onboarding.workflow.title'),
     description: workflow.description || currentTab?.description || canvasStore.workflowMeta?.description || '',
     space_type: workflow.space_type || currentTab?.workflowSpaceType || teamStore.globalSpaceType.value,
     team_id: workflow.team_id || currentTab?.workflowTeamId || teamStore.globalTeamId.value || ''
@@ -1252,7 +1254,7 @@ async function quickSaveWorkflow() {
   const currentTab = canvasStore.getCurrentTab()
 
   if (findBlockingCanvasUploads(canvasStore.nodes, canvasStore.edges).length > 0) {
-    displayToast('素材仍在上传，请等待完成后重试', 'warning', 3000)
+    displayToast(translateUi('uiMessages.m97f1343b0c9b'), 'warning', 3000)
     return false
   }
   
@@ -1261,18 +1263,18 @@ async function quickSaveWorkflow() {
   try {
     workflowData = canvasStore.exportWorkflowForSave()
   } catch (error) {
-    displayToast(`保存失败：${error.message || '未知错误'}`, 'warning', 3000)
+    displayToast(translateUi('uiMessages.mab11eeb05921', { value1: (error.message || translateUi('canvas.unknownError')) }), 'warning', 3000)
     return false
   }
   if (!workflowData.nodes || workflowData.nodes.length === 0) {
-    displayToast('画布为空，无需保存', 'warning', 2000)
+    displayToast(translateUi('uiMessages.m02acc63e024a'), 'warning', 2000)
     return false
   }
   
   // 如果是已保存过的工作流，直接更新
   if (currentTab?.workflowId) {
     try {
-      displayToast('正在保存...', 'info', 10000)
+      displayToast(translateUi('uiMessages.m91a18d716662'), 'info', 10000)
       
       const { saveWorkflow } = await import('@/api/canvas/workflow')
       const spaceParams = teamStore.getSpaceParams('current')
@@ -1289,7 +1291,7 @@ async function quickSaveWorkflow() {
       canvasStore.markCurrentTabSaved()
       persistManualSaveRecoverySnapshot()
       lastAutoSave.value = new Date()
-      displayToast(`「${currentTab.name}」已保存`, 'success', 2000)
+      displayToast(translateUi('uiMessages.mdda64dc2bbe2', { value1: (currentTab.name) }), 'success', 2000)
       console.log('[Canvas] 快速保存成功:', currentTab.name)
       
       // 刷新工作流面板
@@ -1299,7 +1301,7 @@ async function quickSaveWorkflow() {
       return true
     } catch (error) {
       console.error('[Canvas] 快速保存失败:', error)
-      displayToast(`保存失败：${error.message || '未知错误'}`, 'error', 3000)
+      displayToast(translateUi('uiMessages.mab11eeb05921', { value1: (error.message || translateUi('canvas.unknownError')) }), 'error', 3000)
       return false
     }
   } else {
@@ -1336,14 +1338,14 @@ function closeToast() {
 // 🔧 保存中回调（立即显示保存中提示）
 function handleWorkflowSaving(data) {
   console.log('[Canvas] 工作流保存中:', data.name)
-  displayToast(`正在保存「${data.name}」...`, 'info', 10000) // 10秒超时
+  displayToast(translateUi('uiMessages.m0ad1155a4a69', { value1: (data.name) }), 'info', 10000) // 10秒超时
 }
 
 // 🔧 保存失败回调
 function handleWorkflowSaveError(data) {
   console.error('[Canvas] 工作流保存失败:', data.message)
   shareAfterSave.value = false
-  displayToast(`保存失败：${data.message}`, 'error', 5000)
+  displayToast(translateUi('uiMessages.mab11eeb05921', { value1: (data.message) }), 'error', 5000)
 }
 
 // 保存成功回调
@@ -1353,7 +1355,7 @@ function handleWorkflowSaved(workflow) {
   shareAfterSave.value = false
 
   // 🔧 显示保存成功提示
-  displayToast(`工作流「${workflow.name}」保存成功`, 'success', 2000)
+  displayToast(translateUi('uiMessages.me14d603e9d29', { value1: (workflow.name) }), 'success', 2000)
 
   // 更新当前标签名称和工作流ID
   canvasStore.updateCurrentTabName(workflow.name)
@@ -1479,7 +1481,7 @@ async function autoSaveWorkflow(options = {}) {
       const { json, size, viaWorker, elapsed } = await serializeWorkflow(payload)
       if (size > MAX_AUTO_SAVE_SIZE) {
         console.warn(`[Canvas] 自动保存跳过：数据过大 (${(size / 1024 / 1024).toFixed(1)}MB)，请手动保存`)
-        displayToast(`工作流较大(${(size / 1024 / 1024).toFixed(0)}MB)，请手动保存`, 'warning', 3000)
+        displayToast(translateUi('uiMessages.m631532087868', { value1: ((size / 1024 / 1024).toFixed(0)) }), 'warning', 3000)
         return
       }
       console.log(`[Canvas] autosave 序列化 ${(size / 1024).toFixed(1)}KB ${viaWorker ? '(worker)' : '(main)'} ${elapsed?.toFixed?.(1) || '?'}ms`)
@@ -1491,7 +1493,7 @@ async function autoSaveWorkflow(options = {}) {
       // 🔧 新建工作流：创建草稿保存
       if (workflowData.nodes.length >= 2 || reason === 'history-picker') {
         const payload = {
-          name: currentTab.name || `草稿_${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`,
+          name: currentTab.name || translateUi('uiMessages.mb0f9ff13e0a1', { value1: (new Date().toLocaleTimeString(uiLanguage.value, { hour: '2-digit', minute: '2-digit' })) }),
           uploadToCloud: false,
           isDraft: true,
           spaceType: spaceParams.spaceType,
@@ -1501,7 +1503,7 @@ async function autoSaveWorkflow(options = {}) {
         const { json, size, viaWorker, elapsed } = await serializeWorkflow(payload)
         if (size > MAX_AUTO_SAVE_SIZE) {
           console.warn(`[Canvas] 自动保存跳过：数据过大 (${(size / 1024 / 1024).toFixed(1)}MB)，请手动保存`)
-          displayToast(`工作流较大(${(size / 1024 / 1024).toFixed(0)}MB)，请手动保存`, 'warning', 3000)
+          displayToast(translateUi('uiMessages.m631532087868', { value1: ((size / 1024 / 1024).toFixed(0)) }), 'warning', 3000)
           return
         }
         console.log(`[Canvas] autosave 序列化 ${(size / 1024).toFixed(1)}KB ${viaWorker ? '(worker)' : '(main)'} ${elapsed?.toFixed?.(1) || '?'}ms`)
@@ -1518,7 +1520,7 @@ async function autoSaveWorkflow(options = {}) {
           console.log(`[Canvas] 自动保存成功（新建草稿, reason=${reason}）:`, result.workflow.name)
           
           // 显示保存成功提示
-          displayToast('工作流已自动保存', 'success', 2000)
+          displayToast(translateUi('uiMessages.m5425ebbe9ce0'), 'success', 2000)
         }
       }
     }
@@ -1558,7 +1560,7 @@ function startCanvasFpsMonitor() {
       if (!fpsLargeCanvasNotified && canvasStore.nodes.length > 1500 && tier !== 'full') {
         fpsLargeCanvasNotified = true
         try {
-          displayToast('画布节点较多，已开启高性能渲染模式', 'info', 4000)
+          displayToast(translateUi('uiMessages.m8eb389e9bc19'), 'info', 4000)
         } catch (_) { /* noop */ }
       }
     }
@@ -1623,7 +1625,7 @@ function getCurrentWorkflowData() {
   const workflowData = canvasStore.exportWorkflow()
   
   return {
-    name: currentTab.name || '未命名工作流',
+    name: currentTab.name || translateUi('uiMessages.m9e1ed202e684'),
     description: currentTab.description || canvasStore.workflowMeta?.description || '',
     tabId: currentTab.id,
     workflowId: currentTab.workflowId,
@@ -1701,7 +1703,7 @@ function tryAutoRestoreRecentWorkflow() {
     // 使用 canvasStore 恢复工作流
     canvasStore.openWorkflowInNewTab({
       id: recentWorkflow.workflowId || null,
-      name: recentWorkflow.name || '恢复的工作流',
+      name: recentWorkflow.name || translateUi('uiMessages.ma18f30d692a3'),
       description: recentWorkflow.description || '',
       nodes: recentWorkflow.nodes,
       edges: recentWorkflow.edges || [],
@@ -1800,7 +1802,7 @@ async function fetchVideoSubmissionRecovery(submissionId) {
 
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
-    throw new Error(data.message || data.error || `视频任务恢复失败 (${response.status})`)
+    throw new Error(data.message || data.error || translateUi('uiMessages.m1c1240925644', { value1: (response.status) }))
   }
   return data
 }
@@ -1910,16 +1912,16 @@ function failZombieCanvasVideoNodes() {
     if (shouldFailCanvasVideoNodeWithoutTask(node, hasBackgroundTask)) {
       const taskType = node?.data?.taskType
       const errorMsg = taskType === 'image-cutout'
-        ? '抠图处理超时，请重试'
+        ? translateUi('uiMessages.m7dab233f8f06')
         : taskType === 'image-panorama'
-          ? '生成全景图超时，请重试'
+          ? translateUi('uiMessages.m5f8b97183575')
           : (taskType === 'image-hd' || taskType === 'video-hd')
-            ? '高清处理超时，请重试'
+            ? translateUi('uiMessages.mdfe3696a74a7')
             : taskType === 'image' || taskType?.startsWith?.('image')
-              ? '图片生成超时，请重新生成'
+              ? translateUi('uiMessages.m68914f1f4116')
               : taskType === 'audio-edit'
-                ? '音频处理超时，请重试'
-                : '视频生成超时，请重新生成'
+                ? translateUi('uiMessages.mbdb9d6fede47')
+                : translateUi('uiMessages.me0488332fb85')
       canvasStore.updateNodeData(node.id, {
         status: 'error',
         progress: null,
@@ -2180,8 +2182,8 @@ function updateNodeFromTask(task) {
   } else if (task.status === 'failed') {
     // 任务失败
     const errorMsg = task.type === 'image-cutout'
-      ? '抠图处理失败'
-      : (task.type === 'image-panorama' ? '生成全景图失败' : ((task.type === 'video-hd' || task.type === 'image-hd') ? '高清处理失败' : '任务执行失败'))
+      ? translateUi('uiMessages.me14905f40ed0')
+      : (task.type === 'image-panorama' ? translateUi('uiMessages.m540570c4e3cd') : ((task.type === 'video-hd' || task.type === 'image-hd') ? translateUi('uiMessages.m8c799ce57125') : translateUi('uiMessages.ma3cfc7bf0426')))
     applyNodePatch({
       status: 'error',
       progress: null,
@@ -2190,8 +2192,8 @@ function updateNodeFromTask(task) {
   } else if (task.status === 'processing') {
     // 任务进行中
     const progressText = task.type === 'image-cutout'
-      ? '抠图处理中...'
-      : (task.type === 'image-panorama' ? '全景图生成中...' : ((task.type === 'video-hd' || task.type === 'image-hd') ? '高清处理中...' : task.progress))
+      ? translateUi('uiMessages.m265c6562cdfa')
+      : (task.type === 'image-panorama' ? translateUi('uiMessages.m0db8ec220584') : ((task.type === 'video-hd' || task.type === 'image-hd') ? translateUi('uiMessages.m27f66d065ff4') : task.progress))
     applyNodePatch({
       status: 'processing',
       progress: progressText || task.progress
@@ -2254,7 +2256,7 @@ function buildExitSavePayload(state) {
 
   return {
     id: currentTab.workflowId,
-    name: currentTab.name || '未命名工作流',
+    name: currentTab.name || translateUi('uiMessages.m9e1ed202e684'),
     description: currentTab.description || '',
     nodes: state.cleanedData.nodes,
     edges: state.cleanedData.edges,
@@ -2639,7 +2641,7 @@ function handleAIAssistantCanvasWriteback(payload = {}) {
       output
     })
     schedulePersistAfterTask('ai-assistant-skill-writeback')
-    displayToast(`已加载到画布`, 'success')
+    displayToast(translateUi('uiMessages.m0c97a75d8352'), 'success')
     return
   }
   if (!targetNodeId) {
@@ -2655,7 +2657,7 @@ function handleAIAssistantCanvasWriteback(payload = {}) {
     })
     if (node?.id) {
       schedulePersistAfterTask('ai-assistant-skill-writeback')
-      displayToast(`已加载到画布`, 'success')
+      displayToast(translateUi('uiMessages.m0c97a75d8352'), 'success')
     }
     return
   }
@@ -2666,7 +2668,7 @@ function handleAIAssistantCanvasWriteback(payload = {}) {
     output
   })
   schedulePersistAfterTask('ai-assistant-skill-writeback')
-  displayToast(`已加载到画布`, 'success')
+  displayToast(translateUi('uiMessages.m0c97a75d8352'), 'success')
 }
 
 // AI 助手任务提交时同步创建画布节点（与手动生图一致：生成中 processing、参数对应、参考图连线）。
@@ -2720,7 +2722,7 @@ function handleAIAssistantCanvasTaskStarted(payload = {}) {
     data: {
       nodeRole: 'output',
       status: 'processing',
-      progress: mediaType === 'video' ? '视频生成中...' : '生成中...',
+      progress: mediaType === 'video' ? translateUi('uiMessages.m4d608da5021e') : translateUi('canvas.audioNode.generating'),
       processingStartedAt: Date.now(),
       taskType: mediaType,
       taskId,
@@ -3085,7 +3087,7 @@ async function requestCanvasOrganization() {
   try {
     const result = await canvasBoardRef.value.organizeCanvas()
     if (result?.failed) {
-      displayToast('整理画布失败，请稍后重试', 'error')
+      displayToast(translateUi('uiMessages.maafecf36e02a'), 'error')
       return
     }
     if (!result?.changed) return
@@ -3097,7 +3099,7 @@ async function requestCanvasOrganization() {
     })
   } catch (error) {
     console.error('[Canvas] 整理画布失败:', error)
-    displayToast('整理画布失败，请稍后重试', 'error')
+    displayToast(translateUi('uiMessages.maafecf36e02a'), 'error')
   } finally {
     await nextTick()
     isApplyingOrganization = false
@@ -3320,10 +3322,10 @@ async function handleKeyDown(event) {
   if (!isInInput && !event.ctrlKey && !event.metaKey && !event.altKey) {
     const key = event.key.toLowerCase()
     const nodeTypeMap = {
-      'i': { type: 'image-input', title: '图片' },
-      'v': { type: 'video', title: '视频' },
-      't': { type: 'text-input', title: '文本' },
-      'a': { type: 'audio-input', title: '音频' }
+      'i': { type: 'image-input', title: translateUi('canvas.nodeConfig.imageInput.label') },
+      'v': { type: 'video', title: translateUi('canvas.nodeConfig.videoInput.label') },
+      't': { type: 'text-input', title: translateUi('canvas.nodeConfig.textInput.label') },
+      'a': { type: 'audio-input', title: translateUi('canvas.nodeConfig.audioInput.label') }
     }
     
     if (nodeTypeMap[key]) {
@@ -3414,7 +3416,7 @@ function createDownstreamNode(nodeType, nodeTitle) {
       nodeData = {
         title: nodeTitle,
         text: '',
-        placeholder: '输入提示词...'
+        placeholder: translateUi('uiMessages.mc91fa0e4556e')
       }
       break
     case 'audio-input':
@@ -3565,7 +3567,7 @@ async function downloadSelectedMedia() {
     }
   }
   if (started < nodeIds.length) {
-    displayToast(`已开始下载 ${started} 个媒体文件，${nodeIds.length - started} 个下载失败`, 'warning')
+    displayToast(translateUi('uiMessages.m26a779ecd9f1', { value1: (started), value2: (nodeIds.length - started) }), 'warning')
   }
 }
 
@@ -3594,7 +3596,7 @@ async function handleExecuteGroup() {
     const groupId = selectedGroupNode.value.id
     const nodeIds = selectedGroupNode.value.data?.nodeIds || []
     if (!nodeIds.length) {
-      await showAlert('编组内没有可执行的节点', '提示')
+      await showAlert(translateUi('uiMessages.m06d9b77afbaf'), translateUi('common.info'))
       return
     }
     console.log('[Canvas] 整组执行', groupId, nodeIds)
@@ -3607,7 +3609,7 @@ async function handleSaveWorkflow() {
   const workflow = canvasStore.exportWorkflow()
   console.log('[Canvas] 保存工作流', workflow)
   // TODO: 实现保存工作流逻辑
-  await showAlert('工作流已保存（功能开发中）', '提示')
+  await showAlert(translateUi('uiMessages.m9d128250d2bb'), translateUi('common.info'))
 }
 
 // ========== 图像工具栏事件处理 ==========
@@ -3615,49 +3617,49 @@ async function handleSaveWorkflow() {
 async function handleImageRepaint(data) {
   console.log('[Canvas] 图像重绘', data)
   // TODO: 接入重绘API
-  await showAlert('重绘功能开发中，请稍后...', '提示')
+  await showAlert(translateUi('uiMessages.mc93953aa310c'), translateUi('common.info'))
 }
 
 // 擦除（预留接口）
 async function handleImageErase(data) {
   console.log('[Canvas] 图像擦除', data)
   // TODO: 接入擦除API
-  await showAlert('擦除功能开发中，请稍后...', '提示')
+  await showAlert(translateUi('uiMessages.mfad0c53c9278'), translateUi('common.info'))
 }
 
 // 增强（预留接口）
 async function handleImageEnhance(data) {
   console.log('[Canvas] 图像增强', data)
   // TODO: 接入图像增强/超分辨率API
-  await showAlert('增强功能开发中，请稍后...', '提示')
+  await showAlert(translateUi('uiMessages.m782e6e3e7754'), translateUi('common.info'))
 }
 
 // 抠图（预留接口）
 async function handleImageCutout(data) {
   console.log('[Canvas] 图像抠图', data)
   // TODO: 接入抠图/去背景API
-  await showAlert('抠图功能开发中，请稍后...', '提示')
+  await showAlert(translateUi('uiMessages.m60fb64de11cc'), translateUi('common.info'))
 }
 
 // 扩图（预留接口）
 async function handleImageExpand(data) {
   console.log('[Canvas] 图像扩图', data)
   // TODO: 接入扩图/outpainting API
-  await showAlert('扩图功能开发中，请稍后...', '提示')
+  await showAlert(translateUi('uiMessages.mda000a7d442a'), translateUi('common.info'))
 }
 
 // 标注（预留接口）
 async function handleImageAnnotate(data) {
   console.log('[Canvas] 图像标注', data)
   // TODO: 打开标注工具
-  await showAlert('标注功能开发中，请稍后...', '提示')
+  await showAlert(translateUi('uiMessages.m2405adcc25ba'), translateUi('common.info'))
 }
 
 // 裁剪（预留接口，可后续实现裁剪组件）
 async function handleImageCrop(data) {
   console.log('[Canvas] 图像裁剪', data)
   // TODO: 打开裁剪工具
-  await showAlert('裁剪功能开发中，请稍后...', '提示')
+  await showAlert(translateUi('uiMessages.m0450a03a29eb'), translateUi('common.info'))
 }
 
 // 下载
@@ -3737,8 +3739,8 @@ function closePackageModal() {
 
 // 按业务订单类型显示支付成功提示
 function handlePurchaseSuccess(data) {
-  if (data?.kind === 'recharge') displayToast('余额充值成功！', 'success', 3000)
-  else if (data?.kind === 'package') displayToast('套餐购买成功！', 'success', 3000)
+  if (data?.kind === 'recharge') displayToast(translateUi('uiMessages.m0378d512775c'), 'success', 3000)
+  else if (data?.kind === 'package') displayToast(translateUi('uiMessages.ma0b3f49debaa'), 'success', 3000)
   // 刷新用户信息（余额划转等无订单事件只刷新）
   handleUserInfoUpdated()
 }
@@ -3765,7 +3767,7 @@ function handleCreateSuccess() {
     ticketListRef.value?.refresh()
     ticketButtonRef.value?.refresh()
   })
-  displayToast('工单创建成功！', 'success', 3000)
+  displayToast(translateUi('uiMessages.m20a3702bcc0d'), 'success', 3000)
 }
 
 function handleTicketUpdated() {
@@ -3987,7 +3989,7 @@ onMounted(async () => {
       }
     } catch (error) {
       console.error('[Canvas] 加载工作流失败:', error)
-      await showAlert('加载工作流失败：' + error.message, '错误')
+      await showAlert(translateUi('uiMessages.m76c4889c1c05') + error.message, translateUi('common.error'))
     }
   }
 
@@ -4120,13 +4122,13 @@ onUnmounted(() => {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M19 12H5" /><path d="M12 19l-7-7 7-7" />
             </svg>
-            <span>{{ isCommunityEnabled ? '返回社区' : '返回首页' }}</span>
+            <span>{{ isCommunityEnabled ? translateUi('uiMessages.m939bc79bd1c9') : translateUi('uiMessages.md66f4359dae3') }}</span>
           </div>
           <div class="mode-dropdown-item" @click="goToAllProjects">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M3 6h18" /><path d="M3 6v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6" /><path d="M5 4h14l2 2H3l2-2z" />
             </svg>
-            <span>全部项目</span>
+            <span>{{ translateUi('uiMessages.me3040dfd6b30') }}</span>
           </div>
           <div class="mode-dropdown-item" @click="confirmSwitchToSimpleMode">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -4157,11 +4159,10 @@ onUnmounted(() => {
       <Transition name="canvas-team-share-banner">
         <div v-if="teamWorkflowShareNotice" class="canvas-team-share-banner" role="status">
           <span>
-            当前团队工作流“{{ currentTeamWorkflow?.name }}”已公开分享：
-            {{ teamWorkflowShareNotice.mode === 'clone' ? '可克隆' : '仅查看' }}
+            {{ translateUi('uiMessages.m5eb93304b402', { value1: (currentTeamWorkflow?.name), value2: (teamWorkflowShareNotice.mode === 'clone' ? translateUi('uiMessages.m2d338d19a516') : translateUi('uiMessages.m39395c1df20e')) }) }}
           </span>
           <button type="button" @click="openWorkflowShareDialog(getEditorShareWorkflow())">
-            {{ teamWorkflowShareNotice.canManage ? '管理分享' : '查看状态' }}
+            {{ teamWorkflowShareNotice.canManage ? translateUi('uiMessages.mbf180cfcec3c') : translateUi('uiMessages.mf7381c80595f') }}
           </button>
         </div>
       </Transition>
@@ -4182,13 +4183,13 @@ onUnmounted(() => {
               <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>
               <path d="M13 13l6 6"/>
             </svg>
-            <span>点击画布中的图片、视频或音频节点进行引用</span>
+            <span>{{ translateUi('uiMessages.mad9a30cf17ac') }}</span>
           </div>
           <button class="pick-banner-cancel" @click="cancelCanvasPick">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M18 6L6 18M6 6l12 12"/>
             </svg>
-            <span>取消</span>
+            <span>{{ translateUi('common.cancel') }}</span>
           </button>
         </div>
       </Transition>
@@ -4250,9 +4251,9 @@ onUnmounted(() => {
           role="status"
           aria-live="polite"
         >
-          <span>画布已整理</span>
-          <button type="button" @click="keepOrganizedCanvas">保留</button>
-          <button type="button" @click="restoreOrganizedCanvas">恢复原样</button>
+          <span>{{ translateUi('uiMessages.m542d99d75012') }}</span>
+          <button type="button" @click="keepOrganizedCanvas">{{ translateUi('uiMessages.m670ec25af841') }}</button>
+          <button type="button" @click="restoreOrganizedCanvas">{{ translateUi('uiMessages.ma00efe557ba7') }}</button>
         </div>
       </Transition>
 
@@ -4261,7 +4262,7 @@ onUnmounted(() => {
         <button
           type="button"
           class="canvas-control-btn canvas-bottom-collapse-btn"
-          :aria-label="bottomControlsPinned ? '收起左下角工具' : '展开左下角工具'"
+          :aria-label="bottomControlsPinned ? translateUi('uiMessages.m29dc2304ea6a') : translateUi('uiMessages.m90dd1e690771')"
           :aria-expanded="bottomControlsExpanded"
           :data-tooltip="bottomControlsPinned ? '收起左下角工具' : '点击固定展开，悬停临时展开'"
           @mouseenter="hoverBottomControls"
@@ -4279,10 +4280,10 @@ onUnmounted(() => {
           @mousedown.stop
           @touchstart.stop
           data-tooltip="资产管理"
-          aria-label="资产管理"
+          :aria-label="translateUi('uiMessages.m76b6b29831ea')"
         >
           <FolderOpen aria-hidden="true" />
-          <span class="canvas-control-label">资产管理</span>
+          <span class="canvas-control-label">{{ translateUi('uiMessages.m76b6b29831ea') }}</span>
         </button>
 
         <button
@@ -4292,7 +4293,7 @@ onUnmounted(() => {
           @mousedown.stop
           @touchstart.stop
           data-tooltip="整理画布 Shift+Alt+F"
-          aria-label="整理画布"
+          :aria-label="translateUi('uiMessages.mec31121190fd')"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="7" height="7" rx="1.5"/>
@@ -4311,7 +4312,7 @@ onUnmounted(() => {
           @mousedown.stop
           @touchstart.stop
           data-tooltip="小地图（M）· 鼠标悬停快速定位画布"
-          :aria-label="showCanvasMiniMap ? '关闭小地图' : '打开小地图'"
+          :aria-label="showCanvasMiniMap ? translateUi('uiMessages.m8755138a451e') : translateUi('uiMessages.m437e35f838c0')"
         >
           <svg class="map-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 17s5-4.35 5-9a5 5 0 0 0-10 0c0 4.65 5 9 5 9Z"/>
@@ -4347,7 +4348,7 @@ onUnmounted(() => {
           @mousedown.stop
           @touchstart.stop
           :data-tooltip="`${edgesHidden ? '显示' : '隐藏'}节点连线：Ctrl+B；纯净模式：快速按两次 Ctrl+B（Esc 退出）`"
-          :aria-label="edgesHidden ? '显示节点连线' : '隐藏节点连线'"
+          :aria-label="edgesHidden ? translateUi('uiMessages.m55b0d7d2ecae') : translateUi('uiMessages.m7bc78092ebc9')"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="5" cy="7" r="2"/>
@@ -4365,7 +4366,7 @@ onUnmounted(() => {
           @mousedown.stop
           @touchstart.stop
           :data-tooltip="gridSnapEnabled ? '关闭节点网格吸附' : '开启节点网格吸附'"
-          :aria-label="gridSnapEnabled ? '关闭节点网格吸附' : '开启节点网格吸附'"
+          :aria-label="gridSnapEnabled ? translateUi('uiMessages.m39929746e8d7') : translateUi('uiMessages.mbabe98b5dc97')"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M7 4v7a5 5 0 0 0 10 0V4"/>
@@ -4393,19 +4394,19 @@ onUnmounted(() => {
                 min="10"
                 max="500"
                 step="1"
-                aria-label="缩放百分比"
+                :aria-label="translateUi('uiMessages.mc34f2c326f6a')"
                 @keydown.enter.prevent="commitZoomInput"
                 @blur="commitZoomInput"
               />
               <span>%</span>
             </label>
-            <button type="button" role="menuitem" @click="handleZoomIn"><span>放大</span><kbd>+</kbd></button>
-            <button type="button" role="menuitem" @click="handleZoomOut"><span>缩小</span><kbd>−</kbd></button>
-            <button type="button" role="menuitem" @click="fitCanvasToScreen"><span>适合屏幕</span><kbd>0</kbd></button>
+            <button type="button" role="menuitem" @click="handleZoomIn"><span>{{ translateUi('canvas.zoomIn') }}</span><kbd>+</kbd></button>
+            <button type="button" role="menuitem" @click="handleZoomOut"><span>{{ translateUi('canvas.zoomOut') }}</span><kbd>−</kbd></button>
+            <button type="button" role="menuitem" @click="fitCanvasToScreen"><span>{{ translateUi('uiMessages.mdddf6a8339da') }}</span><kbd>0</kbd></button>
             <div class="canvas-zoom-menu-divider"></div>
-            <button type="button" role="menuitem" @click="setZoomPreset(50)">缩放至50%</button>
-            <button type="button" role="menuitem" @click="setZoomPreset(100)">缩放至100%</button>
-            <button type="button" role="menuitem" @click="setZoomPreset(500)">缩放至500%</button>
+            <button type="button" role="menuitem" @click="setZoomPreset(50)">{{ translateUi('uiMessages.mdc9d530c85c1') }}</button>
+            <button type="button" role="menuitem" @click="setZoomPreset(100)">{{ translateUi('uiMessages.m40e4445cd46c') }}</button>
+            <button type="button" role="menuitem" @click="setZoomPreset(500)">{{ translateUi('uiMessages.mf2fbc159b648') }}</button>
           </div>
         </div>
         </div>
@@ -4437,7 +4438,7 @@ onUnmounted(() => {
         <!-- 购物车按钮 -->
         <button
           class="canvas-icon-btn canvas-cart-btn"
-          title="套餐购买"
+          :title="translateUi('user.ledgerType.package')"
           @click="openPackageModal"
         >
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -4466,7 +4467,7 @@ onUnmounted(() => {
         <!-- 主题切换按钮 -->
         <button
           class="canvas-icon-btn canvas-theme-toggle"
-          :title="canvasTheme === 'dark' ? '切换到白昼模式' : '切换到夜晚模式'"
+          :title="canvasTheme === 'dark' ? translateUi('uiMessages.md06a757e1171') : translateUi('uiMessages.mf44f2f8366dd')"
           @click="toggleCanvasTheme"
         >
           <!-- 太阳图标（白昼模式） -->
@@ -4509,9 +4510,9 @@ onUnmounted(() => {
         <button
           type="button"
           class="canvas-icon-btn canvas-top-collapse-btn"
-          :aria-label="topControlsPinned ? '收起右上角功能' : '展开右上角功能'"
+          :aria-label="topControlsPinned ? translateUi('uiMessages.m5466327654de') : translateUi('uiMessages.mce35be4224f5')"
           :aria-expanded="topControlsExpanded"
-          :title="topControlsPinned ? '收起右上角功能' : '点击固定展开，悬停临时展开'"
+          :title="topControlsPinned ? translateUi('uiMessages.m5466327654de') : translateUi('uiMessages.m3b06530d2867')"
           @mouseenter="hoverTopControls"
           @click="toggleTopControls"
         >
@@ -4570,8 +4571,8 @@ onUnmounted(() => {
                     <li>{{ t('canvas.dragConnection') }}</li>
                     <li>{{ t('canvas.rightClickNode') }}</li>
                     <li>{{ t('canvas.clickPlus') }}</li>
-                    <li><kbd>Shift+左键拖动节点/+号</kbd> 将节点的全部连线迁移到目标节点</li>
-                    <li><kbd>Ctrl+左键拖动节点/+号</kbd> 复制节点的全部连线到目标节点</li>
+                    <li><kbd>{{ translateUi('uiMessages.mdad9b6978ff3') }}</kbd> {{ translateUi('uiMessages.m7076a437ca3f') }}</li>
+                    <li><kbd>{{ translateUi('uiMessages.m684d6314d446') }}</kbd> {{ translateUi('uiMessages.m502578b2d6aa') }}</li>
                   </ul>
                 </div>
               </div>
@@ -4586,19 +4587,19 @@ onUnmounted(() => {
                     <li><kbd>Ctrl+V</kbd> {{ t('canvas.pasteNode') }}</li>
                     <li><kbd>Ctrl+A</kbd> {{ t('canvas.selectAllNodes') }}</li>
                     <li><kbd>Ctrl+G</kbd> {{ t('canvas.groupNodes') }}</li>
-                    <li><kbd>Ctrl+B</kbd> 隐藏/显示连线</li>
-                    <li><kbd>Ctrl+B</kbd> 快速连按两次：进入/退出纯净模式；<kbd>Escape</kbd> 退出</li>
-                    <li><kbd>C</kbd> 切换无限画布 / ComfyUI 模式</li>
-                    <li><kbd>M</kbd> 打开/关闭小地图；鼠标悬停快速定位画布</li>
+                    <li><kbd>Ctrl+B</kbd> {{ translateUi('uiMessages.me1c704f05aa3') }}</li>
+                    <li><kbd>Ctrl+B</kbd> {{ translateUi('uiMessages.m0874a5bce5a5') }}<kbd>Escape</kbd> {{ translateUi('uiMessages.m498e1d59b4d7') }}</li>
+                    <li><kbd>C</kbd> {{ translateUi('uiMessages.m9fd39e74d20a') }}</li>
+                    <li><kbd>M</kbd> {{ translateUi('uiMessages.me987b5fc326d') }}</li>
                     <li><kbd>Delete</kbd> / <kbd>Backspace</kbd> {{ t('canvas.deleteSelected') }}</li>
                     <li><kbd>Escape</kbd> {{ t('canvas.closeDialog') }}</li>
                     <li><kbd>Ctrl+Enter</kbd> {{ t('canvas.startGenerate') }}</li>
-                    <li><kbd>Tab</kbd> {{ t('canvas.toggleAIAssistant') || '展开/收起 AI 灵感助手' }}</li>
-                    <li><kbd>I</kbd> {{ t('canvas.createImageNode') || '在下游创建图像节点' }}</li>
-                    <li><kbd>V</kbd> {{ t('canvas.createVideoNode') || '在下游创建视频节点' }}</li>
-                    <li><kbd>T</kbd> {{ t('canvas.createTextNode') || '在下游创建文本节点' }}</li>
-                    <li><kbd>A</kbd> {{ t('canvas.createAudioNode') || '在下游创建音频节点' }}</li>
-                    <li><kbd>D</kbd> {{ t('canvas.downloadNodeFile') || '下载选中节点的文件' }}</li>
+                    <li><kbd>Tab</kbd> {{ t('canvas.toggleAIAssistant') || translateUi('canvas.toggleAIAssistant') }}</li>
+                    <li><kbd>I</kbd> {{ t('canvas.createImageNode') || translateUi('uiMessages.m1b4c68dd7371') }}</li>
+                    <li><kbd>V</kbd> {{ t('canvas.createVideoNode') || translateUi('uiMessages.ma521b6e03f19') }}</li>
+                    <li><kbd>T</kbd> {{ t('canvas.createTextNode') || translateUi('uiMessages.mfb88bf207e3e') }}</li>
+                    <li><kbd>A</kbd> {{ t('canvas.createAudioNode') || translateUi('uiMessages.me117484e7ef2') }}</li>
+                    <li><kbd>D</kbd> {{ t('canvas.downloadNodeFile') || translateUi('canvas.downloadNodeFile') }}</li>
                   </ul>
                 </div>
               </div>
@@ -4772,7 +4773,7 @@ onUnmounted(() => {
         :class="{ active: showAIAssistant }"
         :style="showAIAssistant ? { right: (aiPanelWidth + 24) + 'px' } : {}"
         @click="toggleAIAssistantPanel"
-        :title="showAIAssistant ? '关闭 AI 助手' : '打开 AI 助手'"
+        :title="showAIAssistant ? translateUi('uiMessages.mad9062a7437a') : translateUi('uiMessages.md4ea6a7403d1')"
       >
         <div class="trigger-icon">
           <!-- 星光图标 - 灵感/AI -->

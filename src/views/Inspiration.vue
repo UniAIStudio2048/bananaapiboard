@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * 灵感中心 — 主站风格延伸的"创作灵感入口"
  *
@@ -24,19 +26,19 @@ const FALLBACK_ICON = 'sparkles'
 // 特色功能接口只返回 { id, label, icon, workflow_id }，无 description 字段，
 // 这里按功能语义补齐一句话说明（icon 取不到时走兜底图标）
 const FEATURE_DESCRIPTIONS = {
-  wand: '一键移除视频字幕与水印，成片更干净',
-  infinity: '从图片反推提示词，复现你的灵感',
-  globe: '全景视角创作，VR 场景一键生成',
-  img2img: '以图生图，让已有画面继续延展',
-  brain: '大模型驱动，理解更精准',
-  sparkles: '旗舰模型加持，出图质量更高',
-  layout: '多格分镜一次生成，故事板更高效',
-  users: '多角色一致性创作，人物更统一',
-  video: '智能视频生成，动起来更有冲击力',
-  flame: '爆款内容复刻，紧跟热门趋势',
-  portrait: 'AI 写真，人像创作更专业',
-  'bg-remove': '一键抠图，背景随心替换',
-  upscale: '超分辨率增强，细节更清晰',
+  get wand() { return translateUi('uiMessages.me7ab9c8d43a9') },
+  get infinity() { return translateUi('uiMessages.m01a73abef93e') },
+  get globe() { return translateUi('uiMessages.mb6c0dd9c4be3') },
+  get img2img() { return translateUi('uiMessages.m32a9a9706c76') },
+  get brain() { return translateUi('uiMessages.m942e39804afd') },
+  get sparkles() { return translateUi('uiMessages.m07e0ed68f83f') },
+  get layout() { return translateUi('uiMessages.mc88c878cf51f') },
+  get users() { return translateUi('uiMessages.ma54b9bb52a57') },
+  get video() { return translateUi('uiMessages.mc937c8806b29') },
+  get flame() { return translateUi('uiMessages.m207a5d34fed3') },
+  get portrait() { return translateUi('uiMessages.m568aa8aa171d') },
+  'bg-remove': translateUi('uiMessages.m2d982d2ebf55'),
+  get upscale() { return translateUi('uiMessages.mff3dc5978c7b') },
 }
 
 /** 解析接口 icon → feature-icons 可渲染的图标名 */
@@ -51,7 +53,7 @@ function featureDescription(rawIcon, label) {
   return (
     FEATURE_DESCRIPTIONS[rawIcon]
     || FEATURE_DESCRIPTIONS[iconName]
-    || `AI 智能创作，${label || '开启灵感之旅'}`
+    || translateUi('uiMessages.m25717c0f8801', { value1: (label || translateUi('uiMessages.mb2fedafc399a')) })
   )
 }
 
@@ -67,7 +69,7 @@ const featureCards = computed(() =>
   features.value.map((f) => ({
     id: f.id,
     icon: resolveIconName(f.icon),
-    label: (f.label || '').trim() || '智能创作',
+    label: (f.label || '').trim() || translateUi('uiMessages.me42af1eb7c7f'),
     description: featureDescription(f.icon, f.label),
     route: featureRoute(f),
   }))
@@ -132,9 +134,9 @@ let toastTimer = null
 async function copyPrompt(text) {
   try {
     await navigator.clipboard.writeText(text)
-    toastText.value = '提示词已复制，去创作吧'
+    toastText.value = translateUi('uiMessages.m0aaba293d401')
   } catch (e) {
-    toastText.value = '复制失败，请手动复制'
+    toastText.value = translateUi('uiMessages.m97f4308501ff')
   }
   toastVisible.value = true
   clearTimeout(toastTimer)
@@ -155,20 +157,20 @@ onMounted(() => {
       <section class="text-center max-w-3xl mx-auto mb-16 sm:mb-24">
         <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary-50 dark:bg-primary-900/20 border border-primary-200/60 dark:border-primary-800/40 text-primary-700 dark:text-primary-300 text-xs font-medium mb-6">
           <IconSet name="sparkles" :size="14" />
-          AI 创作灵感中心
+          {{ translateUi('uiMessages.mb3dda47906d5') }}
         </div>
         <h1 class="text-4xl sm:text-5xl font-semibold tracking-tight">
-          <span class="gradient-text">灵感</span>，从第一步开始
+          <span class="gradient-text">{{ translateUi('uiMessages.m674a5c6c5653') }}</span>{{ translateUi('uiMessages.ma3542f8b86d2') }}
         </h1>
         <p class="mt-4 text-base sm:text-lg text-slate-500 dark:text-slate-400 leading-relaxed">
-          发现平台特色功能，浏览精选作品，一键复制提示词，让每一次创作都有迹可循。
+          {{ translateUi('uiMessages.m0671368c2050') }}
         </p>
         <div class="mt-8 flex items-center justify-center gap-3">
           <RouterLink to="/generate" class="btn-primary !px-6 !py-3 text-base">
-            去创作
+            {{ translateUi('uiMessages.m056a3838b1fb') }}
           </RouterLink>
           <RouterLink to="/community" class="btn-secondary !px-6 !py-3 text-base">
-            逛社区
+            {{ translateUi('uiMessages.m0927c89ec76d') }}
           </RouterLink>
         </div>
       </section>
@@ -176,8 +178,8 @@ onMounted(() => {
       <!-- 特色功能宫格 -->
       <section class="mb-16 sm:mb-24">
         <div class="mb-6">
-          <h2 class="text-2xl font-semibold tracking-tight">特色功能</h2>
-          <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">一站式创作能力，选一个立刻开始</p>
+          <h2 class="text-2xl font-semibold tracking-tight">{{ translateUi('uiMessages.m04f57c8d1063') }}</h2>
+          <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.me830c8eb61d8') }}</p>
         </div>
 
         <!-- 加载态 -->
@@ -205,7 +207,7 @@ onMounted(() => {
               :to="card.route"
               class="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
             >
-              开始使用
+              {{ translateUi('uiMessages.m715ee9dc842f') }}
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
               </svg>
@@ -216,7 +218,7 @@ onMounted(() => {
         <!-- 空态 -->
         <div v-else class="bg-surface-1 border border-hairline rounded-xl py-16 text-center">
           <IconSet name="zap" :size="40" class="mx-auto text-slate-300 dark:text-dark-500 mb-3" />
-          <p class="text-sm text-slate-500 dark:text-slate-400">特色功能暂未配置</p>
+          <p class="text-sm text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m0141ff049a65') }}</p>
         </div>
       </section>
 
@@ -224,11 +226,11 @@ onMounted(() => {
       <section class="mb-16 sm:mb-24">
         <div class="flex items-end justify-between mb-6">
           <div>
-            <h2 class="text-2xl font-semibold tracking-tight">灵感作品</h2>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">来自社区作者的精选创作</p>
+            <h2 class="text-2xl font-semibold tracking-tight">{{ translateUi('uiMessages.m9f65c68f1a11') }}</h2>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.mce98874d935d') }}</p>
           </div>
           <RouterLink to="/community" class="text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 whitespace-nowrap">
-            查看更多 →
+            {{ translateUi('uiMessages.md104c383641c') }}
           </RouterLink>
         </div>
 
@@ -253,15 +255,15 @@ onMounted(() => {
         <!-- 空态 -->
         <div v-else class="bg-surface-1 border border-hairline rounded-xl py-16 text-center">
           <IconSet name="image" :size="40" class="mx-auto text-slate-300 dark:text-dark-500 mb-3" />
-          <p class="text-sm text-slate-500 dark:text-slate-400">暂无精选作品，去社区逛逛吧</p>
+          <p class="text-sm text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m87f9df425c3f') }}</p>
         </div>
       </section>
 
       <!-- 提示词灵感 -->
       <section class="mb-16 sm:mb-24">
         <div class="mb-6">
-          <h2 class="text-2xl font-semibold tracking-tight">提示词灵感</h2>
-          <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">点击卡片一键复制，直接带入创作</p>
+          <h2 class="text-2xl font-semibold tracking-tight">{{ translateUi('uiMessages.m02d15adf1dc4') }}</h2>
+          <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.mfaee28843920') }}</p>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div
@@ -276,7 +278,7 @@ onMounted(() => {
                 class="inline-flex items-center gap-1 text-xs font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
               >
                 <IconSet name="wand" :size="14" />
-                去创作
+                {{ translateUi('uiMessages.m056a3838b1fb') }}
               </RouterLink>
               <button
                 type="button"
@@ -284,7 +286,7 @@ onMounted(() => {
                 @click="copyPrompt(prompt)"
               >
                 <IconSet name="sparkles" :size="14" />
-                复制
+                {{ translateUi('common.copy') }}
               </button>
             </div>
           </div>
@@ -293,10 +295,10 @@ onMounted(() => {
 
       <!-- 底部 CTA 横幅 -->
       <section class="bg-surface-1 border border-hairline rounded-xl px-6 py-12 sm:py-16 text-center">
-        <h2 class="text-2xl sm:text-3xl font-semibold tracking-tight">准备好开始创作了吗？</h2>
-        <p class="mt-3 text-sm sm:text-base text-slate-500 dark:text-slate-400">无需复杂操作，描述你的想法，AI 帮你实现</p>
+        <h2 class="text-2xl sm:text-3xl font-semibold tracking-tight">{{ translateUi('uiMessages.mf9eb46d0b4b4') }}</h2>
+        <p class="mt-3 text-sm sm:text-base text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m74b661669fe0') }}</p>
         <RouterLink to="/generate" class="btn-primary !px-8 !py-3.5 text-base mt-8">
-          去创作
+          {{ translateUi('uiMessages.m056a3838b1fb') }}
         </RouterLink>
       </section>
     </div>

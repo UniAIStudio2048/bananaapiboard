@@ -1,3 +1,5 @@
+import { uiTextIndex } from '../i18n/sourceAssertions.mjs'
+import { localizedPattern } from '../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -14,7 +16,7 @@ const onErrorSource = source.slice(onErrorStart, source.indexOf('canvasStore.set
 test('personal workflows never show the collaboration version conflict toast', () => {
   assert.ok(writerStart > 0 && onErrorStart > writerStart, 'collaborationWriter onError must exist')
   const personalGuard = onErrorSource.search(/workflowSpaceType\s*!==\s*'team'/)
-  const toast = onErrorSource.indexOf('协作版本已变化')
+  const toast = uiTextIndex(onErrorSource, '协作版本已变化')
   assert.ok(personalGuard >= 0, '个人工作流必须在冲突提示前单独处理')
   assert.ok(toast > personalGuard, '个人工作流的判断必须在冲突提示之前返回')
   const guardBlock = onErrorSource.slice(personalGuard, onErrorSource.indexOf('return', personalGuard) + 'return'.length)
@@ -24,5 +26,5 @@ test('personal workflows never show the collaboration version conflict toast', (
 
 test('team workflows still surface collaboration conflicts', () => {
   assert.match(onErrorSource, /markCollaborationStale\?\.\(/)
-  assert.match(onErrorSource, /displayToast\('协作版本已变化，请刷新工作流后继续编辑'/)
+  assert.match(onErrorSource, localizedPattern(/displayToast\('协作版本已变化，请刷新工作流后继续编辑'/))
 })

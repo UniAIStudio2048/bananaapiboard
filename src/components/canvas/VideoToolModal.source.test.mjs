@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import { readFileSync } from 'node:fs'
 import { strict as assert } from 'node:assert'
 import { fileURLToPath } from 'node:url'
@@ -16,23 +17,23 @@ const preview = read('video-tool/VideoPreview.vue')
 const controls = read('video-tool/SubtitleEraseControls.vue')
 
 for (const component of ['VideoSourceRail', 'VideoTimeline', 'VideoPreview']) {
-  assert.match(modal, new RegExp(`import ${component}`), `VideoToolModal should import ${component}`)
+  assert.match(modal, localizedPattern(new RegExp(`import ${component}`)), `VideoToolModal should import ${component}`)
 }
 
 for (const apiName of ['estimateSubtitleErase', 'exportVideoTimeline']) {
-  assert.match(modal, new RegExp(apiName), `VideoToolModal should use ${apiName}`)
+  assert.match(modal, localizedPattern(new RegExp(apiName)), `VideoToolModal should use ${apiName}`)
 }
 
 for (const helperName of ['normalizeTimelineClips', 'getTimelineTotalSeconds']) {
-  assert.match(modal, new RegExp(helperName), `VideoToolModal should use ${helperName}`)
+  assert.match(modal, localizedPattern(new RegExp(helperName)), `VideoToolModal should use ${helperName}`)
 }
 
 for (const label of ['剪辑', '字幕擦除', '选区擦除', '全域智能擦除', '高级水印/字幕擦除', '选区水印/字幕擦除', '全域水印/字幕擦除', '导出到画布', '导出到本地', '开始擦除']) {
-  assert.match(modal, new RegExp(label), `VideoToolModal should render ${label}`)
+  assert.match(modal, localizedPattern(new RegExp(label)), `VideoToolModal should render ${label}`)
 }
 
 for (const className of ['video-tool-modal', 'video-tool-modal__mode-tabs', 'video-tool-modal__mode-tab', 'video-tool-modal__erase-dropdown', 'video-tool-modal__submit-btn']) {
-  assert.match(modal, new RegExp(className), `VideoToolModal should include ${className}`)
+  assert.match(modal, localizedPattern(new RegExp(className)), `VideoToolModal should include ${className}`)
 }
 
 const addSourceIndex = modal.indexOf('async function addSourceToTimeline(source)')
@@ -47,7 +48,7 @@ assert.ok(
 const submitBlock = modal.match(/async function submit\(\) \{[\s\S]*?\n\}/)?.[0] || ''
 assert.match(submitBlock, /emit\('export-started',\s*\{[\s\S]*mode:\s*'subtitle'[\s\S]*clips:/, 'subtitle erase should hand off clips to the parent immediately')
 assert.doesNotMatch(submitBlock, /await\s+createSubtitleEraseTask/, 'subtitle erase modal should not wait for provider task creation before closing')
-assert.match(submitBlock, /请先在视频上框选需要擦除的区域/, 'selection erase should reject an empty selection before handoff')
+assert.match(submitBlock, localizedPattern(/请先在视频上框选需要擦除的区域/), 'selection erase should reject an empty selection before handoff')
 
 assert.match(sourceRail, /getHistory\(\{\s*type:\s*'video'/, 'VideoSourceRail should load video history with getHistory')
 assert.match(sourceRail, /thumbnailUrl:\s*item\.thumbnailUrl\s*\|\|\s*item\.thumbnail_url\s*\|\|\s*item\.cover_url/, 'VideoSourceRail should preserve history and canvas thumbnail URLs')
@@ -58,28 +59,28 @@ assert.match(sourceRail, /v-else class="video-source-rail__placeholder"/, 'Video
 assert.doesNotMatch(sourceRail, /<video\b/, 'VideoSourceRail thumbnails must not compete with the active preview for media connections')
 assert.match(sourceRail, /maxRetries:\s*4/, 'VideoSourceRail should use the resilient upload retry budget')
 assert.match(sourceRail, /onProgress:\s*progress\s*=>/, 'VideoSourceRail should expose upload progress immediately')
-assert.match(sourceRail, /正在重试/, 'VideoSourceRail should automatically retry transient upload failures')
+assert.match(sourceRail, localizedPattern(/正在重试/), 'VideoSourceRail should automatically retry transient upload failures')
 assert.match(sourceRail, /finally\s*\{[\s\S]*event\.target\.value\s*=\s*''/, 'VideoSourceRail should allow selecting the same file again after failure')
 const uploadBlock = sourceRail.match(/async function handleUpload\(event\) \{[\s\S]*?\n\}/)?.[0] || ''
 assert.ok(uploadBlock.indexOf('probeVideoDuration(localVideoUrl)') < uploadBlock.indexOf("uploadCanvasMedia(file, 'video'"), 'VideoSourceRail should probe local metadata in parallel with upload')
 assert.match(uploadBlock, /URL\.revokeObjectURL\(localVideoUrl\)/, 'VideoSourceRail should release the local metadata URL')
 for (const label of ['画布', '上传', '历史']) {
-  assert.match(sourceRail, new RegExp(label), `VideoSourceRail should render ${label}`)
+  assert.match(sourceRail, localizedPattern(new RegExp(label)), `VideoSourceRail should render ${label}`)
 }
 
 for (const eventName of ['dragstart', 'drop', 'removeClip']) {
-  assert.match(timeline, new RegExp(eventName), `VideoTimeline should support ${eventName}`)
+  assert.match(timeline, localizedPattern(new RegExp(eventName)), `VideoTimeline should support ${eventName}`)
 }
 
 assert.match(preview, /normalizePreviewRectToVideo/, 'VideoPreview should normalize fine erase rectangles')
 assert.match(preview, /object-fit:\s*contain/, 'VideoPreview should show the whole source video with letterbox bars')
 for (const pointerEvent of ['pointerdown', 'pointermove', 'pointerup']) {
-  assert.match(preview, new RegExp(pointerEvent), `VideoPreview should handle ${pointerEvent}`)
+  assert.match(preview, localizedPattern(new RegExp(pointerEvent)), `VideoPreview should handle ${pointerEvent}`)
 }
 
 assert.match(timeline, /box-sizing:\s*border-box/, 'VideoTimeline should include padding in its fixed modal row height')
 assert.match(timeline, /height:\s*100%/, 'VideoTimeline should fit inside the modal timeline row instead of overflowing the viewport')
 
 for (const label of ['字幕擦除', '选区擦除', '全域智能擦除', '高级水印/字幕擦除', '选区水印/字幕擦除', '全域水印/字幕擦除']) {
-  assert.match(controls, new RegExp(label), `SubtitleEraseControls should render ${label}`)
+  assert.match(controls, localizedPattern(new RegExp(label)), `SubtitleEraseControls should render ${label}`)
 }

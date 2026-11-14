@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * NodeShell.vue - 画布节点虚拟化轻骨架
  *
@@ -51,7 +53,7 @@ const TYPE_ICON_ALIAS = {
 }
 
 // NODE_CATEGORIES 未覆盖的类别兜底中文名
-const FALLBACK_CATEGORY_LABELS = { edit: '编辑', video: '视频', character: '角色', 'seedance-character': '角色' }
+const FALLBACK_CATEGORY_LABELS = { get edit() { return translateUi('common.edit') }, get video() { return translateUi('canvas.nodeConfig.videoInput.label') }, get character() { return translateUi('user.role') }, 'seedance-character': translateUi('user.role') }
 
 const iconName = computed(() => {
   if (typeConfig.value?.icon) return typeConfig.value.icon
@@ -73,9 +75,9 @@ const categoryColor = computed(() => typeConfig.value?.color || '#8b8b8b')
 // 状态徽标文案与语义色（对齐 canvas.css 的 --canvas-accent-* token）
 const statusBadge = computed(() => {
   const s = status.value
-  if (s === 'running' || s === 'processing') return { text: '运行中', cls: 'shell-status-running' }
-  if (s === 'completed' || s === 'success') return { text: '完成', cls: 'shell-status-success' }
-  if (s === 'failed' || s === 'error') return { text: '失败', cls: 'shell-status-error' }
+  if (s === 'running' || s === 'processing') return { get text() { return translateUi('uiMessages.m1f0eb99b7ed0') }, cls: 'shell-status-running' }
+  if (s === 'completed' || s === 'success') return { get text() { return translateUi('common.finish') }, cls: 'shell-status-success' }
+  if (s === 'failed' || s === 'error') return { get text() { return translateUi('uiMessages.m28384d7afd2e') }, cls: 'shell-status-error' }
   return null
 })
 
@@ -97,7 +99,7 @@ const categoryClass = computed(() => `shell-cat-${categoryKey.value}`)
         <span class="shell-category-dot" :style="{ background: categoryColor }"></span>
         {{ categoryLabel }}
       </span>
-      <span class="shell-title">{{ title || '节点' }}</span>
+      <span class="shell-title">{{ title || translateUi('canvas.nodeLabel') }}</span>
       <span v-if="statusBadge" class="shell-status" :class="statusBadge.cls">{{ statusBadge.text }}</span>
     </div>
     <div class="shell-body" />

@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
@@ -23,7 +24,7 @@ test('VideoNode sends Seedance OpenAPI Pro character assets as face codes', () =
 
 test('VideoNode excludes Seedance OpenAPI Pro character HTTP URLs from image payload fields', () => {
   assert.match(source, /capturedState\.isSeedanceOpenApiPro && capturedState\.faceCodes\?\.length > 0/)
-  assert.match(source, /Seedance OpenAPI Pro 仅保留普通参考图/)
+  assert.match(source, localizedPattern(/Seedance OpenAPI Pro 仅保留普通参考图/))
   assert.match(source, /finalImages = finalImages\.filter\(u => !charHttpUrls\.has\(u\)\)/)
 })
 

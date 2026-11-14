@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 import { normalizeAssetReviewStatus } from './assetReviewStatus.js'
 
 export function createSeedanceReviewController({ getData, getSourceUrl, assetType, nodeId, update, resolveUrl, getProvider, create, poll, notify }) {
@@ -32,11 +33,11 @@ export function createSeedanceReviewController({ getData, getSourceUrl, assetTyp
       if (!isCurrent(sourceUrl, asset.assetId)) return
       const status = normalizeAssetReviewStatus(result.Status || result.status)
       update({ status, assetUrl: result.URL || asset.assetUrl, reviewedAt: status === 'Active' ? new Date().toISOString() : null, error: null })
-      if (status === 'Active') notify('素材已过审', 'success')
+      if (status === 'Active') notify(translateUi('uiMessages.mdc0d15e32c49'), 'success')
     }).catch(error => {
       if (!isCurrent(sourceUrl, asset.assetId)) return
       update({ error: error.message || '审核状态查询失败，请重试查询' })
-      notify(error.message || '审核状态查询失败，请重试查询', 'error')
+      notify(error.message || translateUi('uiMessages.mc6c440b0178b'), 'error')
     }).finally(() => {
       if (pollingId === asset.assetId) pollingId = ''
     })
@@ -45,7 +46,7 @@ export function createSeedanceReviewController({ getData, getSourceUrl, assetTyp
   async function submit() {
     if (submitting || disposed) return
     const sourceUrl = getSourceUrl()
-    if (!sourceUrl) return notify('未找到素材', 'warning')
+    if (!sourceUrl) return notify(translateUi('uiMessages.m828878d11d15'), 'warning')
     submitting = true
     try {
       const providerType = await getProvider()
@@ -58,21 +59,21 @@ export function createSeedanceReviewController({ getData, getSourceUrl, assetTyp
         resume()
         return
       }
-      if (assetType !== 'Image' && ['seedance_openapi_pro', 'bytefor'].includes(providerType)) throw new Error('当前素材渠道仅支持图片角色，不支持视频或音频')
+      if (assetType !== 'Image' && ['seedance_openapi_pro', 'bytefor'].includes(providerType)) throw new Error(translateUi('uiMessages.m10870919e732'))
       const url = await resolveUrl(sourceUrl)
       if (!isCurrent(sourceUrl)) return
       const result = await create({ URL: url, AssetType: assetType, Name: `Seedance快捷角色_${nodeId}`, sourceNodeId: nodeId, providerType })
       if (!isCurrent(sourceUrl)) return
       const quickAsset = result.quickAsset || {}
       const assetId = quickAsset.assetId || result.asset?.Id || result.Id
-      if (!assetId) throw new Error('快捷资产接口返回数据异常')
+      if (!assetId) throw new Error(translateUi('uiMessages.ma6808c4df911'))
       const savedProvider = quickAsset.providerType || providerType
       const faceCode = quickAsset.faceCode || result.asset?.FaceCode || assetId
       update({ ...quickAsset, assetId, assetUri: quickAsset.assetUri || (['seedance_openapi_pro', 'bytefor'].includes(savedProvider) ? `face:${faceCode}` : `asset://${assetId}`), assetType, sourceUrl, assetUrl: result.asset?.URL || url, providerType: savedProvider, groupId: quickAsset.groupId || result.asset?.GroupId, status: normalizeAssetReviewStatus(quickAsset.status || result.asset?.Status || 'Processing'), error: null })
-      notify('已提交素材审核', 'info')
+      notify(translateUi('uiMessages.mdd3e67b8ecd2'), 'info')
       resume()
     } catch (error) {
-      if (isCurrent(sourceUrl)) notify(`提交过审失败：${error.message || '未知错误'}`, 'error')
+      if (isCurrent(sourceUrl)) notify(translateUi('uiMessages.m2e23cfb7a798', { value1: (error.message || translateUi('canvas.unknownError')) }), 'error')
     } finally {
       submitting = false
     }

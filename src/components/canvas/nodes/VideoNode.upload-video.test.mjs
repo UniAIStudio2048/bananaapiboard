@@ -1,3 +1,6 @@
+import * as i18nTestRuntime from '../../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
@@ -17,7 +20,7 @@ function fixture(data = {}) {
     showAlert: async message => calls.alerts.push(message),
     URL: { createObjectURL: file => { calls.blobs.push(file); return 'blob:video' } }
   }
-  const run = new Function(...Object.keys(bindings), `${match[0]}; return handleSourceVideoChange`)(...Object.values(bindings))
+  const run = new Function('translateUi', 'uiLanguage', ...Object.keys(bindings), `${match[0]}; return handleSourceVideoChange`)(translateUi, uiLanguage, ...Object.values(bindings))
   return { calls, run }
 }
 

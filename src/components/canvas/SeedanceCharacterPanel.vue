@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * SeedanceCharacterPanel.vue - Seedance 角色库管理面板
  * 平铺角色卡片模式，参考 Sora 角色卡片设计
@@ -290,7 +292,7 @@ async function loadAssets() {
     }
   } catch (err) {
     if (!hasCachedData) {
-      errorMessage.value = err.message || '加载角色失败'
+      errorMessage.value = err.message || translateUi('uiMessages.m6b6352461a0d')
     }
   } finally {
     loading.value = false
@@ -356,7 +358,7 @@ async function syncFromCloud() {
         try {
           await saveAsset({
             type: seedanceAssetType.value,
-            name: ca.Name || '角色素材',
+            name: ca.Name || translateUi('uiMessages.m7ef49512bce8'),
             url: `asset://${ca.Id}`,
             thumbnail_url: ca.URL,
             metadata: {
@@ -401,7 +403,7 @@ async function syncFromCloud() {
 
 async function handleCreateGroup() {
   if (isSeedanceOpenApiProProvider.value) {
-    errorMessage.value = 'Bytefor API 使用专用人物库，无需创建分组'
+    errorMessage.value = translateUi('uiMessages.m1a6ae0b15536')
     return
   }
   if (!createGroupForm.value.Name.trim()) return
@@ -443,7 +445,7 @@ async function handleCreateGroupLiveness() {
       ProviderType: requestedProviderType.value
     })
     if (!session.H5Link || !session.BytedToken) {
-      throw new Error('获取认证链接失败')
+      throw new Error(translateUi('uiMessages.me63941c6ec3a'))
     }
     livenessBytedToken.value = session.BytedToken
     livenessQrDataUrl.value = await QRCode.toDataURL(session.H5Link, {
@@ -479,7 +481,7 @@ async function handleCreateGroupLiveness() {
       }
     }
     if (attempts >= maxAttempts) {
-      errorMessage.value = '认证超时，请重试'
+      errorMessage.value = translateUi('uiMessages.m93ba7937c6b6')
     }
   } catch (err) {
     errorMessage.value = err.message
@@ -526,7 +528,7 @@ async function confirmDeleteGroup() {
     deleteGroupTarget.value = null
     await refreshAll()
   } catch (err) {
-    errorMessage.value = '删除分组失败：' + (err.message || '未知错误')
+    errorMessage.value = translateUi('uiMessages.m39a0c574445a') + (err.message || translateUi('canvas.unknownError'))
   } finally {
     deleteGroupLoading.value = false
   }
@@ -545,12 +547,12 @@ function triggerUpload() {
 async function triggerFaceVerifyUpload() {
   if (livenessVerifying.value) return
   if (!supportsLiveness.value) {
-    errorMessage.value = '当前渠道不支持真人人像认证'
+    errorMessage.value = translateUi('uiMessages.m10f126900d8d')
     return
   }
 
   createGroupType.value = 'LivenessFace'
-  createGroupForm.value = { Name: '默认真人人像分组', Description: '' }
+  createGroupForm.value = { Name: translateUi('uiMessages.m8f8af50c8688'), Description: '' }
   errorMessage.value = ''
   showCreateGroupModal.value = true
   await nextTick()
@@ -563,7 +565,7 @@ async function handleFileUpload(event) {
 
   let targetGroupId = props.selectedGroupId || groups.value[0]?.Id
   if (!targetGroupId) {
-    errorMessage.value = '请先创建一个角色组'
+    errorMessage.value = translateUi('uiMessages.m47b50cd7e57c')
     return
   }
 
@@ -572,12 +574,12 @@ async function handleFileUpload(event) {
   try {
     const uploadResult = await uploadImages(Array.from(files))
     const urls = Array.isArray(uploadResult) ? uploadResult : (uploadResult.urls || uploadResult.images || [])
-    if (!urls.length) throw new Error('上传失败：未返回URL')
+    if (!urls.length) throw new Error(translateUi('uiMessages.m3aeb2acc1950'))
 
     const spaceParams = teamStore.getSpaceParams(props.spaceFilter)
 
     for (const url of urls) {
-      const fileName = files[0]?.name?.replace(/\.[^.]+$/, '') || '角色素材'
+      const fileName = files[0]?.name?.replace(/\.[^.]+$/, '') || translateUi('uiMessages.m7ef49512bce8')
       const result = await createAsset({
         GroupId: targetGroupId,
         URL: url,
@@ -626,7 +628,7 @@ async function handleFileUpload(event) {
     }
     await loadAssets()
   } catch (err) {
-    errorMessage.value = err.message || '上传角色失败'
+    errorMessage.value = err.message || translateUi('uiMessages.md3f92d219c79')
   } finally {
     uploadLoading.value = false
     if (fileInputRef.value) fileInputRef.value.value = ''
@@ -672,7 +674,7 @@ function startPolling(assetId, groupId, imageUrl, name, canvasAssetId, providerT
         const spaceParams = teamStore.getSpaceParams(props.spaceFilter)
         await saveAsset({
           type: seedanceAssetType.value,
-          name: asset.Name || name || '角色素材',
+          name: asset.Name || name || translateUi('uiMessages.m7ef49512bce8'),
           url: `asset://${asset.Id}`,
           thumbnail_url: asset.URL || imageUrl,
           metadata: finalMetadata,
@@ -794,7 +796,7 @@ function getAssetDownloadFilename(asset) {
 async function handleDownloadAsset(asset) {
   closeContextMenu()
   if (!asset?.URL) {
-    errorMessage.value = '没有可下载的图片'
+    errorMessage.value = translateUi('uiMessages.m16b92f55f19a')
     return
   }
 
@@ -802,7 +804,7 @@ async function handleDownloadAsset(asset) {
     await smartDownload(asset.URL, getAssetDownloadFilename(asset))
   } catch (err) {
     console.error('[SeedancePanel] 下载角色图片失败:', err)
-    errorMessage.value = '下载失败：' + (err.message || '未知错误')
+    errorMessage.value = translateUi('uiMessages.m90f9253844e7') + (err.message || translateUi('canvas.unknownError'))
   }
 }
 
@@ -813,7 +815,7 @@ const editingInputRef = ref(null)
 
 function startRename(asset) {
   if (activeProvider.value === 'stars_asset') {
-    errorMessage.value = '当前素材渠道不支持资产改名'
+    errorMessage.value = translateUi('uiMessages.m2dc6349a8b59')
     closeContextMenu()
     return
   }
@@ -842,7 +844,7 @@ async function confirmRename(asset) {
     asset.Name = newName
   } catch (err) {
     console.error('[SeedancePanel] 重命名失败:', err)
-    errorMessage.value = '重命名失败：' + (err.message || '未知错误')
+    errorMessage.value = translateUi('uiMessages.m0ab10c33f462') + (err.message || translateUi('canvas.unknownError'))
   }
 }
 
@@ -903,7 +905,7 @@ async function confirmDelete() {
     emit('groups-updated')
   } catch (err) {
     console.error('[SeedancePanel] 删除角色失败:', err)
-    errorMessage.value = '删除失败：' + (err.message || '未知错误')
+    errorMessage.value = translateUi('uiMessages.m0580fcee37e0') + (err.message || translateUi('canvas.unknownError'))
   } finally {
     deleteLoading.value = false
     showDeleteConfirm.value = false
@@ -993,13 +995,13 @@ onUnmounted(() => {
           v-if="currentGroupIsOwner"
           class="group-indicator-delete" 
           @click="requestDeleteGroup(groups.find(g => g.Id === props.selectedGroupId))" 
-          title="删除此分组"
+          :title="translateUi('uiMessages.mc0b3e4377edb')"
         >
           <svg viewBox="0 0 16 16" fill="none" width="10" height="10">
             <path d="M3 4.5h10M6.5 4.5V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1.5M5 4.5v8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
-        <button class="group-indicator-clear" @click="clearGroupFilter" title="查看全部">
+        <button class="group-indicator-clear" @click="clearGroupFilter" :title="translateUi('uiMessages.mfa2ff3c379a7')">
           <svg viewBox="0 0 16 16" fill="none" width="10" height="10">
             <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
           </svg>
@@ -1014,7 +1016,7 @@ onUnmounted(() => {
         <input
           v-model="searchQuery"
           class="search-input"
-          placeholder="搜索角色或资产 ID..."
+          :placeholder="translateUi('uiMessages.m0f2dc2d845fc')"
         />
       </div>
 
@@ -1035,7 +1037,7 @@ onUnmounted(() => {
           >{{ opt.label }}</button>
         </div>
         <div class="toolbar-buttons">
-          <button class="btn-toolbar" @click="toggleFullscreen" :title="isFullscreen ? '退出全屏' : '全屏浏览'" aria-label="全屏浏览">
+          <button class="btn-toolbar" @click="toggleFullscreen" :title="isFullscreen ? translateUi('uiMessages.m0f1505b6ad3f') : translateUi('uiMessages.mdd52888063f4')" :aria-label="translateUi('uiMessages.mdd52888063f4')">
             <svg v-if="!isFullscreen" viewBox="0 0 24 24" fill="none" width="13" height="13">
               <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
@@ -1043,20 +1045,20 @@ onUnmounted(() => {
               <path d="M4 14h4v4M20 10h-4V6M14 10l7-7M3 21l7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
-          <button class="btn-toolbar" @click="refreshAll" title="刷新" aria-label="刷新列表">
+          <button class="btn-toolbar" @click="refreshAll" :title="translateUi('common.refresh')" :aria-label="translateUi('uiMessages.me28be7098db1')">
             <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
               <path d="M13.5 2.5v4h-4M2.5 13.5v-4h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
               <path d="M3.5 6A5.5 5.5 0 0 1 13 5.5M12.5 10a5.5 5.5 0 0 1-9.5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
-          <button class="btn-toolbar" @click="triggerFaceVerifyUpload" :disabled="uploadLoading || livenessVerifying" title="真人认证上传" aria-label="真人认证上传">
+          <button class="btn-toolbar" @click="triggerFaceVerifyUpload" :disabled="uploadLoading || livenessVerifying" :title="translateUi('uiMessages.meb1c335dd2e4')" :aria-label="translateUi('uiMessages.meb1c335dd2e4')">
             <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
               <circle cx="8" cy="5.5" r="2.5" stroke="currentColor" stroke-width="1.3"/>
               <path d="M3 14c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
               <path d="M11.5 3.5l1 1 2-2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
-          <button class="btn-toolbar" @click="triggerUpload" :disabled="uploadLoading" title="上传角色" aria-label="上传角色">
+          <button class="btn-toolbar" @click="triggerUpload" :disabled="uploadLoading" :title="translateUi('uiMessages.m4abcca1e112c')" :aria-label="translateUi('uiMessages.m4abcca1e112c')">
             <template v-if="uploadLoading">
               <div class="spinner-xs"></div>
             </template>
@@ -1067,7 +1069,7 @@ onUnmounted(() => {
               </svg>
             </template>
           </button>
-          <button v-if="supportsCustomGroups" class="btn-toolbar btn-create" @click="createGroupType = 'AIGC'; createGroupForm = { Name: '', Description: '' }; errorMessage = ''; showCreateGroupModal = true" aria-label="新建角色组">
+          <button v-if="supportsCustomGroups" class="btn-toolbar btn-create" @click="createGroupType = 'AIGC'; createGroupForm = { Name: '', Description: '' }; errorMessage = ''; showCreateGroupModal = true" :aria-label="translateUi('uiMessages.m6872ead50733')">
             <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
               <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
             </svg>
@@ -1079,7 +1081,7 @@ onUnmounted(() => {
     <!-- 错误提示 -->
     <div v-if="errorMessage" class="error-bar">
       <span class="error-text">{{ errorMessage }}</span>
-      <button @click="errorMessage = ''" class="error-close" aria-label="关闭">
+      <button @click="errorMessage = ''" class="error-close" :aria-label="translateUi('common.close')">
         <svg viewBox="0 0 16 16" fill="none" width="10" height="10">
           <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
@@ -1089,7 +1091,7 @@ onUnmounted(() => {
     <!-- 加载状态 -->
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
-      <span>加载角色...</span>
+      <span>{{ translateUi('uiMessages.m7ebb399243db') }}</span>
     </div>
 
     <!-- 空状态 -->
@@ -1102,18 +1104,18 @@ onUnmounted(() => {
           <path d="M16 32c1.5-2 4-3 8-3s6.5 1 8 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
       </div>
-      <p class="empty-title" v-if="allAssets.length === 0">还没有角色素材</p>
-      <p class="empty-title" v-else>未找到匹配结果</p>
+      <p class="empty-title" v-if="allAssets.length === 0">{{ translateUi('uiMessages.mf82482ac9891') }}</p>
+      <p class="empty-title" v-else>{{ translateUi('uiMessages.mf6c08da715b6') }}</p>
       <p class="empty-hint">
-        <template v-if="allAssets.length === 0">上传图片创建 Seedance 角色素材</template>
-        <template v-else>试试调整搜索或筛选条件</template>
+        <template v-if="allAssets.length === 0">{{ translateUi('uiMessages.ma7b13288b607') }}</template>
+        <template v-else>{{ translateUi('uiMessages.m052a959d9b54') }}</template>
       </p>
       <button v-if="allAssets.length === 0" class="btn-empty-upload" @click="triggerUpload">
         <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
           <path d="M8 11V3M5 5.5L8 2.5l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M3 11v2h10v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        上传角色
+        {{ translateUi('uiMessages.m4abcca1e112c') }}
       </button>
     </div>
 
@@ -1147,17 +1149,17 @@ onUnmounted(() => {
           <!-- Processing 覆盖层 -->
           <div v-if="asset.Status === 'Processing'" class="status-overlay processing-overlay">
             <div class="processing-spinner"></div>
-            <span>处理中</span>
+            <span>{{ translateUi('videoGen.processing') }}</span>
           </div>
 
           <!-- Failed 覆盖层 -->
-          <div v-if="asset.Status === 'Expired'" class="status-overlay"><span>已过期 · 引用时自动审核</span></div>
+          <div v-if="asset.Status === 'Expired'" class="status-overlay"><span>{{ translateUi('uiMessages.mf7f5fedee871') }}</span></div>
           <div v-if="asset.Status === 'Failed'" class="status-overlay failed-overlay">
             <svg viewBox="0 0 16 16" fill="none" width="16" height="16">
               <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.2"/>
               <path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
-            <span>失败</span>
+            <span>{{ translateUi('uiMessages.m28384d7afd2e') }}</span>
           </div>
 
           <!-- hover 复制提示 -->
@@ -1166,14 +1168,14 @@ onUnmounted(() => {
               <svg viewBox="0 0 16 16" fill="none" width="11" height="11">
                 <path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
-              已复制
+              {{ translateUi('common.copied') }}
             </template>
             <template v-else>
               <svg viewBox="0 0 16 16" fill="none" width="11" height="11">
                 <rect x="5" y="5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
                 <path d="M11 3H4.5A1.5 1.5 0 0 0 3 4.5V11" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
               </svg>
-              复制 URI
+              {{ translateUi('uiMessages.md065e0efb652') }}
             </template>
           </div>
         </div>
@@ -1191,7 +1193,7 @@ onUnmounted(() => {
               @blur="confirmRename(asset)"
               @click.stop
             />
-            <span v-else class="card-name" :title="asset.Name" @dblclick.stop="startRename(asset)">{{ asset.Name || '未命名' }}</span>
+            <span v-else class="card-name" :title="asset.Name" @dblclick.stop="startRename(asset)">{{ asset.Name || translateUi('canvas.unnamed') }}</span>
             <span class="card-uri-tag" :title="`asset://${asset.Id}`">
               @{{ asset.Id?.slice(-8) || '—' }}
             </span>
@@ -1206,8 +1208,8 @@ onUnmounted(() => {
         <div v-if="showCreateGroupModal" class="modal-overlay" @click.self="showCreateGroupModal = false">
           <div class="modal-content" @click.stop>
             <div class="modal-header">
-              <h3 class="modal-title">创建角色组</h3>
-              <button class="modal-close" @click="showCreateGroupModal = false" aria-label="关闭弹窗">
+              <h3 class="modal-title">{{ translateUi('uiMessages.mab9ce5131343') }}</h3>
+              <button class="modal-close" @click="showCreateGroupModal = false" :aria-label="translateUi('uiMessages.m617e99107e2a')">
                 <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
                   <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                 </svg>
@@ -1218,29 +1220,29 @@ onUnmounted(() => {
               <template v-if="livenessQrDataUrl">
                 <div class="qr-verify-container">
                   <div class="qr-code-wrapper">
-                    <img :src="livenessQrDataUrl" alt="扫码认证" class="qr-code-img" />
+                    <img :src="livenessQrDataUrl" :alt="translateUi('uiMessages.m38c01882d5c6')" class="qr-code-img" />
                     <div v-if="!livenessPolling" class="qr-expired-overlay">
-                      <span>已过期</span>
-                      <button class="qr-refresh-btn" @click="handleCreateGroup">刷新</button>
+                      <span>{{ translateUi('user.expired') }}</span>
+                      <button class="qr-refresh-btn" @click="handleCreateGroup">{{ translateUi('common.refresh') }}</button>
                     </div>
                   </div>
                   <div class="qr-instructions">
                     <div class="qr-step">
                       <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><rect x="3" y="3" width="7" height="7" rx="1" stroke="#60a5fa" stroke-width="1.5"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="#60a5fa" stroke-width="1.5"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="#60a5fa" stroke-width="1.5"/><rect x="14" y="14" width="4" height="4" rx="0.5" stroke="#60a5fa" stroke-width="1.5"/><path d="M21 14v7h-3" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round"/></svg>
-                      <span>打开微信，扫描左侧二维码</span>
+                      <span>{{ translateUi('uiMessages.m22fbec4d1f4c') }}</span>
                     </div>
                     <div class="qr-step">
                       <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><circle cx="12" cy="9" r="4" stroke="#60a5fa" stroke-width="1.5"/><path d="M12 16c-4 0-7 2-7 4v1h14v-1c0-2-3-4-7-4z" stroke="#60a5fa" stroke-width="1.5"/></svg>
-                      <span>在手机上完成人脸认证</span>
+                      <span>{{ translateUi('uiMessages.m7e11242c3a39') }}</span>
                     </div>
                     <div class="qr-step">
                       <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M5 12l5 5L19 7" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      <span>认证通过后自动创建角色组</span>
+                      <span>{{ translateUi('uiMessages.m7ce8659a5322') }}</span>
                     </div>
                   </div>
                   <div class="qr-polling-status">
                     <div class="liveness-spinner"></div>
-                    <span>等待扫码认证...</span>
+                    <span>{{ translateUi('uiMessages.m18659ae0fca1') }}</span>
                   </div>
                 </div>
               </template>
@@ -1249,7 +1251,7 @@ onUnmounted(() => {
               <template v-else>
                 <!-- 组类型选择（官方/官转渠道支持两种） -->
                 <div v-if="supportsLiveness" class="group-type-selector">
-                  <label class="form-label">角色组类型</label>
+                  <label class="form-label">{{ translateUi('uiMessages.mf2595ae60417') }}</label>
                   <div class="type-toggle">
                     <button
                       class="type-toggle-btn"
@@ -1257,7 +1259,7 @@ onUnmounted(() => {
                       @click="createGroupType = 'AIGC'"
                     >
                       <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      AIGC 角色
+                      {{ translateUi('uiMessages.m3ae015475dad') }}
                     </button>
                     <button
                       class="type-toggle-btn"
@@ -1265,40 +1267,40 @@ onUnmounted(() => {
                       @click="createGroupType = 'LivenessFace'"
                     >
                       <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><circle cx="12" cy="9" r="4" stroke="currentColor" stroke-width="1.5"/><path d="M12 16c-4 0-7 2-7 4v1h14v-1c0-2-3-4-7-4z" stroke="currentColor" stroke-width="1.5"/></svg>
-                      真人人像
+                      {{ translateUi('uiMessages.me5a01b100030') }}
                     </button>
                   </div>
-                  <p class="type-hint">{{ createGroupType === 'AIGC' ? 'AI生成角色，无需人脸认证' : '真人角色，需要扫码完成人脸认证' }}</p>
+                  <p class="type-hint">{{ createGroupType === 'AIGC' ? translateUi('uiMessages.m271fb243c3a5') : translateUi('uiMessages.m2413aa15e61e') }}</p>
                 </div>
-                <label class="form-label" :class="{ 'form-label-gap': supportsLiveness }">名称 <span class="required">*</span></label>
+                <label class="form-label" :class="{ 'form-label-gap': supportsLiveness }">{{ translateUi('directorStudio.inspector.name') }} <span class="required">*</span></label>
                 <input
                   v-model="createGroupForm.Name"
                   class="form-input"
-                  placeholder="为角色组起个名字"
+                  :placeholder="translateUi('uiMessages.m72c88816b06f')"
                   @keyup.enter="handleCreateGroup"
                 />
-                <label class="form-label form-label-gap">描述</label>
+                <label class="form-label form-label-gap">{{ translateUi('uiMessages.mdc2ba467fc7a') }}</label>
                 <textarea
                   v-model="createGroupForm.Description"
                   class="form-textarea"
-                  placeholder="简要描述这个角色组的用途（可选）"
+                  :placeholder="translateUi('uiMessages.ma7393f9bbaa8')"
                   rows="3"
                 ></textarea>
                 <div v-if="livenessVerifying && !livenessQrDataUrl" class="liveness-status">
                   <div class="liveness-spinner"></div>
-                  <span>正在生成认证二维码...</span>
+                  <span>{{ translateUi('uiMessages.m470543e3fa95') }}</span>
                 </div>
               </template>
             </div>
             <div class="modal-footer">
-              <button class="btn-modal-cancel" @click="livenessQrDataUrl ? cancelLivenessAndClose() : showCreateGroupModal = false">{{ livenessQrDataUrl ? '关闭' : '取消' }}</button>
+              <button class="btn-modal-cancel" @click="livenessQrDataUrl ? cancelLivenessAndClose() : showCreateGroupModal = false">{{ livenessQrDataUrl ? translateUi('common.close') : translateUi('common.cancel') }}</button>
               <button
                 v-if="!livenessQrDataUrl"
                 class="btn-modal-confirm"
                 @click="handleCreateGroup"
                 :disabled="createGroupLoading || !createGroupForm.Name.trim()"
               >
-                {{ createGroupLoading ? '生成中...' : (createGroupType === 'LivenessFace' && supportsLiveness ? '生成认证二维码' : '创建') }}
+                {{ createGroupLoading ? translateUi('imageGen.generating') : (createGroupType === 'LivenessFace' && supportsLiveness ? translateUi('uiMessages.m4598d643c84e') : translateUi('uiMessages.mcde2cd071d25')) }}
               </button>
             </div>
           </div>
@@ -1319,20 +1321,20 @@ onUnmounted(() => {
             <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
               <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
-            添加到画布
+            {{ translateUi('canvas.assetPanel.addToCanvas') }}
           </button>
           <button v-if="isSeedanceAssetReusable(contextMenuAsset)" class="context-menu-item" @click="copyAssetUri(contextMenuAsset); closeContextMenu()">
             <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
               <rect x="5" y="5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
               <path d="M11 3H4.5A1.5 1.5 0 0 0 3 4.5V11" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
             </svg>
-            复制 URI
+            {{ translateUi('uiMessages.md065e0efb652') }}
           </button>
           <button v-if="isSeedanceAssetReusable(contextMenuAsset) && contextMenuAsset?.URL" class="context-menu-item" @click="handleDownloadAsset(contextMenuAsset)">
             <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
               <path d="M3 11.5v1A1.5 1.5 0 0 0 4.5 14h7a1.5 1.5 0 0 0 1.5-1.5v-1M8 2.5v7M5.5 7.5 8 10l2.5-2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            下载图片
+            {{ translateUi('imageGen.downloadImage') }}
           </button>
           <button 
             v-if="contextMenuAsset && isAssetCreator(contextMenuAsset)"
@@ -1342,7 +1344,7 @@ onUnmounted(() => {
             <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
               <path d="M3 4.5h10M6.5 4.5V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1.5M5 4.5v8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            删除角色
+            {{ translateUi('uiMessages.m5e7dadca706f') }}
           </button>
         </div>
       </Transition>
@@ -1354,8 +1356,8 @@ onUnmounted(() => {
         <div v-if="showDeleteConfirm" class="modal-overlay" @click.self="cancelDelete">
           <div class="modal-content delete-confirm-modal" @click.stop>
             <div class="modal-header">
-              <h3 class="modal-title delete-modal-title">确认删除</h3>
-              <button class="modal-close" @click="cancelDelete" aria-label="关闭">
+              <h3 class="modal-title delete-modal-title">{{ translateUi('uiMessages.ma3ea3c17b401') }}</h3>
+              <button class="modal-close" @click="cancelDelete" :aria-label="translateUi('common.close')">
                 <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
                   <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                 </svg>
@@ -1363,18 +1365,18 @@ onUnmounted(() => {
             </div>
             <div class="modal-body">
               <p class="delete-confirm-text">
-                确定要删除角色 <strong>{{ deleteTarget?.Name || '未命名' }}</strong> 吗？
+                {{ translateUi('uiMessages.m7676d8e97ee0') }} <strong>{{ deleteTarget?.Name || translateUi('canvas.unnamed') }}</strong> {{ translateUi('uiMessages.m9d45d8943988') }}
               </p>
-              <p class="delete-confirm-hint">此操作将同时从火山引擎云端删除，不可恢复。</p>
+              <p class="delete-confirm-hint">{{ translateUi('uiMessages.m4e29c05f5bd7') }}</p>
             </div>
             <div class="modal-footer">
-              <button class="btn-modal-cancel" @click="cancelDelete">取消</button>
+              <button class="btn-modal-cancel" @click="cancelDelete">{{ translateUi('common.cancel') }}</button>
               <button 
                 class="btn-modal-confirm btn-modal-delete"
                 @click="confirmDelete"
                 :disabled="deleteLoading"
               >
-                {{ deleteLoading ? '删除中...' : '确认删除' }}
+                {{ deleteLoading ? translateUi('uiMessages.m4669785ade95') : translateUi('uiMessages.ma3ea3c17b401') }}
               </button>
             </div>
           </div>
@@ -1388,8 +1390,8 @@ onUnmounted(() => {
         <div v-if="showDeleteGroupConfirm" class="modal-overlay" @click.self="cancelDeleteGroup">
           <div class="modal-content delete-confirm-modal" @click.stop>
             <div class="modal-header">
-              <h3 class="modal-title delete-modal-title">删除分组</h3>
-              <button class="modal-close" @click="cancelDeleteGroup" aria-label="关闭">
+              <h3 class="modal-title delete-modal-title">{{ translateUi('uiMessages.m7605c1d82eed') }}</h3>
+              <button class="modal-close" @click="cancelDeleteGroup" :aria-label="translateUi('common.close')">
                 <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
                   <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                 </svg>
@@ -1397,18 +1399,18 @@ onUnmounted(() => {
             </div>
             <div class="modal-body">
               <p class="delete-confirm-text">
-                确定要删除分组 <strong>{{ deleteGroupTarget?.Name || '未命名' }}</strong> 吗？
+                {{ translateUi('uiMessages.mb661cc0f03f2') }} <strong>{{ deleteGroupTarget?.Name || translateUi('canvas.unnamed') }}</strong> {{ translateUi('uiMessages.m9d45d8943988') }}
               </p>
-              <p class="delete-confirm-hint">此操作将删除该分组及其中所有角色素材，不可恢复。</p>
+              <p class="delete-confirm-hint">{{ translateUi('uiMessages.m5cfed231067e') }}</p>
             </div>
             <div class="modal-footer">
-              <button class="btn-modal-cancel" @click="cancelDeleteGroup">取消</button>
+              <button class="btn-modal-cancel" @click="cancelDeleteGroup">{{ translateUi('common.cancel') }}</button>
               <button 
                 class="btn-modal-confirm btn-modal-delete"
                 @click="confirmDeleteGroup"
                 :disabled="deleteGroupLoading"
               >
-                {{ deleteGroupLoading ? '删除中...' : '确认删除' }}
+                {{ deleteGroupLoading ? translateUi('uiMessages.m4669785ade95') : translateUi('uiMessages.ma3ea3c17b401') }}
               </button>
             </div>
           </div>
@@ -1430,7 +1432,7 @@ onUnmounted(() => {
                   <circle cx="16" cy="11" r="2.5" stroke="currentColor" stroke-width="1.5"/>
                   <path d="M8 16c1-1.5 3-2.5 5-2.5s4 1 5 2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                 </svg>
-                {{ `${seedanceCharacterLibraryName}角色库` }}
+                {{ translateUi('uiMessages.mda94f693cc14', { value1: (seedanceCharacterLibraryName) }) }}
                 <span class="fullscreen-count">{{ t('canvas.characterCount', { count: fullscreenFilteredAssets.length }) }}</span>
               </h3>
               <div class="fullscreen-toolbar">
@@ -1441,7 +1443,7 @@ onUnmounted(() => {
                   <input
                     v-model="searchQuery"
                     class="search-input"
-                    placeholder="搜索角色或资产 ID..."
+                    :placeholder="translateUi('uiMessages.m0f2dc2d845fc')"
                   />
                 </div>
                 <div class="fullscreen-filters">
@@ -1458,13 +1460,13 @@ onUnmounted(() => {
                     @click="statusFilter = opt.value"
                   >{{ opt.label }}</button>
                 </div>
-                <button class="btn-toolbar" @click="refreshAll" title="刷新">
+                <button class="btn-toolbar" @click="refreshAll" :title="translateUi('common.refresh')">
                   <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
                     <path d="M13.5 2.5v4h-4M2.5 13.5v-4h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                     <path d="M3.5 6A5.5 5.5 0 0 1 13 5.5M12.5 10a5.5 5.5 0 0 1-9.5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
                 </button>
-                <button class="btn-toolbar" @click="triggerUpload" :disabled="uploadLoading" title="上传角色">
+                <button class="btn-toolbar" @click="triggerUpload" :disabled="uploadLoading" :title="translateUi('uiMessages.m4abcca1e112c')">
                   <template v-if="uploadLoading"><div class="spinner-xs"></div></template>
                   <template v-else>
                     <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
@@ -1474,7 +1476,7 @@ onUnmounted(() => {
                   </template>
                 </button>
               </div>
-              <button class="fullscreen-close" @click="isFullscreen = false" title="退出全屏 (ESC)">
+              <button class="fullscreen-close" @click="isFullscreen = false" :title="translateUi('uiMessages.m18f6bd035ebd')">
                 <svg viewBox="0 0 16 16" fill="none" width="16" height="16">
                   <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                 </svg>
@@ -1491,7 +1493,7 @@ onUnmounted(() => {
                 <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
                   <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                 </svg>
-                全部
+                {{ translateUi('common.all') }}
                 <span class="group-pill-count">{{ filteredAssets.length }}</span>
               </button>
               <button
@@ -1509,10 +1511,10 @@ onUnmounted(() => {
             <!-- 全屏内容 -->
             <div v-if="loading" class="fullscreen-loading">
               <div class="spinner"></div>
-              <span>加载角色...</span>
+              <span>{{ translateUi('uiMessages.m7ebb399243db') }}</span>
             </div>
             <div v-else-if="fullscreenFilteredAssets.length === 0" class="fullscreen-empty">
-              <p>暂无匹配的角色素材</p>
+              <p>{{ translateUi('uiMessages.mfc36b0b3e859') }}</p>
             </div>
             <div v-else class="fullscreen-grid">
               <div
@@ -1540,18 +1542,18 @@ onUnmounted(() => {
                   </div>
                   <div v-if="asset.Status === 'Processing'" class="status-overlay processing-overlay">
                     <div class="spinner-sm"></div>
-                    <span>处理中</span>
+                    <span>{{ translateUi('videoGen.processing') }}</span>
                   </div>
-                  <div v-if="asset.Status === 'Expired'" class="status-overlay"><span>已过期 · 引用时自动审核</span></div>
+                  <div v-if="asset.Status === 'Expired'" class="status-overlay"><span>{{ translateUi('uiMessages.mf7f5fedee871') }}</span></div>
                   <div v-if="asset.Status === 'Failed'" class="status-overlay failed-overlay">
                     <svg viewBox="0 0 16 16" fill="none" width="16" height="16">
                       <path d="M8 5v3M8 10h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                       <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/>
                     </svg>
-                    <span>失败</span>
+                    <span>{{ translateUi('uiMessages.m28384d7afd2e') }}</span>
                   </div>
-                  <div v-if="isSeedanceAssetReusable(asset) && copiedAssetId === asset.Id" class="copy-hint show">已复制 URI</div>
-                  <div v-else-if="isSeedanceAssetReusable(asset)" class="copy-hint">点击复制 URI</div>
+                  <div v-if="isSeedanceAssetReusable(asset) && copiedAssetId === asset.Id" class="copy-hint show">{{ translateUi('uiMessages.m4890aabae2d8') }}</div>
+                  <div v-else-if="isSeedanceAssetReusable(asset)" class="copy-hint">{{ translateUi('uiMessages.md0ed13f10ce8') }}</div>
                 </div>
                 <div class="fullscreen-card-info">
                   <input
@@ -1564,7 +1566,7 @@ onUnmounted(() => {
                     @blur="confirmRename(asset)"
                     @click.stop
                   />
-                  <span v-else class="fullscreen-card-name" @dblclick.stop="startRename(asset)">{{ asset.Name || '未命名' }}</span>
+                  <span v-else class="fullscreen-card-name" @dblclick.stop="startRename(asset)">{{ asset.Name || translateUi('canvas.unnamed') }}</span>
                   <span class="card-uri-tag">@{{ asset.Id?.slice(-8) || '—' }}</span>
                 </div>
               </div>

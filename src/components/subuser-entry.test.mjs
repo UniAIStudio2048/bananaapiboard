@@ -1,3 +1,5 @@
+import { includesUiText } from '../i18n/sourceAssertions.mjs'
+import { withI18n } from '../i18n/componentTestRuntime.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -17,7 +19,7 @@ function links(node, found = []) {
 }
 
 async function render(source, data) {
-  const app = Vue.createSSRApp({ data: () => data, render: new Function('Vue', compile(source, { prefixIdentifiers: true }).code)(Vue) })
+  const app = withI18n(Vue.createSSRApp({ data: () => data, render: new Function('Vue', compile(source, { prefixIdentifiers: true }).code)(Vue) }))
   app.component('RouterLink', { props: ['to'], setup: (props, { slots }) => () => Vue.h('a', { href: props.to }, slots.default?.()) })
   app.component('SubuserPanel', { setup: () => () => Vue.h('button', '创建子用户') })
   return renderToString(app)
@@ -29,7 +31,7 @@ const entries = [
 ]
 
 for (const [name, path, key] of entries) {
-  const quickLinks = links(baseParse(template(path))).filter(source => !source.includes('创建子用户'))
+  const quickLinks = links(baseParse(template(path))).filter(source => !includesUiText(source, '创建子用户'))
   for (const [label, user, visible] of [
     ['未登录', null, false],
     ['未创建子用户', { is_subuser: false, has_subusers: false }, false],
@@ -54,7 +56,7 @@ for (const [path, key] of [['./canvas/UserProfilePanel.vue', 'userInfo'], ['../v
     ['子用户', { is_subuser: true, has_subusers: true }, false]
   ]) {
     test(`${path}账户管理入口：${label}`, async () => {
-      const createLinks = links(baseParse(template(path))).filter(source => source.includes('创建子用户'))
+      const createLinks = links(baseParse(template(path))).filter(source => includesUiText(source, '创建子用户'))
       assert.equal(createLinks.length, 1)
       const html = await render(createLinks[0], { [key]: user })
       assert.equal(html.includes('href="/subuser"'), visible)

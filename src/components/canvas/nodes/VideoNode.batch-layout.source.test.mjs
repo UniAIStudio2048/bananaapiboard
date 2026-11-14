@@ -6,10 +6,7 @@ const source = fs.readFileSync(new URL('./VideoNode.vue', import.meta.url), 'utf
 
 test('video 2x/4x uses shared grid and visible group', () => {
   assert.match(source, /getBatchGridPositions/)
-  assert.match(
-    source,
-    /canvasStore\.createVisibleGroup\(allNodeIds, `视频生成 ×\$\{generateCount\}`/
-  )
+  assert.match(source, /canvasStore\.createVisibleGroup\(allNodeIds, translateUi\('uiMessages\.m52b9b6c6d2ca', \{ value1: \(generateCount\) \}\)/)
   assert.match(source, /skipHistory:\s*true/)
 })
 

@@ -1,3 +1,7 @@
+import * as i18nTestRuntime from '../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
+import { withI18n } from '../i18n/componentTestRuntime.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -12,7 +16,7 @@ function permanentCards(node) {
   const children = (node.children || []).flatMap(permanentCards)
   if (children.length) return children
   const source = node.loc?.source || ''
-  const label = /t\('user\.permanentPoints(?:Desc)?'\)|>永久积分<|💎 永久积分/.test(source)
+  const label = /(?:t|translateUi)\('(?:user\.permanentPoints(?:Desc)?|imageGen\.permanentPoints|uiMessages\.macd46c627535)'\)|>永久积分<|💎 永久积分/.test(source)
   const balance = /formatPoints\((?:getPermanentUserPoints\(|toPointsNumber\(me\?\.points|me\.points|userInfo\?\.points)/.test(source)
   return ['div', 'button'].includes(node.tag) && label && balance ? [source] : []
 }
@@ -33,13 +37,13 @@ for (const [name, path, key, count] of [
     test(`${name}永久积分：${label}`, async () => {
       assert.equal(cards.length, count)
       for (const card of cards) {
-        const app = Vue.createSSRApp({
+        const app = withI18n(Vue.createSSRApp({
           data: () => ({
             [key]: user, formatPoints, ...points, icons: { diamond: '' },
             t: key => key, pointsStats: { permanent: { earned: 0, spent: 0 } }
           }),
-          render: new Function('Vue', compile(card, { prefixIdentifiers: true }).code)(Vue)
-        })
+          render: new Function('translateUi', 'uiLanguage', 'Vue', compile(card, { prefixIdentifiers: true }).code)(translateUi, uiLanguage, Vue)
+        }))
         const html = await renderToString(app)
         assert.ok(html.replace(/<[^>]*>/g, ' ').split(/\s+/).includes(expected), html)
       }

@@ -15,7 +15,7 @@
             <img
               v-if="userAvatar"
               :src="userAvatar"
-              alt="头像"
+              :alt="translateUi('uiMessages.m3ea2d23c902c')"
               class="w-8 h-8 rounded-full object-cover"
             />
             <div v-else class="w-8 h-8 rounded-full bg-neutral-800 flex items-center justify-center">
@@ -40,21 +40,21 @@
                 @click="goToProfile"
               >
                 <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                个人中心
+                {{ translateUi('nav.user') }}
               </button>
               <button
                 class="w-full px-4 py-3 text-left text-sm text-gray-200 hover:bg-neutral-800 flex items-center gap-2.5 transition-colors"
                 @click="goToCanvas"
               >
                 <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
-                开始创作
+                {{ translateUi('landing.startCreating') }}
               </button>
               <button
                 class="w-full px-4 py-3 text-left text-sm text-gray-200 hover:bg-neutral-800 flex items-center gap-2.5 transition-colors"
                 @click="enterBeginnerMode"
               >
                 <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18l-.813-2.096a4.5 4.5 0 0 0-2.091-2.091L4 13l2.096-.813a4.5 4.5 0 0 0 2.091-2.091L9 8l.813 2.096a4.5 4.5 0 0 0 2.091 2.091L14 13l-2.096.813a4.5 4.5 0 0 0-2.091 2.091ZM18.259 8.715 18 9.5l-.259-.785a2.25 2.25 0 0 0-1.456-1.456L15.5 7l.785-.259a2.25 2.25 0 0 0 1.456-1.456L18 4.5l.259.785a2.25 2.25 0 0 0 1.456 1.456L20.5 7l-.785.259a2.25 2.25 0 0 0-1.456 1.456Z" /></svg>
-                进入新手模式
+                {{ translateUi('uiMessages.m67f2f167a6e5') }}
               </button>
               <div class="border-t border-neutral-700/60" />
               <button
@@ -62,7 +62,7 @@
                 @click="handleLogout"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-                退出登录
+                {{ translateUi('nav.logout') }}
               </button>
             </div>
           </Transition>
@@ -72,7 +72,7 @@
           class="px-5 py-1.5 rounded-full border border-neutral-600 bg-neutral-900 hover:bg-neutral-800 text-sm text-neutral-300 hover:text-white font-medium transition-all"
           @click="communityStore.showLoginModal = true"
         >
-          登录
+          {{ translateUi('nav.login') }}
         </button>
       </div>
     </nav>
@@ -97,7 +97,7 @@
       <div class="flex items-center justify-between mb-5">
         <h2 class="text-2xl font-bold">{{ communityStore.sectionNames.tvshow }}</h2>
         <router-link to="/community/tvshow" class="text-sm text-neutral-400 hover:text-white transition-colors">
-          查看更多 >
+          {{ translateUi('uiMessages.m0d28d20fcbb8') }}
         </router-link>
       </div>
 
@@ -122,7 +122,7 @@
             <input
               v-model="searchKeyword"
               type="text"
-              placeholder="请输入搜索内容"
+              :placeholder="translateUi('uiMessages.m52408b1748ed')"
               class="w-48 pl-9 pr-3 py-1.5 rounded-full bg-neutral-800 border-none text-sm text-gray-200 placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-neutral-600 transition-colors"
               @keyup.enter="handleSearch"
             />
@@ -169,12 +169,12 @@
         <svg class="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
         </svg>
-        <p class="text-sm">暂无作品</p>
+        <p class="text-sm">{{ translateUi('uiMessages.md8c0476550a7') }}</p>
       </div>
 
       <!-- 没有更多 -->
       <div v-if="noMore && mixedWorks.length" class="text-center py-6 text-neutral-700 text-sm">
-        已经到底了
+        {{ translateUi('uiMessages.mb7c1cdefd7e1') }}
       </div>
 
       <!-- 无限滚动哨兵 -->
@@ -188,6 +188,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, computed, onMounted, onUnmounted, nextTick, watch, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import { clearAuthSession } from '@/api/client'
@@ -322,15 +324,15 @@ const activeSort = ref('latest')
 const searchKeyword = ref('')
 
 const sortOptions = [
-  { label: '最新', value: 'latest' },
-  { label: '最热', value: 'popular' },
-  { label: '最多点赞', value: 'most_liked' }
+  { get label() { return translateUi('uiMessages.m569af1a47dbd') }, value: 'latest' },
+  { get label() { return translateUi('uiMessages.md8df0b513ff4') }, value: 'popular' },
+  { get label() { return translateUi('uiMessages.m3a2ed4515687') }, value: 'most_liked' }
 ]
 
 const categoryTabs = computed(() => {
   const fixed = [
-    { id: null, name: '全部分类' },
-    { id: 'featured', name: '精选创作' }
+    { id: null, name: translateUi('communityUI.allCategories') },
+    { id: 'featured', name: translateUi('communityUI.featuredCreations') }
   ]
   const dynamic = (communityStore.categories || []).map(c => ({ id: c.id, name: c.name }))
   return [...fixed, ...dynamic]

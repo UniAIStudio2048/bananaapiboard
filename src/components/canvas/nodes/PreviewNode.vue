@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * PreviewNode.vue - 预览输出节点
  */
@@ -107,7 +109,7 @@ async function download() {
 
 // 全屏预览
 function fullscreen() {
-  alert('全屏预览功能开发中...')
+  alert(translateUi('uiMessages.m7d8419427771'))
 }
 </script>
 
@@ -117,11 +119,11 @@ function fullscreen() {
     <div class="canvas-node-header">
       <div class="canvas-node-title">
         <span class="icon">{{ isGridMode ? '⊞' : '◉' }}</span>
-        {{ data.title || (isGridMode ? '9宫格分镜' : '预览输出') }}
+        {{ data.title || (isGridMode ? translateUi('uiMessages.m24ddde14ada1') : translateUi('canvas.nodeConfig.previewOutput.label')) }}
       </div>
       <div v-if="!props.data?.readonly" class="canvas-node-actions">
-        <button class="canvas-node-action-btn" title="下载" @click="download">↓</button>
-        <button class="canvas-node-action-btn" title="全屏" @click="fullscreen">⤢</button>
+        <button class="canvas-node-action-btn" :title="translateUi('common.download')" @click="download">↓</button>
+        <button class="canvas-node-action-btn" :title="translateUi('canvas.textNode.fullscreen')" @click="fullscreen">⤢</button>
       </div>
     </div>
     
@@ -135,20 +137,20 @@ function fullscreen() {
             :key="index" 
             class="grid-item"
           >
-            <img :src="url" :alt="`分镜 ${index + 1}`" />
+            <img :src="url" :alt="translateUi('uiMessages.m5c3577f41309', { value1: (index + 1) })" />
           </div>
         </div>
         
         <!-- 文本预览 -->
         <div v-else-if="contentType === 'text'" class="preview-text">
-          {{ inheritedData?.content || '无内容' }}
+          {{ inheritedData?.content || translateUi('uiMessages.m77064131fb20') }}
         </div>
         
         <!-- 图片预览 -->
         <img 
           v-else-if="contentType === 'image' && inheritedData?.urls?.length" 
           :src="inheritedData.urls[0]" 
-          alt="预览"
+          :alt="translateUi('uiMessages.m13d61fea9f17')"
         />
         
         <!-- 视频预览 -->
@@ -161,7 +163,7 @@ function fullscreen() {
         
         <!-- 空状态 -->
         <div v-else class="canvas-node-preview-empty">
-          等待上游节点输出...
+          {{ translateUi('uiMessages.me4e44096c8e1') }}
         </div>
       </div>
     </div>

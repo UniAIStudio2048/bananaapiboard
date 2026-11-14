@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 const props = defineProps({
@@ -93,7 +95,7 @@ const triggerLabel = computed(() => {
   if (props.showDuration && (currentDuration.value?.label || currentDuration.value?.value)) {
     values.push(currentDuration.value.label || `${currentDuration.value.value}s`)
   }
-  return values.join(' · ') || '生成参数'
+  return values.join(' · ') || translateUi('uiMessages.m6abcd1436548')
 })
 
 const durationIndex = computed(() => {
@@ -175,7 +177,7 @@ onUnmounted(() => document.removeEventListener('mousedown', handleDocumentMouseD
         :class="{ 'opens-upward': openUpward }"
       >
         <section v-if="qualityOptions.length > 0" class="video-parameters-section">
-          <h3>画质</h3>
+          <h3>{{ translateUi('uiMessages.m77ccdb7ba817') }}</h3>
           <div class="video-quality-grid">
             <button
               v-for="option in qualityOptions"
@@ -191,7 +193,7 @@ onUnmounted(() => document.removeEventListener('mousedown', handleDocumentMouseD
         </section>
 
         <section v-if="resolutionFirst && resolutionOptions.length > 0" class="video-parameters-section">
-          <h3>清晰度</h3>
+          <h3>{{ translateUi('uiMessages.m0e22652107f5') }}</h3>
           <div class="video-resolution-grid">
             <button
               v-for="option in resolutionOptions"
@@ -207,7 +209,7 @@ onUnmounted(() => document.removeEventListener('mousedown', handleDocumentMouseD
         </section>
 
         <section v-if="aspectRatios.length > 0" class="video-parameters-section">
-          <h3>比例</h3>
+          <h3>{{ translateUi('directorStudio.inspector.aspect') }}</h3>
           <div class="video-aspect-ratio-grid">
             <button
               v-for="option in aspectRatios"
@@ -224,7 +226,7 @@ onUnmounted(() => document.removeEventListener('mousedown', handleDocumentMouseD
         </section>
 
         <section v-if="!resolutionFirst && resolutionOptions.length > 0" class="video-parameters-section">
-          <h3>清晰度</h3>
+          <h3>{{ translateUi('uiMessages.m0e22652107f5') }}</h3>
           <div class="video-resolution-grid">
             <button
               v-for="option in resolutionOptions"
@@ -240,7 +242,7 @@ onUnmounted(() => document.removeEventListener('mousedown', handleDocumentMouseD
         </section>
 
         <section v-if="outputFormatOptions.length > 0" class="video-parameters-section">
-          <h3>返回类型</h3>
+          <h3>{{ translateUi('uiMessages.m96ce1c39458a') }}</h3>
           <div class="video-quality-grid">
             <button
               v-for="option in outputFormatOptions"
@@ -258,7 +260,7 @@ onUnmounted(() => document.removeEventListener('mousedown', handleDocumentMouseD
         <slot name="before-duration" />
 
         <section v-if="showDuration && durationOptions.length > 0" class="video-parameters-section">
-          <h3>生成时长</h3>
+          <h3>{{ translateUi('uiMessages.m4e0221b19771') }}</h3>
           <div v-if="durationOptions.length <= 6" class="video-duration-option-grid">
             <button
               v-for="option in durationOptions"
@@ -278,7 +280,7 @@ onUnmounted(() => document.removeEventListener('mousedown', handleDocumentMouseD
               :max="durationOptions.length - 1"
               :value="durationIndex"
               step="1"
-              aria-label="生成时长"
+              :aria-label="translateUi('uiMessages.m4e0221b19771')"
               @input="handleDurationSlider"
             >
             <output>{{ currentDuration?.label || `${currentDuration?.value || ''}s` }}</output>

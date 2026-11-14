@@ -52,7 +52,7 @@ test('VideoNode does not render an extra STD/pro/4K quality selector for split K
 test('VideoNode displays selected Kling official second-based billing', () => {
   assert.match(source, /const klingOfficialSelectedDurationCost = computed/)
   assert.match(source, /klingOfficialSelectedDurationCost\.value \* selectedCount\.value/)
-  assert.match(source, /selectedDuration\.value\s*\?\s*`\$\{selectedDuration\.value\}s = \$\{formatVideoNodePoints\(klingOfficialSelectedDurationTotalCost\.value\)\}积分`/)
+  assert.match(source, /selectedDuration\.value\s*\?\s*translateUi\('uiMessages\.m0943bf0b1369', \{ value1: \(selectedDuration\.value\), value2: \(formatVideoNodePoints\(klingOfficialSelectedDurationTotalCost\.value\)\) \}\)/)
 })
 
 test('VideoNode submits split Kling v3 Omni model ids instead of generic mode actualModel', () => {

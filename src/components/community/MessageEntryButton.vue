@@ -10,11 +10,13 @@
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-4l-4 4v-4z" />
     </svg>
-    <span>{{ canMessage ? '私信' : '互关后可私信' }}</span>
+    <span>{{ canMessage ? translateUi('uiMessages.m39aeb5f130e8') : translateUi('uiMessages.mbe4b44e15eb1') }}</span>
   </button>
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed } from 'vue'
 
 const props = defineProps({

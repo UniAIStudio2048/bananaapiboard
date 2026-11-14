@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, ref, watch } from 'vue'
 import { getAssets } from '@/api/canvas/assets'
 
@@ -66,17 +68,17 @@ watch(() => props.visible, visible => {
 <template>
   <Teleport to="body">
     <div v-if="visible" class="digital-human-selector-overlay" @click.self="close">
-      <section class="digital-human-selector" role="dialog" aria-modal="true" aria-label="选择 HeyGen 数字人">
+      <section class="digital-human-selector" role="dialog" aria-modal="true" :aria-label="translateUi('uiMessages.m058065d93eb8')">
         <header class="digital-human-selector-header">
           <div>
-            <h3>选择 HeyGen 数字人</h3>
-            <p>仅显示训练完成的数字人</p>
+            <h3>{{ translateUi('uiMessages.m058065d93eb8') }}</h3>
+            <p>{{ translateUi('uiMessages.m7cc5902ff8ba') }}</p>
           </div>
-          <button type="button" class="digital-human-selector-close" aria-label="关闭" @click="close">✕</button>
+          <button type="button" class="digital-human-selector-close" :aria-label="translateUi('common.close')" @click="close">✕</button>
         </header>
 
-        <div v-if="loading" class="digital-human-selector-empty">加载中…</div>
-        <div v-else-if="completedHumans.length === 0" class="digital-human-selector-empty">暂无可用数字人</div>
+        <div v-if="loading" class="digital-human-selector-empty">{{ translateUi('uiMessages.m4927a53bcc88') }}</div>
+        <div v-else-if="completedHumans.length === 0" class="digital-human-selector-empty">{{ translateUi('uiMessages.mfeccce275834') }}</div>
         <div v-else class="digital-human-selector-grid">
           <button
             v-for="asset in completedHumans"
@@ -91,14 +93,14 @@ watch(() => props.visible, visible => {
           >
             <img v-if="previewUrl(asset)" :src="previewUrl(asset)" :alt="asset.name" />
             <span v-else class="digital-human-selector-placeholder">🧑</span>
-            <span class="digital-human-selector-name">{{ asset.name || '未命名数字人' }}</span>
+            <span class="digital-human-selector-name">{{ asset.name || translateUi('uiMessages.mdd6b7ec40edf') }}</span>
             <small>{{ metadata(asset).kind === 'digital_twin' ? 'Digital Twin' : 'Photo Avatar' }}</small>
           </button>
         </div>
 
         <footer class="digital-human-selector-footer">
-          <button type="button" class="digital-human-selector-cancel" @click="close">取消</button>
-          <button type="button" class="digital-human-selector-confirm" :disabled="!selectedAsset" @click="confirm">选择角色</button>
+          <button type="button" class="digital-human-selector-cancel" @click="close">{{ translateUi('common.cancel') }}</button>
+          <button type="button" class="digital-human-selector-confirm" :disabled="!selectedAsset" @click="confirm">{{ translateUi('uiMessages.m48712c79752e') }}</button>
         </footer>
       </section>
     </div>

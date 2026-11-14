@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * StoryboardNode.vue - 分镜格子节点
  *
@@ -61,7 +63,7 @@ const isAnyConnecting = computed(() => {
 })
 
 // ========== 节点标签 ==========
-const localLabel = ref(props.data.title || '分镜格子')
+const localLabel = ref(props.data.title || translateUi('canvas.nodeConfig.storyboardGrid.label'))
 const isEditingLabel = ref(false)
 const labelInputRef = ref(null)
 
@@ -78,7 +80,7 @@ function startEditLabel() {
 function finishEditLabel() {
   isEditingLabel.value = false
   if (!localLabel.value.trim()) {
-    localLabel.value = '分镜格子'
+    localLabel.value = translateUi('canvas.nodeConfig.storyboardGrid.label')
   }
   updateNodeData()
 }
@@ -87,7 +89,7 @@ function handleLabelKeydown(event) {
   if (event.key === 'Enter') {
     finishEditLabel()
   } else if (event.key === 'Escape') {
-    localLabel.value = props.data.title || '分镜格子'
+    localLabel.value = props.data.title || translateUi('canvas.nodeConfig.storyboardGrid.label')
     isEditingLabel.value = false
   }
 }
@@ -426,7 +428,7 @@ function handleEditDragEnd(event) {
         type: 'image-input',
         position: { x: canvasX - 100, y: canvasY - 80 },
         data: {
-          title: '图片',
+          title: translateUi('canvas.nodeConfig.imageInput.label'),
           nodeRole: 'source',
           sourceImages: [imageUrl]
         }
@@ -776,7 +778,7 @@ function clearAllCells() {
 async function autoMergeAndOutput() {
   const validImages = images.value.slice(0, gridCount.value).filter(img => img !== null)
   if (validImages.length < 1) {
-    alert('请至少上传1张图片进行输出')
+    alert(translateUi('uiMessages.mc99349388b5b'))
     return
   }
 
@@ -869,12 +871,12 @@ async function autoMergeAndOutput() {
     canvas.toBlob(async (blob) => {
       try {
         if (!blob) {
-          throw new Error('拼接图片导出失败，请重试')
+          throw new Error(translateUi('uiMessages.m1e7df45bf5ca'))
         }
         const file = new File([blob], 'storyboard_output.png', { type: 'image/png' })
         const urls = await uploadImages([file])
         if (!urls?.[0]) {
-          throw new Error('拼接图片上传失败，未返回图片地址')
+          throw new Error(translateUi('uiMessages.m722a7903b53f'))
         }
 
         outputImageUrl.value = urls[0]
@@ -916,7 +918,7 @@ function createOutputNode(url) {
     type: 'image',
     position: nodePosition,
     data: {
-      title: '输出图像',
+      title: translateUi('uiMessages.m9e73cda61138'),
       output: { type: 'image', url: url, urls: [url] },
       // 传递比例和尺寸信息，确保 ImageNode 初始显示正确
       aspectRatio: aspectRatio.value,
@@ -1130,7 +1132,7 @@ function createUpstreamNode(nodeType) {
     type: nodeType,
     position: nodePosition,
     data: {
-      label: nodeType === 'text-input' ? '提示词' : '图片',
+      label: nodeType === 'text-input' ? translateUi('canvas.audioNode.prompt') : translateUi('canvas.nodeConfig.imageInput.label'),
       sourceImages: []
     }
   })
@@ -1193,7 +1195,7 @@ const hasAnyImage = computed(() => {
       <!-- 比例选择（点击展开竖排列表） -->
       <div class="toolbar-section toolbar-popover-wrap" ref="ratioDropdownRef">
         <button class="toolbar-popover-trigger" @mousedown.stop.prevent="toggleRatioDropdown($event)" @click.stop.prevent>
-          <span class="popover-label">比例</span>
+          <span class="popover-label">{{ translateUi('directorStudio.inspector.aspect') }}</span>
           <span class="popover-value">{{ aspectRatio }}</span>
         </button>
         <Transition name="popover-fade">
@@ -1213,7 +1215,7 @@ const hasAnyImage = computed(() => {
       <!-- 网格选择（点击展开竖排列表） -->
       <div class="toolbar-section toolbar-popover-wrap" ref="gridDropdownRef">
         <button class="toolbar-popover-trigger" @mousedown.stop.prevent="toggleGridDropdown($event)" @click.stop.prevent>
-          <span class="popover-label">网格</span>
+          <span class="popover-label">{{ translateUi('directorStudio.inspector.grid') }}</span>
           <span class="popover-value">{{ gridSize.replace('x', '×') }}</span>
         </button>
         <Transition name="popover-fade">
@@ -1237,34 +1239,34 @@ const hasAnyImage = computed(() => {
           :class="{ active: isEditMode }"
           @mousedown.stop.prevent="isEditMode ? exitEditMode() : enterEditMode()"
           @click.stop.prevent
-          :title="isEditMode ? '退出编辑' : '进入编辑'"
+          :title="isEditMode ? translateUi('uiMessages.m0720d3218eee') : translateUi('uiMessages.maae1e0328d06')"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M12 20h9" stroke-linecap="round"/>
             <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4 11.5-11.5z" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span>{{ isEditMode ? '退出' : '编辑' }}</span>
+          <span>{{ isEditMode ? translateUi('uiMessages.m498e1d59b4d7') : translateUi('common.edit') }}</span>
         </button>
         <button
           class="toolbar-btn action-btn"
           :disabled="isMerging"
           @mousedown.stop.prevent="autoMergeAndOutput"
           @click.stop.prevent
-          title="拼接输出"
+          :title="translateUi('uiMessages.m9016901179e6')"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/>
             <path d="M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span>{{ isMerging ? '合成中...' : '合成' }}</span>
+          <span>{{ isMerging ? translateUi('uiMessages.m8e58a9316c1e') : translateUi('uiMessages.ma5651442f170') }}</span>
         </button>
-        <button class="toolbar-btn action-btn" @mousedown.stop.prevent="clearAllCells" @click.stop.prevent title="清空所有格子">
+        <button class="toolbar-btn action-btn" @mousedown.stop.prevent="clearAllCells" @click.stop.prevent :title="translateUi('uiMessages.m8e22f732f806')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span>清空</span>
+          <span>{{ translateUi('common.clear') }}</span>
         </button>
-        <button class="toolbar-btn action-btn" @mousedown.stop.prevent="toggleCollapse" @click.stop.prevent :title="isCollapsed ? '展开分镜' : '折叠分镜'">
+        <button class="toolbar-btn action-btn" @mousedown.stop.prevent="toggleCollapse" @click.stop.prevent :title="isCollapsed ? translateUi('uiMessages.m318b78b608ee') : translateUi('uiMessages.mc9c0e307c876')">
           <svg v-if="!isCollapsed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M4 12h16M12 4v16" stroke-linecap="round" stroke-linejoin="round" transform="rotate(45 12 12)"/>
             <rect x="3" y="8" width="18" height="12" rx="2" stroke-linecap="round"/>
@@ -1276,7 +1278,7 @@ const hasAnyImage = computed(() => {
             <line x1="3" y1="9" x2="21" y2="9" stroke-linecap="round"/>
             <line x1="3" y1="15" x2="21" y2="15" stroke-linecap="round"/>
           </svg>
-          <span>{{ isCollapsed ? '展开' : '折叠' }}</span>
+          <span>{{ isCollapsed ? translateUi('common.expand') : translateUi('uiMessages.m84a07f292f1f') }}</span>
         </button>
 
       </div>
@@ -1311,7 +1313,7 @@ const hasAnyImage = computed(() => {
         @mousedown.stop
       >
         <span class="left-menu-icon">◫</span>
-        <span class="left-menu-label">图片</span>
+        <span class="left-menu-label">{{ translateUi('canvas.nodes.image') }}</span>
       </div>
     </div>
 
@@ -1354,7 +1356,7 @@ const hasAnyImage = computed(() => {
               </svg>
             </div>
             <!-- 展开按钮 -->
-            <button class="expand-btn nodrag nowheel" @click.stop="expandFromCollapsed" @mousedown.stop title="展开分镜">
+            <button class="expand-btn nodrag nowheel" @click.stop="expandFromCollapsed" @mousedown.stop :title="translateUi('uiMessages.m318b78b608ee')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="3" width="18" height="18" rx="2"/>
                 <line x1="9" y1="3" x2="9" y2="21" stroke-linecap="round"/>
@@ -1422,13 +1424,13 @@ const hasAnyImage = computed(() => {
               <!-- 编辑模式下的操作按钮：预览、替换、删除 -->
               <!-- 注意：不在容器上 @mousedown.stop，让 mousedown 能穿透到 grid-item 以支持拖拽排序 -->
               <div v-if="url && isEditMode" class="edit-cell-actions nodrag nowheel" :class="{ 'edit-cell-actions-compact': gridSize === '5x5' }">
-                <button class="edit-cell-btn" @click.stop="handleCellPreview(index, $event)" @mousedown.stop @pointerdown.stop title="预览">
+                <button class="edit-cell-btn" @click.stop="handleCellPreview(index, $event)" @mousedown.stop @pointerdown.stop :title="translateUi('uiMessages.m13d61fea9f17')">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke-linecap="round" stroke-linejoin="round"/>
                     <circle cx="12" cy="12" r="3"/>
                   </svg>
                 </button>
-                <button class="edit-cell-btn" @click.stop="handleCellReplace(index, $event)" @mousedown.stop @pointerdown.stop title="替换">
+                <button class="edit-cell-btn" @click.stop="handleCellReplace(index, $event)" @mousedown.stop @pointerdown.stop :title="translateUi('uiMessages.m131b13aa2659')">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21 12a9 9 0 0 0-15.5-6.3" stroke-linecap="round" stroke-linejoin="round"/>
                     <path d="M3 4v6h6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1436,7 +1438,7 @@ const hasAnyImage = computed(() => {
                     <path d="M21 20v-6h-6" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
                 </button>
-                <button class="edit-cell-btn edit-cell-btn-delete" @click.stop="clearCell(index)" @mousedown.stop @pointerdown.stop title="删除">
+                <button class="edit-cell-btn edit-cell-btn-delete" @click.stop="clearCell(index)" @mousedown.stop @pointerdown.stop :title="translateUi('common.delete')">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
@@ -1469,7 +1471,7 @@ const hasAnyImage = computed(() => {
     </div>
 
     <!-- ========== 底部提示文字 ========== -->
-    <div v-if="!isEditMode && !isCollapsed" class="storyboard-hint">双击以进入分镜编辑排序</div>
+    <div v-if="!isEditMode && !isCollapsed" class="storyboard-hint">{{ translateUi('uiMessages.md4afb491a450') }}</div>
 
 
 
@@ -1499,7 +1501,7 @@ const hasAnyImage = computed(() => {
         }"
       >
         <img :src="editDragImageSrc" class="edit-drag-ghost-img" />
-        <div v-if="isDraggingOutside" class="edit-drag-ghost-hint">释放以创建图片节点</div>
+        <div v-if="isDraggingOutside" class="edit-drag-ghost-hint">{{ translateUi('uiMessages.ma9173e187333') }}</div>
       </div>
     </Teleport>
 

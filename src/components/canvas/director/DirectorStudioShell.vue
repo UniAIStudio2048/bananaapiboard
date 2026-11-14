@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue'
 import DirectorStudioToolbar from './DirectorStudioToolbar.vue'
 import DirectorStudioProjectPanel from './DirectorStudioProjectPanel.vue'
@@ -173,7 +175,7 @@ function normalizeReferenceAssets(entries) {
     normalized.push({
       id: source.id || `asset-${index + 1}`,
       url,
-      label: source.label || source.title || source.name || dt('assetFallbackName', '参考图{count}', { count: normalized.length + 1 }),
+      label: source.label || source.title || source.name || dt('assetFallbackName', translateUi('directorStudio.assetFallbackName'), { count: normalized.length + 1 }),
       color: source.color || '#38bdf8'
     })
   })
@@ -355,7 +357,7 @@ function duplicateSelectedItem() {
   const copy = {
     ...source,
     id: createId('director-item'),
-    label: dt('items.copyName', '{name} 副本', { name: source.label || source.id || dt('items.fallbackName', '元素') }),
+    label: dt('items.copyName', translateUi('directorStudio.items.copyName'), { name: source.label || source.id || dt('items.fallbackName', translateUi('directorStudio.items.fallbackName')) }),
     x: legacy.x,
     y: legacy.y,
     pos3d: nextPos
@@ -377,7 +379,7 @@ function pasteItem() {
   const item = {
     ...source,
     id: createId('director-item'),
-    label: dt('items.pasteName', '{name} 粘贴', { name: source.label || source.id || dt('items.fallbackName', '元素') }),
+    label: dt('items.pasteName', translateUi('directorStudio.items.pasteName'), { name: source.label || source.id || dt('items.fallbackName', translateUi('directorStudio.items.fallbackName')) }),
     x: legacy.x,
     y: legacy.y,
     pos3d: nextPos
@@ -466,7 +468,7 @@ function handleSceneReady() {
 }
 
 function handleSceneError(error) {
-  sceneErrorMessage.value = error?.message || dt('errors.sceneLoadFailed', '3D 场景加载失败')
+  sceneErrorMessage.value = error?.message || dt('errors.sceneLoadFailed', translateUi('directorStudio.errors.sceneLoadFailed'))
 }
 
 function applyNodePatch(patch) {
@@ -527,7 +529,7 @@ async function captureScreenshot() {
     snapshotPanelRef.value?.focus?.()
     return snapshotUrl
   } catch (error) {
-    sceneErrorMessage.value = getDirectorOperationErrorMessage(error, dt('errors.snapshotUploadFailed', '截图上传失败'))
+    sceneErrorMessage.value = getDirectorOperationErrorMessage(error, dt('errors.snapshotUploadFailed', translateUi('directorStudio.errors.snapshotUploadFailed')))
     patchNodeData({ status: 'error' })
     return null
   } finally {
@@ -729,7 +731,7 @@ async function selectPanoramaSource(source) {
     })
     sceneErrorMessage.value = ''
   } catch (error) {
-    sceneErrorMessage.value = getDirectorOperationErrorMessage(error, dt('errors.panoramaImportFailed', '全景图导入失败'))
+    sceneErrorMessage.value = getDirectorOperationErrorMessage(error, dt('errors.panoramaImportFailed', translateUi('directorStudio.errors.panoramaImportFailed')))
   } finally {
     panoramaBusy.value = false
   }
@@ -924,24 +926,24 @@ onMounted(async () => {
           <section class="director-panorama-panel">
             <div class="director-panel-heading">
               <div>
-                <span>{{ dt('panorama.title', '全景') }}</span>
-                <strong>{{ props.data.mode === 'panorama' ? dt('panorama.active', '已启用') : dt('panorama.flat', '平面') }}</strong>
+                <span>{{ dt('panorama.title', translateUi('directorStudio.panorama.title')) }}</span>
+                <strong>{{ props.data.mode === 'panorama' ? dt('panorama.active', translateUi('directorStudio.panorama.active')) : dt('panorama.flat', translateUi('directorStudio.panorama.flat')) }}</strong>
               </div>
               <div class="director-panorama-actions">
                 <button
                   type="button"
                   class="director-mini-button"
-                  :title="dt('panorama.uploadTitle', '上传全景图')"
+                  :title="dt('panorama.uploadTitle', translateUi('directorStudio.panorama.uploadTitle'))"
                   :disabled="panoramaBusy"
                   @click="panoramaFileInput?.click?.()"
-                >{{ dt('panorama.upload', '上传') }}</button>
+                >{{ dt('panorama.upload', translateUi('directorStudio.panorama.upload')) }}</button>
                 <button
                   type="button"
                   class="director-mini-button"
-                  :title="dt('panorama.clearTitle', '清除全景图')"
+                  :title="dt('panorama.clearTitle', translateUi('directorStudio.panorama.clearTitle'))"
                   :disabled="panoramaBusy"
                   @click="clearPanoramaSource"
-                >{{ dt('panorama.clear', '清除') }}</button>
+                >{{ dt('panorama.clear', translateUi('directorStudio.panorama.clear')) }}</button>
               </div>
             </div>
             <input
@@ -964,7 +966,7 @@ onMounted(async () => {
                 <img :src="asset.url" alt="">
                 <span>{{ asset.label || asset.url }}</span>
               </button>
-              <div v-if="panoramaImportAssets.length === 0" class="director-empty-row">{{ dt('panorama.noAssets', '暂无图片素材') }}</div>
+              <div v-if="panoramaImportAssets.length === 0" class="director-empty-row">{{ dt('panorama.noAssets', translateUi('directorStudio.panorama.noAssets')) }}</div>
             </div>
           </section>
           <DirectorStudioProjectPanel
@@ -1027,7 +1029,7 @@ onMounted(async () => {
             @scene-error="handleSceneError"
           />
           <div v-if="sceneErrorMessage" class="director-shell-scene-error" role="alert">
-            <strong>{{ dt('errors.sceneUnavailable', '3D 场景不可用') }}</strong>
+            <strong>{{ dt('errors.sceneUnavailable', translateUi('directorStudio.errors.sceneUnavailable')) }}</strong>
             <span>{{ sceneErrorMessage }}</span>
           </div>
         </main>
@@ -1066,9 +1068,9 @@ onMounted(async () => {
 
       <footer class="director-shell-status">
         <span>{{ selectedStatusText }}</span>
-        <span>{{ dt('status.items', '{count} 个元素', { count: itemCount }) }}</span>
-        <span>{{ dt('status.references', '{count} 张参考', { count: referenceCount }) }}</span>
-        <span>{{ dt('status.panoramas', '{count} 张全景', { count: props.panoramaAssets.length }) }}</span>
+        <span>{{ dt('status.items', translateUi('directorStudio.status.items'), { count: itemCount }) }}</span>
+        <span>{{ dt('status.references', translateUi('directorStudio.status.references'), { count: referenceCount }) }}</span>
+        <span>{{ dt('status.panoramas', translateUi('directorStudio.status.panoramas'), { count: props.panoramaAssets.length }) }}</span>
       </footer>
 
       <DirectorStudioShortcutDialog

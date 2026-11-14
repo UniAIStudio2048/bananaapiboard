@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../../i18n/index.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -8,6 +9,7 @@ const referenceSection = source.slice(
   source.indexOf('function updatePromptMentionBindings')
 )
 const readReferenceMedia = new Function(
+  'translateUi',
   'canvasStore', 'props', 'VIDEO_NODE_TYPES', 'referenceImages', 'referenceVideos',
   'computed', 'ref', 'getMediaMentionKey',
   `${referenceSection}\nreturn referenceMediaList.value`
@@ -15,6 +17,7 @@ const readReferenceMedia = new Function(
 
 function getReferences(nodes, images, videos = []) {
   return readReferenceMedia(
+    translateUi,
     {
       nodesById: new Map(nodes.map(node => [node.id, node])),
       edgesByTarget: new Map([['target', [{ source: 'source' }]]])

@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * InplaceImageEditor.vue - 原地图片编辑器
  * 
@@ -172,8 +174,8 @@ const hasEnoughPoints = computed(() => {
 // 积分文本（多语言）
 const pointsLabel = computed(() => {
   const labels = {
-    'zh-CN': '积分',
-    'zh-TW': '積分',
+    'zh-CN': translateUi('user.points'),
+    'zh-TW': translateUi('uiMessages.m5976fa2c62b2'),
     'en': 'pts',
     'ja': 'ポイント',
     'ko': '포인트',
@@ -214,10 +216,10 @@ function getErasePrompt(userInput) {
 // 节点标签（根据语言）
 const getNodeLabel = computed(() => {
   const labels = {
-    'zh-CN': '重绘结果',
-    'zh-TW': '重繪結果',
+    'zh-CN': translateUi('uiMessages.md84e55561aec'),
+    'zh-TW': translateUi('uiMessages.ma4162ca94f21'),
     'en': 'Repaint Result',
-    'ja': '再描画結果',
+    get ja() { return translateUi('uiMessages.mb0960c8a17d5') },
     'ko': '다시 그리기 결과',
     'es': 'Resultado de retoque',
     'fr': 'Résultat de retouche',
@@ -232,15 +234,15 @@ const getNodeLabel = computed(() => {
 // 重绘模式提示词提示
 const repaintPlaceholder = computed(() => {
   return editTool.value === 'erase' 
-    ? '描述要移除的内容...' 
-    : '描述你想改变什么...'
+    ? translateUi('uiMessages.m3d1f1769aee9')
+    : translateUi('uiMessages.mc7857a51c25a')
 })
 
 // 底部提示
 const bottomHint = computed(() => {
   return editTool.value === 'erase' 
-    ? '绘制蒙版以擦除' 
-    : '绘制蒙版以重绘'
+    ? translateUi('uiMessages.m3920e63fb93d')
+    : translateUi('uiMessages.mf63d539bf720')
 })
 
 // 获取节点在屏幕上的位置
@@ -622,7 +624,7 @@ async function handleGenerate() {
     // 2. 上传合成后的图片
     const uploadResult = await uploadImages([mergedFile])
     if (!uploadResult || uploadResult.length === 0) {
-      throw new Error('图片上传失败')
+      throw new Error(translateUi('uiMessages.m2a1aa07b1f9b'))
     }
     const uploadedImageUrl = uploadResult[0]
     
@@ -683,7 +685,7 @@ async function handleGenerate() {
     
   } catch (error) {
     console.error('[InplaceImageEditor] 生成失败:', error)
-    alert('生成失败: ' + error.message)
+    alert(translateUi('uiMessages.md2b740fbeecc') + error.message)
   } finally {
     isGenerating.value = false
   }
@@ -733,7 +735,7 @@ function updateNodesWithResults(nodeIds, urls) {
       // 没有对应的URL，可能是生成数量不足
       canvasStore.updateNodeData(nodeId, {
         status: 'error',
-        error: '未生成对应图片'
+        get error() { return translateUi('uiMessages.m71f92d7ed8ec') }
       })
     }
   })
@@ -837,7 +839,7 @@ onUnmounted(() => {
           <!-- 顶部工具栏 -->
           <div class="editor-toolbar">
             <!-- 关闭按钮 -->
-            <button class="close-btn" @click="handleClose" title="关闭 (ESC)">
+            <button class="close-btn" @click="handleClose" :title="translateUi('uiMessages.ma0168ae06f99')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
@@ -849,7 +851,7 @@ onUnmounted(() => {
                 class="tool-btn" 
                 :class="{ active: currentDrawTool === 'brush' }"
                 @click="selectTool('brush')"
-                title="画笔"
+                :title="translateUi('uiMessages.m05731b92ad31')"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M12 19l7-7 3 3-7 7-3-3z"/>
@@ -862,7 +864,7 @@ onUnmounted(() => {
                 class="tool-btn" 
                 :class="{ active: currentDrawTool === 'rect' }"
                 @click="selectTool('rect')"
-                title="矩形选框"
+                :title="translateUi('uiMessages.m724cc5641aa6')"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="3" y="3" width="18" height="18" rx="2"/>
@@ -873,7 +875,7 @@ onUnmounted(() => {
                 class="tool-btn" 
                 :class="{ active: currentDrawTool === 'eraser' }"
                 @click="selectTool('eraser')"
-                title="橡皮擦"
+                :title="translateUi('uiMessages.m05cf56410be3')"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M20 20H7L3 16c-.6-.6-.6-1.5 0-2.1l10-10c.6-.6 1.5-.6 2.1 0l6.9 6.9c.6.6.6 1.5 0 2.1L13.4 21.5"/>
@@ -901,7 +903,7 @@ onUnmounted(() => {
                 class="tool-btn" 
                 @click="undo" 
                 :disabled="historyIndex <= 0"
-                title="撤销 (Ctrl+Z)"
+                :title="translateUi('uiMessages.m2b712a273dd4')"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M3 10h10a5 5 0 0 1 5 5v2"/>
@@ -913,7 +915,7 @@ onUnmounted(() => {
                 class="tool-btn" 
                 @click="redo" 
                 :disabled="historyIndex >= history.length - 1"
-                title="重做 (Ctrl+Y)"
+                :title="translateUi('uiMessages.me7b8259977a0')"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 10H11a5 5 0 0 0-5 5v2"/>
@@ -927,7 +929,7 @@ onUnmounted(() => {
           <div class="editor-canvas-area">
             <div v-if="isLoading && !isAnimating" class="loading-state">
               <div class="spinner"></div>
-              <span>加载中...</span>
+              <span>{{ translateUi('common.loading') }}</span>
             </div>
             
             <div 
@@ -979,25 +981,25 @@ onUnmounted(() => {
             <!-- 操作栏 -->
             <div class="action-bar">
               <div class="action-left">
-                <button class="clear-btn" @click="clearMask" title="清除蒙版">
+                <button class="clear-btn" @click="clearMask" :title="translateUi('uiMessages.m0ed290c456de')">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="10"/>
                     <line x1="15" y1="9" x2="9" y2="15"/>
                     <line x1="9" y1="9" x2="15" y2="15"/>
                   </svg>
-                  <span>清除蒙版</span>
+                  <span>{{ translateUi('uiMessages.m0ed290c456de') }}</span>
                 </button>
                 <span class="hint-text">{{ bottomHint }}</span>
               </div>
               
               <div class="action-right">
                 <!-- 尺寸切换（点击循环） -->
-                <button class="toggle-chip" @click="toggleSize" title="点击切换尺寸">
+                <button class="toggle-chip" @click="toggleSize" :title="translateUi('uiMessages.mf934ebdf5211')">
                   <span class="chip-label">{{ selectedSize }}</span>
                 </button>
                 
                 <!-- 张数切换（点击循环） -->
-                <button class="toggle-chip" @click="toggleCount" title="点击切换张数">
+                <button class="toggle-chip" @click="toggleCount" :title="translateUi('uiMessages.m578de9fc1248')">
                   <span class="chip-label">x{{ selectedCount }}</span>
                 </button>
                 
@@ -1012,11 +1014,11 @@ onUnmounted(() => {
                   class="generate-btn"
                   :disabled="isGenerating || !hasEnoughPoints"
                   @click="handleGenerate"
-                  :title="!hasEnoughPoints ? '积分不足' : ''"
+                  :title="!hasEnoughPoints ? translateUi('imageGen.insufficientPoints') : ''"
                 >
                   <template v-if="isGenerating">
                     <span class="spinner-small"></span>
-                    <span>生成中...</span>
+                    <span>{{ translateUi('imageGen.generating') }}</span>
                   </template>
                   <template v-else>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="gen-icon">
@@ -1024,7 +1026,7 @@ onUnmounted(() => {
                       <path d="M2 17l10 5 10-5"/>
                       <path d="M2 12l10 5 10-5"/>
                     </svg>
-                    <span>生成</span>
+                    <span>{{ translateUi('nav.generate') }}</span>
                   </template>
                 </button>
               </div>

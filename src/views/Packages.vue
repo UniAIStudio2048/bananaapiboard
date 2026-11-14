@@ -4,10 +4,10 @@
       <!-- 页面标题 -->
       <div class="text-center mb-12">
         <h1 class="text-4xl md:text-5xl font-bold bg-gradient-to-r from-primary-600 to-purple-600 bg-clip-text text-transparent mb-4">
-          套餐选购
+          {{ translateUi('uiMessages.ma8618123b9fd') }}
         </h1>
         <p class="text-slate-600 dark:text-slate-400 text-lg">
-          选择适合您的创作套餐，解锁更多并发能力
+          {{ translateUi('uiMessages.mfc617514afcc') }}
         </p>
       </div>
 
@@ -21,17 +21,17 @@
               </svg>
             </div>
             <div>
-              <div class="text-sm text-slate-500 dark:text-slate-400">当前套餐</div>
+              <div class="text-sm text-slate-500 dark:text-slate-400">{{ translateUi('packages.currentPlan') }}</div>
               <div class="text-xl font-bold text-slate-900 dark:text-white">{{ activePackage.package_name }}</div>
             </div>
           </div>
           <div class="flex items-center gap-6">
             <div class="text-center">
-              <div class="text-sm text-slate-500 dark:text-slate-400">并发限制</div>
+              <div class="text-sm text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m44c5959863d8') }}</div>
               <div class="text-2xl font-bold text-primary-600 dark:text-primary-400">{{ activePackage.concurrent_limit }}</div>
             </div>
             <div class="text-center">
-              <div class="text-sm text-slate-500 dark:text-slate-400">剩余时间</div>
+              <div class="text-sm text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m568c1e74fb06') }}</div>
               <div class="text-lg font-semibold text-slate-700 dark:text-slate-300">{{ formatRemainingTime(activePackage.expires_at) }}</div>
             </div>
           </div>
@@ -45,7 +45,7 @@
             <svg class="w-6 h-6 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
-            <span class="text-slate-700 dark:text-slate-300">当前余额</span>
+            <span class="text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.m32cdac4f29d7') }}</span>
           </div>
           <div class="flex items-center gap-3">
             <div class="text-2xl font-bold text-amber-600 dark:text-amber-400">
@@ -56,7 +56,7 @@
               class="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg font-medium shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-2"
             >
               <span>💳</span>
-              <span>去充值</span>
+              <span>{{ translateUi('uiMessages.m3527c8a8543c') }}</span>
             </button>
           </div>
         </div>
@@ -65,13 +65,13 @@
       <!-- 套餐列表 -->
       <div v-if="loading" class="text-center py-12">
         <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-        <p class="mt-4 text-slate-600 dark:text-slate-400">加载套餐信息...</p>
+        <p class="mt-4 text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.m9b27807ec6b9') }}</p>
       </div>
 
       <div v-else-if="error" class="text-center py-12">
         <p class="text-red-600 dark:text-red-400">{{ error }}</p>
         <button @click="loadPackages" class="mt-4 px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700">
-          重试
+          {{ translateUi('common.retry') }}
         </button>
       </div>
 
@@ -85,7 +85,7 @@
           <!-- 推荐标签 -->
           <div v-if="pkg.type === 'monthly'" class="absolute -top-3 left-1/2 transform -translate-x-1/2">
             <span class="bg-gradient-to-r from-primary-500 to-purple-500 text-white text-xs font-bold px-4 py-1 rounded-full">
-              推荐
+              {{ translateUi('landing.recommended') }}
             </span>
           </div>
 
@@ -109,19 +109,19 @@
               <svg class="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
               </svg>
-              <span class="text-slate-700 dark:text-slate-300">{{ formatPoints(pkg.points) }} 积分</span>
+              <span class="text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.md901f70479c8', { value1: (formatPoints(pkg.points)) }) }}</span>
             </div>
             <div class="flex items-center gap-2">
               <svg class="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
               </svg>
-              <span class="text-slate-700 dark:text-slate-300">{{ pkg.concurrent_limit }} 个并发</span>
+              <span class="text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.mf1eb4eb32522', { value1: (pkg.concurrent_limit) }) }}</span>
             </div>
             <div class="flex items-center gap-2">
               <svg class="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
               </svg>
-              <span class="text-slate-700 dark:text-slate-300">{{ pkg.duration_days }} 天有效期</span>
+              <span class="text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.mffd9fcd5e618', { value1: (pkg.duration_days) }) }}</span>
             </div>
             <div v-for="discount in getPackageDiscounts(pkg)" :key="discount.type" class="flex items-center gap-2">
               <svg class="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -138,54 +138,54 @@
             class="w-full py-3 rounded-xl font-semibold transition-all duration-200"
             :class="getButtonStyle(pkg.type)"
           >
-            <span v-if="purchasing === pkg.id">处理中...</span>
-            <span v-else-if="isCurrentPackage(pkg.type)">续费套餐</span>
-            <span v-else-if="canUpgrade(pkg.type)">升级套餐</span>
-            <span v-else-if="isDowngrade(pkg.type)">不可降级</span>
-            <span v-else>升级套餐</span>
+            <span v-if="purchasing === pkg.id">{{ translateUi('common.processing') }}</span>
+            <span v-else-if="isCurrentPackage(pkg.type)">{{ translateUi('uiMessages.m05367bca4f4f') }}</span>
+            <span v-else-if="canUpgrade(pkg.type)">{{ translateUi('packages.upgradePackage') }}</span>
+            <span v-else-if="isDowngrade(pkg.type)">{{ translateUi('packages.cannotDowngrade') }}</span>
+            <span v-else>{{ translateUi('packages.upgradePackage') }}</span>
           </button>
         </div>
       </div>
 
       <!-- 说明 -->
       <div class="mt-12 bg-white dark:bg-dark-800 rounded-xl p-6 shadow-lg">
-        <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-4">购买说明</h3>
+        <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-4">{{ translateUi('uiMessages.m82178d27eb16') }}</h3>
         <ul class="space-y-2 text-slate-600 dark:text-slate-400">
           <li class="flex items-start gap-2">
             <svg class="w-5 h-5 text-primary-500 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span>套餐购买后立即生效，赠送的积分将自动充值到您的账户</span>
+            <span>{{ translateUi('uiMessages.m83984edfeace') }}</span>
           </li>
           <li class="flex items-start gap-2">
             <svg class="w-5 h-5 text-green-500 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            <span><span class="font-semibold text-green-600 dark:text-green-400">支持套餐续费</span>：续费当前套餐将累计增加积分和有效期，并发数保持不变</span>
+            <span><span class="font-semibold text-green-600 dark:text-green-400">{{ translateUi('uiMessages.mf67d7542eea8') }}</span>{{ translateUi('uiMessages.m23dc677ea7fe') }}</span>
           </li>
           <li class="flex items-start gap-2">
             <svg class="w-5 h-5 text-primary-500 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span>并发限制决定了您可以同时生成的图片数量，提升创作效率</span>
+            <span>{{ translateUi('uiMessages.mf8d0cda12ae7') }}</span>
           </li>
           <li class="flex items-start gap-2">
             <svg class="w-5 h-5 text-primary-500 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span>支持套餐升级，升级时将自动折抵剩余时长的价值，并获得更高的并发限制</span>
+            <span>{{ translateUi('uiMessages.m5c6d4bddf75a') }}</span>
           </li>
           <li class="flex items-start gap-2">
             <svg class="w-5 h-5 text-red-500 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-            <span>不支持套餐降级，请根据实际需求选择合适的套餐</span>
+            <span>{{ translateUi('uiMessages.mda391d896401') }}</span>
           </li>
           <li class="flex items-start gap-2">
             <svg class="w-5 h-5 text-primary-500 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span>套餐到期后，并发限制将恢复为 <span class="font-semibold text-primary-600">{{ defaultConcurrentLimit }}</span> 个默认值，过期积分同时清零</span>
+            <span>{{ translateUi('uiMessages.m69c0979680e2') }} <span class="font-semibold text-primary-600">{{ defaultConcurrentLimit }}</span> {{ translateUi('uiMessages.m9d2cd4289279') }}</span>
           </li>
         </ul>
       </div>
@@ -196,7 +196,7 @@
       <div class="bg-white dark:bg-dark-700 rounded-xl shadow-2xl max-w-md w-full mx-4">
         <div class="p-6 border-b border-slate-200 dark:border-dark-600">
           <div class="flex items-center justify-between">
-            <h3 class="text-xl font-bold gradient-text">🎫 兑换券</h3>
+            <h3 class="text-xl font-bold gradient-text">{{ translateUi('uiMessages.m793022b01b53') }}</h3>
             <button @click="closeVoucherModal" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -208,33 +208,33 @@
         <div class="p-6">
           <div class="mb-4">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              兑换码
+              {{ translateUi('uiMessages.mabbb6156a43e') }}
             </label>
             <input
               v-model="voucherCode"
               type="text"
-              placeholder="请输入12位兑换码"
+              :placeholder="translateUi('uiMessages.m2727a128acfb')"
               maxlength="13"
               class="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-dark-500 bg-white dark:bg-dark-600 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
               @keyup.enter="submitVoucher"
             />
             <div class="mt-2 space-y-2">
               <p class="text-xs text-slate-500 dark:text-slate-400">
-                兑换券为12位大写字母
+                {{ translateUi('uiMessages.m2ff0d07456b2') }}
               </p>
               <div class="p-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                 <p class="text-xs text-blue-700 dark:text-blue-300 flex items-start gap-1.5">
                   <svg class="w-3.5 h-3.5 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
-                  <span class="font-medium">智能购买：兑换后如有余额，将自动购买最大可用套餐并激活，剩余余额保留在账户中</span>
+                  <span class="font-medium">{{ translateUi('uiMessages.m94975a647190') }}</span>
                 </p>
               </div>
               <p class="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span>如果您有优惠券，请在购买套餐结算时使用</span>
+                <span>{{ translateUi('uiMessages.mdcb454dad517') }}</span>
               </p>
             </div>
           </div>
@@ -247,7 +247,7 @@
               <div class="flex-1">
                 <p class="text-sm font-medium text-amber-800 dark:text-amber-300">{{ voucherError }}</p>
                 <p v-if="voucherError.includes('优惠券')" class="mt-2 text-xs text-amber-700 dark:text-amber-400">
-                  💡 提示：优惠券在购买套餐时使用，可以享受折扣优惠
+                  {{ translateUi('uiMessages.m27f258ddc68a') }}
                 </p>
               </div>
             </div>
@@ -275,7 +275,7 @@
               class="inline-flex items-center px-3 py-2 text-sm bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg font-medium shadow-md hover:shadow-lg transition-all duration-200"
             >
               <span class="mr-1.5">🔗</span>
-              <span>{{ externalLinkConfig.button_text || '获取兑换券' }}</span>
+              <span>{{ externalLinkConfig.button_text || translateUi('voucher.getVoucher') }}</span>
               <svg v-if="externalLinkConfig.open_in_new_tab" class="w-3.5 h-3.5 ml-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
               </svg>
@@ -289,15 +289,15 @@
               class="px-4 py-2 rounded-lg font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-600 transition-colors"
               :disabled="voucherLoading"
             >
-              取消
+              {{ translateUi('common.cancel') }}
             </button>
             <button 
               @click="submitVoucher"
               class="px-6 py-2 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white rounded-lg font-medium shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               :disabled="voucherLoading || !voucherCode.trim()"
             >
-              <span v-if="voucherLoading">兑换中...</span>
-              <span v-else>立即兑换</span>
+              <span v-if="voucherLoading">{{ translateUi('user.redeeming') }}</span>
+              <span v-else>{{ translateUi('user.redeemNow') }}</span>
             </button>
           </div>
         </div>
@@ -317,8 +317,8 @@
                 </svg>
               </div>
               <div>
-                <h3 class="text-xl font-bold text-white">{{ purchaseInfo.action }}套餐</h3>
-                <p class="text-sm text-white/80">请确认订单信息</p>
+                <h3 class="text-xl font-bold text-white">{{ translateUi('uiMessages.m13d30a975aae', { value1: (purchaseInfo.action) }) }}</h3>
+                <p class="text-sm text-white/80">{{ translateUi('uiMessages.m6daaa54e3b1d') }}</p>
               </div>
             </div>
             <button @click="closePurchaseModal" class="text-white/80 hover:text-white transition-colors">
@@ -341,32 +341,32 @@
             </div>
             <div class="grid grid-cols-3 gap-4">
               <div class="text-center">
-                <div class="text-sm text-slate-500 dark:text-slate-400">赠送积分</div>
+                <div class="text-sm text-slate-500 dark:text-slate-400">{{ translateUi('admin.grantPoints') }}</div>
                 <div class="text-lg font-bold text-slate-900 dark:text-white">{{ formatPoints(selectedPackage.points) }}</div>
               </div>
               <div class="text-center">
-                <div class="text-sm text-slate-500 dark:text-slate-400">并发数</div>
+                <div class="text-sm text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.mf33bc7f6cdbb') }}</div>
                 <div class="text-lg font-bold text-slate-900 dark:text-white">{{ selectedPackage.concurrent_limit }}</div>
               </div>
               <div class="text-center">
-                <div class="text-sm text-slate-500 dark:text-slate-400">有效期</div>
-                <div class="text-lg font-bold text-slate-900 dark:text-white">{{ selectedPackage.duration_days }}天</div>
+                <div class="text-sm text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m9c2a28e8f98f') }}</div>
+                <div class="text-lg font-bold text-slate-900 dark:text-white">{{ translateUi('uiMessages.mb4baa30d48ff', { value1: (selectedPackage.duration_days) }) }}</div>
               </div>
             </div>
             
             <!-- 续费/升级说明 -->
             <div v-if="purchaseInfo.isCurrent" class="mt-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
               <div class="text-sm text-green-800 dark:text-green-300 space-y-1">
-                <div class="font-semibold mb-2">✓ 续费说明：</div>
-                <div>• 积分累计增加 {{ formatPoints(selectedPackage.points) }} 点</div>
-                <div>• 有效期累计延长 {{ selectedPackage.duration_days }} 天</div>
-                <div>• 并发数保持不变</div>
+                <div class="font-semibold mb-2">{{ translateUi('uiMessages.m493df7848705') }}</div>
+                <div>{{ translateUi('uiMessages.m8bed3b58d990', { value1: (formatPoints(selectedPackage.points)) }) }}</div>
+                <div>{{ translateUi('uiMessages.m5c18fc018af0', { value1: (selectedPackage.duration_days) }) }}</div>
+                <div>{{ translateUi('uiMessages.m036c1a95cfda') }}</div>
               </div>
             </div>
             <div v-else-if="purchaseInfo.isUpgrade" class="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
               <div class="text-sm text-blue-800 dark:text-blue-300">
-                <div class="font-semibold">✓ 升级说明：</div>
-                <div>升级将自动折抵剩余时长的价值</div>
+                <div class="font-semibold">{{ translateUi('uiMessages.mc5a613eccb20') }}</div>
+                <div>{{ translateUi('uiMessages.mb40877e15fa8') }}</div>
               </div>
             </div>
           </div>
@@ -377,13 +377,13 @@
               <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
               </svg>
-              <span class="font-medium text-slate-700 dark:text-slate-300">优惠券</span>
+              <span class="font-medium text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.m3e2581c8de38') }}</span>
             </div>
             <div class="flex gap-2">
               <input 
                 v-model="purchaseCouponCode"
                 type="text"
-                placeholder="输入优惠券码"
+                :placeholder="translateUi('uiMessages.mb394a69d722c')"
                 class="flex-1 px-4 py-2 bg-white dark:bg-dark-600 border border-slate-300 dark:border-dark-500 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent uppercase"
                 @input="purchaseCouponCode = purchaseCouponCode.toUpperCase()"
               />
@@ -392,7 +392,7 @@
                 :disabled="!purchaseCouponCode || purchaseLoading"
                 class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                应用
+                {{ translateUi('directorStudio.inspector.apply') }}
               </button>
             </div>
             <!-- 优惠券应用成功提示 -->
@@ -405,11 +405,11 @@
                   <span>{{ appliedCoupon.name }}</span>
                 </div>
                 <button @click="removeCoupon" class="text-red-600 hover:text-red-700 text-sm">
-                  移除
+                  {{ translateUi('user.removeCoupon') }}
                 </button>
               </div>
               <div class="mt-1 text-xs text-green-600 dark:text-green-400">
-                优惠: -{{ formatMoney(couponDiscount) }}
+                {{ translateUi('uiMessages.m70026419601d', { value1: (formatMoney(couponDiscount)) }) }}
               </div>
             </div>
             <!-- 优惠券错误提示 -->
@@ -426,7 +426,7 @@
               <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
-              支付方式
+              {{ translateUi('user.paymentMethod') }}
             </h4>
 
             <!-- 余额使用 -->
@@ -436,12 +436,12 @@
                   <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                   </svg>
-                  <span class="font-medium text-slate-700 dark:text-slate-300">账户余额</span>
+                  <span class="font-medium text-slate-700 dark:text-slate-300">{{ translateUi('packages.accountBalance') }}</span>
                 </div>
                 <span class="text-amber-600 dark:text-amber-400 font-bold">{{ formatMoney(purchaseInfo.balance) }}</span>
               </div>
               <div class="flex items-center justify-between text-sm">
-                <span class="text-slate-600 dark:text-slate-400">使用余额</span>
+                <span class="text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.mde21671eec3c') }}</span>
                 <span class="font-bold text-green-600 dark:text-green-400">-{{ formatMoney(purchaseInfo.balanceUsed) }}</span>
               </div>
             </div>
@@ -454,7 +454,7 @@
                     <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                     </svg>
-                    <span class="font-medium text-slate-700 dark:text-slate-300">在线支付</span>
+                    <span class="font-medium text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.md0438a53b3da') }}</span>
                   </div>
                   <span class="text-blue-600 dark:text-blue-400 font-bold">{{ formatMoney(purchaseInfo.needPay) }}</span>
                 </div>
@@ -468,7 +468,7 @@
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span class="font-medium">余额充足，无需额外支付</span>
+                <span class="font-medium">{{ translateUi('uiMessages.mab14bd432b90') }}</span>
               </div>
             </div>
           </div>
@@ -476,24 +476,24 @@
           <!-- 费用汇总 -->
           <div class="bg-slate-50 dark:bg-dark-600 rounded-xl p-4 space-y-2">
             <div class="flex items-center justify-between text-sm">
-              <span class="text-slate-600 dark:text-slate-400">套餐原价</span>
+              <span class="text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.mae94f319b00a') }}</span>
               <span class="text-slate-900 dark:text-white font-medium">{{ formatMoney(selectedPackage.price) }}</span>
             </div>
             <div v-if="purchaseInfo.isUpgrade && purchaseInfo.upgradeDiscount > 0" class="flex items-center justify-between text-sm">
-              <span class="text-slate-600 dark:text-slate-400">升级折抵</span>
+              <span class="text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.m288f601c81ac') }}</span>
               <span class="text-blue-600 dark:text-blue-400 font-medium">-{{ formatMoney(purchaseInfo.upgradeDiscount) }}</span>
             </div>
             <div v-if="couponDiscount > 0" class="flex items-center justify-between text-sm">
-              <span class="text-slate-600 dark:text-slate-400">优惠券优惠</span>
+              <span class="text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.m01c2b7dc5501') }}</span>
               <span class="text-purple-600 dark:text-purple-400 font-medium">-{{ formatMoney(couponDiscount) }}</span>
             </div>
             <div class="flex items-center justify-between text-sm">
-              <span class="text-slate-600 dark:text-slate-400">使用余额</span>
+              <span class="text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.mde21671eec3c') }}</span>
               <span class="text-green-600 dark:text-green-400 font-medium">-{{ formatMoney(purchaseInfo.balanceUsed) }}</span>
             </div>
             <div class="border-t border-slate-200 dark:border-dark-500 pt-2 mt-2">
               <div class="flex items-center justify-between">
-                <span class="font-bold text-slate-900 dark:text-white">需要支付</span>
+                <span class="font-bold text-slate-900 dark:text-white">{{ translateUi('uiMessages.m5c9576f44990') }}</span>
                 <span class="text-2xl font-bold text-primary-600 dark:text-primary-400">
                   {{ formatMoney(purchaseInfo.needPay) }}
                 </span>
@@ -519,7 +519,7 @@
             :disabled="purchaseLoading"
             class="flex-1 px-6 py-3 bg-white dark:bg-dark-600 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-100 dark:hover:bg-dark-500 transition-colors border border-slate-300 dark:border-dark-500"
           >
-            取消
+            {{ translateUi('common.cancel') }}
           </button>
           <button
             @click="confirmPurchase"
@@ -530,9 +530,9 @@
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            <span v-if="purchaseLoading">处理中...</span>
-            <span v-else-if="purchaseInfo.needOnlinePayment">确认并支付</span>
-            <span v-else>确认{{ purchaseInfo.action }}</span>
+            <span v-if="purchaseLoading">{{ translateUi('common.processing') }}</span>
+            <span v-else-if="purchaseInfo.needOnlinePayment">{{ translateUi('uiMessages.me79225bdda7f') }}</span>
+            <span v-else>{{ translateUi('uiMessages.mc447e931aca1', { value1: (purchaseInfo.action) }) }}</span>
           </button>
         </div>
       </div>
@@ -547,8 +547,8 @@
             <div class="flex items-center space-x-3">
               <span class="text-3xl">💳</span>
               <div>
-                <h3 class="text-xl font-bold text-white">账户充值</h3>
-                <p class="text-sm text-white/80">快速充值到账户余额</p>
+                <h3 class="text-xl font-bold text-white">{{ translateUi('user.accountRecharge') }}</h3>
+                <p class="text-sm text-white/80">{{ translateUi('uiMessages.mc3bce5c18868') }}</p>
               </div>
             </div>
             <button @click="closeRechargeModal" class="text-white/80 hover:text-white transition-colors">
@@ -563,7 +563,7 @@
           <!-- 充值卡片选项 -->
           <div v-if="rechargeCards.length > 0">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
-              选择充值卡片
+              {{ translateUi('user.selectRechargeCard') }}
             </label>
             <div class="grid grid-cols-3 gap-3">
               <button
@@ -582,8 +582,8 @@
                 <div>{{ currencySymbol }}{{ (card.amount / 100).toFixed(0) }}</div>
                 <!-- 奖励说明 -->
                 <div v-if="card.bonus_enabled" class="text-xs mt-1" :class="selectedRechargeCard?.id === card.id ? 'text-white/80' : 'text-amber-600 dark:text-amber-400'">
-                  <span v-if="card.bonus_type === 'random'">+{{ card.bonus_min }}~{{ card.bonus_max }} 随机积分奖励</span>
-                  <span v-else>+{{ card.bonus_fixed }} 积分奖励</span>
+                  <span v-if="card.bonus_type === 'random'">{{ translateUi('uiMessages.mbee417a9888a', { value1: (card.bonus_min), value2: (card.bonus_max) }) }}</span>
+                  <span v-else>{{ translateUi('uiMessages.mff467e49bb29', { value1: (card.bonus_fixed) }) }}</span>
                 </div>
               </button>
             </div>
@@ -592,7 +592,7 @@
           <!-- 自定义金额 -->
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              或输入自定义金额（{{ rechargeLimits.minAmount }}-{{ rechargeLimits.maxAmount }}{{ currencyUnitLabel }}）
+              {{ translateUi('uiMessages.m8db41ccc790d', { value1: (rechargeLimits.minAmount), value2: (rechargeLimits.maxAmount), value3: (currencyUnitLabel) }) }}
             </label>
             <div class="relative">
               <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400 text-lg">{{ currencySymbol }}</span>
@@ -603,7 +603,7 @@
                 :max="rechargeLimits.maxAmount"
                 step="0.01"
                 class="w-full pl-10 px-4 py-3 rounded-lg border border-slate-300 dark:border-dark-500 bg-white dark:bg-dark-600 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all text-lg"
-                placeholder="输入金额"
+                :placeholder="translateUi('uiMessages.mad727176fc37')"
                 @input="rechargeAmount = ''; selectedRechargeCard = null"
               />
             </div>
@@ -613,7 +613,7 @@
           <!-- 充值金额预览 -->
           <div v-if="getFinalRechargeAmount() > 0" class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4">
             <div class="flex items-center justify-between">
-              <span class="text-sm text-green-700 dark:text-green-300">充值金额</span>
+              <span class="text-sm text-green-700 dark:text-green-300">{{ translateUi('user.rechargeAmount') }}</span>
               <span class="text-2xl font-bold text-green-600 dark:text-green-400">
                 {{ formatMoney(getFinalRechargeAmount()) }}
               </span>
@@ -621,10 +621,10 @@
             <!-- 选中充值卡片的奖励信息 -->
             <div v-if="selectedRechargeCard?.bonus_enabled" class="mt-2 pt-2 border-t border-green-200 dark:border-green-700">
               <div class="flex items-center justify-between text-sm">
-                <span class="text-green-600 dark:text-green-400">🎁 充值奖励</span>
+                <span class="text-green-600 dark:text-green-400">{{ translateUi('uiMessages.m223b8f0b39eb') }}</span>
                 <span class="font-medium text-amber-600 dark:text-amber-400">
-                  <span v-if="selectedRechargeCard.bonus_type === 'random'">+{{ selectedRechargeCard.bonus_min }}~{{ selectedRechargeCard.bonus_max }} 随机积分奖励</span>
-                  <span v-else>+{{ selectedRechargeCard.bonus_fixed }} 积分奖励</span>
+                  <span v-if="selectedRechargeCard.bonus_type === 'random'">{{ translateUi('uiMessages.mbee417a9888a', { value1: (selectedRechargeCard.bonus_min), value2: (selectedRechargeCard.bonus_max) }) }}</span>
+                  <span v-else>{{ translateUi('uiMessages.mff467e49bb29', { value1: (selectedRechargeCard.bonus_fixed) }) }}</span>
                 </span>
               </div>
             </div>
@@ -640,9 +640,9 @@
             <div class="flex items-start space-x-2">
               <span class="text-lg">💡</span>
               <div class="text-xs text-slate-600 dark:text-slate-400 space-y-1">
-                <p>• 充值后金额将直接到账户余额</p>
-                <p>• 账户余额可用于购买套餐或划转为积分</p>
-                <p>• 最低充值{{ rechargeLimits.minAmount }}{{ currencyUnitLabel }}，单笔最高{{ rechargeLimits.maxAmount }}{{ currencyUnitLabel }}</p>
+                <p>{{ translateUi('uiMessages.me7d555f383d4') }}</p>
+                <p>{{ translateUi('uiMessages.mc79f4ab52fca') }}</p>
+                <p>{{ translateUi('uiMessages.m717b29d7fba4', { value1: (rechargeLimits.minAmount), value2: (currencyUnitLabel), value3: (rechargeLimits.maxAmount), value4: (currencyUnitLabel) }) }}</p>
               </div>
             </div>
           </div>
@@ -655,15 +655,15 @@
             class="flex-1 px-4 py-3 rounded-xl font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-600 transition-colors"
             :disabled="rechargeLoading"
           >
-            取消
+            {{ translateUi('common.cancel') }}
           </button>
           <button 
             @click="submitRecharge"
             class="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium rounded-xl hover:from-amber-600 hover:to-orange-600 transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
             :disabled="rechargeLoading || getFinalRechargeAmount() < 100"
           >
-            <span v-if="rechargeLoading">处理中...</span>
-            <span v-else>💳 立即支付</span>
+            <span v-if="rechargeLoading">{{ translateUi('common.processing') }}</span>
+            <span v-else>{{ translateUi('uiMessages.m6fa46cf1759d') }}</span>
           </button>
         </div>
       </div>
@@ -675,6 +675,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { openCheckout } from '@/utils/openCheckout'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -702,7 +704,7 @@ const voucherError = ref('')
 const voucherSuccess = ref('')
 const externalLinkConfig = ref({
   enabled: false,
-  button_text: '获取兑换券',
+  get button_text() { return translateUi('voucher.getVoucher') },
   url: '',
   open_in_new_tab: true
 })
@@ -771,24 +773,24 @@ function getButtonStyle(type) {
 }
 
 function getDurationText(days) {
-  if (days === 1) return '每天'
-  if (days === 7) return '每周'
-  if (days === 30) return '每月'
-  if (days === 90) return '每季度'
-  if (days === 365) return '每年'
-  return `${days}天`
+  if (days === 1) return translateUi('uiMessages.meea1694c235b')
+  if (days === 7) return translateUi('uiMessages.m92845d3b531d')
+  if (days === 30) return translateUi('uiMessages.m68b21af949de')
+  if (days === 90) return translateUi('uiMessages.md12e1ba679ca')
+  if (days === 365) return translateUi('uiMessages.m3fd8936ffb47')
+  return translateUi('uiMessages.mb4baa30d48ff', { value1: (days) })
 }
 
 function formatRemainingTime(expiresAt) {
   const now = Date.now()
   const remaining = expiresAt - now
-  if (remaining <= 0) return '已过期'
+  if (remaining <= 0) return translateUi('user.expired')
   
   const days = Math.floor(remaining / (24 * 60 * 60 * 1000))
   const hours = Math.floor((remaining % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000))
   
-  if (days > 0) return `${days}天`
-  return `${hours}小时`
+  if (days > 0) return translateUi('uiMessages.mb4baa30d48ff', { value1: (days) })
+  return translateUi('uiMessages.mf512482fac29', { value1: (hours) })
 }
 
 function isCurrentPackage(type) {
@@ -841,7 +843,7 @@ async function loadPackages() {
       const data = await pkgRes.json()
       packages.value = data.packages
     } else {
-      error.value = '加载套餐失败'
+      error.value = translateUi('uiMessages.m3eb439c8e6bb')
     }
 
     // 获取当前套餐
@@ -866,7 +868,7 @@ async function loadPackages() {
         if (configData.voucher_external_link) {
           externalLinkConfig.value = {
             enabled: !!configData.voucher_external_link.enabled,
-            button_text: configData.voucher_external_link.button_text || '获取兑换券',
+            button_text: configData.voucher_external_link.button_text || translateUi('voucher.getVoucher'),
             url: configData.voucher_external_link.url || '',
             open_in_new_tab: configData.voucher_external_link.open_in_new_tab !== false
           }
@@ -878,7 +880,7 @@ async function loadPackages() {
 
   } catch (e) {
     console.error('[loadPackages] error:', e)
-    error.value = '加载失败，请刷新重试'
+    error.value = translateUi('uiMessages.m639b9fd76d7c')
   } finally {
     loading.value = false
   }
@@ -898,7 +900,7 @@ const couponError = ref('')
 async function purchasePackage(pkg) {
   if (purchasing.value) return
   if (isDowngrade(pkg.type)) {
-    alert('不支持降级套餐')
+    alert(translateUi('uiMessages.me5ee1cf41124'))
     return
   }
 
@@ -933,7 +935,7 @@ const purchaseInfo = computed(() => {
   
   const isCurrent = isCurrentPackage(pkg.type)
   const isUpgrade = canUpgrade(pkg.type)
-  const action = isCurrent ? '续费' : (isUpgrade ? '升级' : '购买')
+  const action = isCurrent ? translateUi('packages.renew') : (isUpgrade ? translateUi('packages.upgrade') : translateUi('pointsType.purchase'))
   
   // 1. 原始套餐价格
   let finalPrice = pkg.price
@@ -998,7 +1000,7 @@ async function applyCoupon() {
     const data = await res.json()
     
     if (!res.ok) {
-      couponError.value = data.message || '优惠券验证失败'
+      couponError.value = data.message || translateUi('user.couponValidateFailed')
       return
     }
     
@@ -1008,7 +1010,7 @@ async function applyCoupon() {
     
   } catch (e) {
     console.error('[applyCoupon] error:', e)
-    couponError.value = '优惠券验证失败，请重试'
+    couponError.value = translateUi('uiMessages.mef72c47d43a5')
   }
 }
 
@@ -1024,7 +1026,7 @@ async function confirmPurchase() {
   if (!selectedPackage.value || purchaseLoading.value) return
   const input = { kind: 'package', package_id: selectedPackage.value.id,
     ...(appliedCoupon.value ? { coupon_code: purchaseCouponCode.value.trim() } : {}) }
-  const title = selectedPackage.value.name || '套餐购买'
+  const title = selectedPackage.value.name || translateUi('pointsType.package_purchase')
   closePurchaseModal()
   const result = await openCheckout(input, title)
   if (result) { await loadPackages() }
@@ -1039,7 +1041,7 @@ async function openRechargeModal() {
   selectedRechargeCard.value = null
   try {
     const response = await fetch(getApiUrl('/api/recharge-cards'), { headers: getTenantHeaders() })
-    if (!response.ok) throw new Error('充值卡片加载失败')
+    if (!response.ok) throw new Error(translateUi('uiMessages.mc54d2d8aaf79'))
     rechargeCards.value = (await response.json()).recharge_cards || []
   } catch (e) { rechargeCards.value = []; rechargeError.value = e.message }
 }
@@ -1081,7 +1083,7 @@ function getFinalRechargeAmount() {
 async function submitRecharge() {
   const amount = getFinalRechargeAmount()
   if (amount < rechargeLimits.value.minAmount * 100 || amount > rechargeLimits.value.maxAmount * 100) {
-    rechargeError.value = `充值金额须在 ${rechargeLimits.value.minAmount}–${rechargeLimits.value.maxAmount}${currencyUnitLabel.value}之间`
+    rechargeError.value = translateUi('uiMessages.m726e1c06b4a0', { value1: (rechargeLimits.value.minAmount), value2: (rechargeLimits.value.maxAmount), value3: (currencyUnitLabel.value) })
     return
   }
   const input = { kind: 'recharge', amount, ...(selectedRechargeCard.value ? { recharge_card_id: selectedRechargeCard.value.id } : {}) }
@@ -1107,7 +1109,7 @@ function closeVoucherModal() {
 
 async function submitVoucher() {
   if (!voucherCode.value || !voucherCode.value.trim()) {
-    voucherError.value = '请输入兑换码'
+    voucherError.value = translateUi('user.enterVoucherCode')
     return
   }
   
@@ -1165,19 +1167,10 @@ async function submitVoucher() {
           
           // 构建成功消息
           const remainingBalance = user.value?.balance || 0
-          voucherSuccess.value = `
-            ✅ 兑换成功！获得 ${formatMoney(balance)} 余额
-            
-            🎉 已自动购买「${affordablePackage.name}」套餐
-            • 赠送积分：${formatPoints(affordablePackage.points)}
-            • 并发限制：${affordablePackage.concurrent_limit}个
-            • 有效期：${affordablePackage.duration_days}天
-            
-            💰 剩余余额：${formatMoney(remainingBalance)}
-          `.trim()
+          voucherSuccess.value = translateUi('uiMessages.m46659c533807', { value1: (formatMoney(balance)), value2: (affordablePackage.name), value3: (formatPoints(affordablePackage.points)), value4: (affordablePackage.concurrent_limit), value5: (affordablePackage.duration_days), value6: (formatMoney(remainingBalance)) }).trim()
         } else {
           // 购买失败，显示兑换成功但未能自动购买
-          voucherSuccess.value = `✅ 兑换成功！获得 ${formatMoney(balance)} 余额\n\n⚠️ 自动购买套餐失败：${purchaseResult.error}\n请手动购买套餐`
+          voucherSuccess.value = translateUi('uiMessages.ma4e351d6cc4f', { value1: (formatMoney(balance)), value2: (purchaseResult.error) })
         }
       } else {
         // 余额不足以购买任何套餐，或所有套餐都是降级
@@ -1185,23 +1178,23 @@ async function submitVoucher() {
         // 查找最便宜的套餐价格，给用户提示
         const minPricePackage = packages.value.reduce((min, p) => (!min || p.price < min.price) ? p : min, null)
         const minPrice = minPricePackage ? minPricePackage.price : 0
-        let hint = '当前余额不足以购买套餐'
+        let hint = translateUi('uiMessages.mc6951c2ee094')
         if (minPrice > 0 && balance < minPrice) {
-          hint = `最便宜的套餐需要 ${formatMoney(minPrice)}，当前余额 ${formatMoney(balance)}`
+          hint = translateUi('uiMessages.m905571e1537c', { value1: (formatMoney(minPrice)), value2: (formatMoney(balance)) })
         } else if (activePackage.value) {
-          hint = '您当前已有套餐，可购买的套餐无法升级'
+          hint = translateUi('uiMessages.m291e03dea9c3')
         }
-        voucherSuccess.value = `✅ 兑换成功！获得 ${formatMoney(balance)} 余额\n\n💡 ${hint}，您可以继续充值后购买`
+        voucherSuccess.value = translateUi('uiMessages.ma29e2e3bfb0b', { value1: (formatMoney(balance)), value2: (hint) })
       }
     } else {
       // 没有余额或没有套餐
       console.log('[submitVoucher] 条件不满足: balance=', balance, ', packages.length=', packages.value?.length)
       if (balance === 0 && result.points > 0) {
-        voucherSuccess.value = `✅ 成功兑换 ${result.points} 积分！`
+        voucherSuccess.value = translateUi('uiMessages.m9af7b466b352', { value1: (result.points) })
       } else if (!packages.value || packages.value.length === 0) {
-        voucherSuccess.value = `✅ 兑换成功！获得 ${formatMoney(balance)} 余额\n\n⚠️ 暂无可用套餐，请稍后查看`
+        voucherSuccess.value = translateUi('uiMessages.md1cedd2220ed', { value1: (formatMoney(balance)) })
       } else {
-        voucherSuccess.value = result.message || `成功兑换 ${result.points} 积分！`
+        voucherSuccess.value = result.message || translateUi('uiMessages.m54d0432acd4c', { value1: (result.points) })
       }
     }
     
@@ -1213,7 +1206,7 @@ async function submitVoucher() {
       closeVoucherModal()
     }, 5000)
   } catch (e) {
-    voucherError.value = e.message || '兑换失败，请检查兑换码是否正确'
+    voucherError.value = e.message || translateUi('uiMessages.m5fbc20de118c')
   } finally {
     voucherLoading.value = false
   }
@@ -1311,7 +1304,7 @@ async function autoPurchasePackage(pkg, token) {
       // 如果返回了支付链接，说明余额不足（理论上不应该发生）
       if (data.pay_url) {
         console.log('[autoPurchasePackage] ❌ 返回了支付链接，余额不足')
-        return { success: false, error: '余额不足，需要在线支付' }
+        return { success: false, error: translateUi('uiMessages.mb438cd6bc50c') }
       }
       
       console.log('[autoPurchasePackage] ✅ 购买成功!')
@@ -1320,12 +1313,12 @@ async function autoPurchasePackage(pkg, token) {
     } else {
       console.log('[autoPurchasePackage] ❌ 购买失败:', data.message || data.error)
       console.log('[autoPurchasePackage] ========== 购买失败 ==========')
-      return { success: false, error: data.message || data.error || '购买失败' }
+      return { success: false, error: data.message || data.error || translateUi('uiMessages.m0f18b9ba38bf') }
     }
   } catch (e) {
     console.error('[autoPurchasePackage] ❌ 异常:', e)
     console.log('[autoPurchasePackage] ========== 购买异常 ==========')
-    return { success: false, error: e.message || '网络错误' }
+    return { success: false, error: e.message || translateUi('uiMessages.m88c035ff99b6') }
   }
 }
 

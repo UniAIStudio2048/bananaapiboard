@@ -1,3 +1,4 @@
+import { uiTextIndex } from '../../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -13,14 +14,14 @@ test('Seedance character asset replacement is gated by live replacements, not th
   // capturedState.characterAssetUris 是提交瞬间的快照，与实时遍历存在竞态，
   // 快照为空时会整体跳过替换，导致已过审角色资产以 TOS 预览 URL 直传 API。
   const charBranch = backgroundSource.slice(
-    backgroundSource.indexOf('Seedance 2.0 角色素材处理'),
+    uiTextIndex(backgroundSource, 'Seedance 2.0 角色素材处理'),
     backgroundSource.indexOf("apiType === 'bytefor'")
   )
   assert.match(charBranch, /if \(!capturedState\.isSeedanceOpenApiPro && characterReplacements\.length > 0\)/)
 })
 
 test('Seedance quick asset replacement is gated by live quickReplacements', () => {
-  const idx = backgroundSource.indexOf('注入快捷过审')
+  const idx = uiTextIndex(backgroundSource, '注入快捷过审')
   assert.ok(idx > 0, 'quick asset injection log should exist')
   const quickBranch = backgroundSource.slice(idx - 700, idx + 300)
   assert.match(quickBranch, /if \(capturedState\.isSeedance2\) \{\s*const quickReplacements = collectSeedanceMediaReplacements/)

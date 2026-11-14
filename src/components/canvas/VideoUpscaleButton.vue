@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
@@ -15,7 +17,7 @@ const opened = ref(false)
 const busy = ref(false)
 const resolutions = ['720p', '1080p', '2k', '4k']
 const headers = () => ({ ...getTenantHeaders(), 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` })
-const priceLabel = resolution => `${formatPoints(config.value.points_per_second[resolution])} 积分/秒 · 预扣 10 秒 ${formatPoints(config.value.points_per_second[resolution] * 10)} 积分，按实际时长多退少补`
+const priceLabel = resolution => translateUi('uiMessages.m3a7a27000ab2', { value1: (formatPoints(config.value.points_per_second[resolution])), value2: (formatPoints(config.value.points_per_second[resolution] * 10)) })
 
 async function open() {
   if (busy.value) return
@@ -24,11 +26,11 @@ async function open() {
   try {
     const response = await fetch(getApiUrl('/api/videos/upscale/config'), { headers: headers(), cache: 'no-store' })
     const result = await response.json()
-    if (!response.ok) throw new Error(result.message || '高清配置暂不可用')
+    if (!response.ok) throw new Error(result.message || translateUi('uiMessages.m7e9afbfb4bc5'))
     config.value = result
     if (result.enabled) opened.value = true
     else emit('legacy')
-  } catch (error) { showToast(error.message || '高清配置加载失败', 'error') }
+  } catch (error) { showToast(error.message || translateUi('uiMessages.m60d5d888a6da'), 'error') }
   finally { busy.value = false }
 }
 
@@ -38,11 +40,11 @@ async function submit(resolution) {
   let context, nodeId, taskId, submitted = false
   try {
     let videoUrl = props.videoUrl
-    if (!videoUrl) throw new Error('没有可处理的视频')
+    if (!videoUrl) throw new Error(translateUi('uiMessages.ma2cfc7387fcd'))
     if (/^(blob:|data:)/.test(videoUrl)) {
       const blob = await (await fetch(videoUrl)).blob()
       const uploaded = await uploadCanvasMedia(new File([blob], 'video.mp4', { type: blob.type || 'video/mp4' }), 'video')
-      if (!uploaded.url) throw new Error('视频上传失败')
+      if (!uploaded.url) throw new Error(translateUi('uiMessages.m8bc76392a011'))
       videoUrl = uploaded.url
     }
     context = await props.ensureWorkflow(props.nodeId)
@@ -51,7 +53,7 @@ async function submit(resolution) {
     nodeId = `upscale_node_${requestId}`
     taskId = `upscale_${requestId}`
     const node = { id: nodeId, type: 'video', position: { x: source.position.x + 500, y: source.position.y }, data: {
-      label: `高清放大 ${resolution.toUpperCase()}`, title: `高清放大 ${resolution.toUpperCase()}`, status: 'processing', progress: '正在提交高清放大...',
+      label: translateUi('uiMessages.m3cb5cc87d0ba', { value1: (resolution.toUpperCase()) }), title: translateUi('uiMessages.m3cb5cc87d0ba', { value1: (resolution.toUpperCase()) }), status: 'processing', progress: translateUi('uiMessages.mfc53bbd666f5'),
       upscaleRequestId: requestId, taskId, taskType: 'video-hd', hdUpscaled: true, upscaleResolution: resolution,
       processingStartedAt: Date.now(), sourceNodeId: props.nodeId, sourceUrl: videoUrl, output: { type: 'video', url: '' }
     } }
@@ -66,32 +68,32 @@ async function submit(resolution) {
       catch (error) { if (attempt === 1) throw error }
     }
     const result = await response.json()
-    if (!response.ok || !result.taskId) throw new Error(result.message || '高清放大提交失败')
+    if (!response.ok || !result.taskId) throw new Error(result.message || translateUi('uiMessages.meb6310ff276b'))
     submitted = true
     taskId = result.taskId
-    canvasStore.updateNodeData(nodeId, { taskId, pointsCost: result.prepaid, progress: '高清放大中...' })
+    canvasStore.updateNodeData(nodeId, { taskId, pointsCost: result.prepaid, progress: translateUi('uiMessages.me99ce7ce0f92') })
     registerTask({ taskId, type: 'video-hd', nodeId, tabId: context.currentTab.id, metadata: { sourceUrl: videoUrl, sourceNodeId: props.nodeId, workflowId: context.workflowId } })
-    showToast(`高清放大已提交，预扣 ${formatPoints(result.prepaid)} 积分`, 'success')
+    showToast(translateUi('uiMessages.m0fdbed3b6d5d', { value1: (formatPoints(result.prepaid)) }), 'success')
   } catch (error) {
     if (nodeId && context && !submitted) {
       // Keep the deterministic task ID: an accepted request survives a lost response and can be re-fetched.
-      const data = { status: 'error', progress: null, error: error.message || '提交状态待确认，请重新获取', taskId }
+      const data = { status: 'error', progress: null, error: error.message || translateUi('uiMessages.m5d2e4d8c79f2'), taskId }
       await patchWorkflowNode(context.workflowId, nodeId, { data }).catch(() => {})
       canvasStore.updateNodeData(nodeId, data)
     }
-    showToast(error.message || '高清放大提交失败', 'error')
+    showToast(error.message || translateUi('uiMessages.meb6310ff276b'), 'error')
   } finally { busy.value = false }
 }
 </script>
 <template>
   <div class="upscale-control nodrag nopan" @keydown.esc.stop="opened = false">
     <slot :open="open" :busy="busy" />
-    <div v-if="opened" class="upscale-menu" role="menu" aria-label="超分分辨率" @mousedown.stop @wheel.stop>
-      <div class="upscale-heading">选择超分分辨率 <button aria-label="关闭分辨率菜单" @click.stop="opened = false">×</button></div>
+    <div v-if="opened" class="upscale-menu" role="menu" :aria-label="translateUi('uiMessages.me69254355c31')" @mousedown.stop @wheel.stop>
+      <div class="upscale-heading">{{ translateUi('uiMessages.m298f33ab2484') }} <button :aria-label="translateUi('uiMessages.m839118327010')" @click.stop="opened = false">×</button></div>
       <button v-for="resolution in resolutions" :key="resolution" class="resolution-option" role="menuitem" :title="priceLabel(resolution)" @click.stop="submit(resolution)">
-        <span>{{ resolution.toUpperCase() }}</span><span class="resolution-price">{{ formatPoints(config.points_per_second[resolution]) }} 积分/秒</span>
+        <span>{{ resolution.toUpperCase() }}</span><span class="resolution-price">{{ translateUi('uiMessages.m645a4df1e94c', { value1: (formatPoints(config.points_per_second[resolution])) }) }}</span>
       </button>
-      <p>预扣 10 秒，按实际时长多退少补</p>
+      <p>{{ translateUi('uiMessages.m2167621f1612') }}</p>
     </div>
   </div>
 </template>
@@ -104,7 +106,7 @@ async function submit(resolution) {
 .resolution-option:hover, .resolution-option:focus-visible { background: #3f3f46; outline: none; }
 .resolution-price, p { font-size: 11px; color: #a1a1aa; }
 p { padding: 8px 6px 2px; margin: 0; white-space: normal; }
-:global(.canvas-theme-light) .upscale-menu { background: #fff; color: #18181b; border-color: #d4d4d8; }
-:global(.canvas-theme-light) .resolution-option:hover, :global(.canvas-theme-light) .resolution-option:focus-visible { background: #f4f4f5; }
-:global(.canvas-theme-light) .resolution-price, :global(.canvas-theme-light) .upscale-heading, :global(.canvas-theme-light) p { color: #52525b; }
+.canvas-theme-light .upscale-menu { background: #fff; color: #18181b; border-color: #d4d4d8; }
+.canvas-theme-light .resolution-option:hover, .canvas-theme-light .resolution-option:focus-visible { background: #f4f4f5; }
+.canvas-theme-light .resolution-price, .canvas-theme-light .upscale-heading, .canvas-theme-light p { color: #52525b; }
 </style>

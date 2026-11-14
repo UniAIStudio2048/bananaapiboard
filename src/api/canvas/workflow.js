@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../i18n/index.js'
 /**
  * Canvas 工作流 API
  */
@@ -27,7 +28,7 @@ function getCanvasClientId() {
 /** 只读会话（他人持有编辑权）不发写入请求 */
 function assertWorkflowWritable(workflowId) {
   if (workflowId && canvasEditLease.isReadonly(workflowId)) {
-    const err = new Error('工作流正在其他会话中编辑，当前为只读')
+    const err = new Error(translateUi('uiMessages.mb9248396f294'))
     err.code = 'edit_lease_readonly'
     err.status = 409
     throw err
@@ -137,7 +138,7 @@ export async function getStorageQuota() {
 
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.error || '获取配额失败')
+    throw new Error(error.error || translateUi('uiMessages.md4422109b465'))
   }
 
   return response.json()
@@ -154,7 +155,7 @@ async function requestWorkflowSave(jsonBody, workflowId = null) {
 
   const text = await response.text()
   if (!text) {
-    if (!response.ok) throw new Error(`保存失败 (HTTP ${response.status})`)
+    if (!response.ok) throw new Error(translateUi('uiMessages.mc468ce297681', { value1: (response.status) }))
     return { success: true }
   }
 
@@ -162,10 +163,10 @@ async function requestWorkflowSave(jsonBody, workflowId = null) {
   try {
     data = JSON.parse(text)
   } catch (e) {
-    throw new Error(`服务器响应格式错误: ${text.substring(0, 100)}`)
+    throw new Error(translateUi('uiMessages.mb343c234fcde', { value1: (text.substring(0, 100)) }))
   }
   if (!response.ok) {
-    const err = new Error(data.message || data.error || '保存失败')
+    const err = new Error(data.message || data.error || translateUi('errors.saveFailed'))
     err.code = data.code || data.error
     err.status = response.status
     err.nodeVersions = data.node_versions || null
@@ -278,7 +279,7 @@ export async function loadWorkflow(workflowId) {
   
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.error || '加载失败')
+    throw new Error(error.error || translateUi('uiMessages.md1d044826a45'))
   }
   
   const data = await response.json()
@@ -299,7 +300,7 @@ export async function getWorkflowManifest(workflowId) {
   if (!response.ok) {
     let err = {}
     try { err = await response.json() } catch {}
-    throw new Error(err.error || `获取 manifest 失败 (HTTP ${response.status})`)
+    throw new Error(err.error || translateUi('uiMessages.m0e8bf72c5527', { value1: (response.status) }))
   }
   return response.json()
 }
@@ -324,7 +325,7 @@ export async function getWorkflowNodesBatch(workflowId, nodeIds) {
   if (!response.ok) {
     let err = {}
     try { err = await response.json() } catch {}
-    throw new Error(err.error || `批量加载节点失败 (HTTP ${response.status})`)
+    throw new Error(err.error || translateUi('uiMessages.m87e8c2255bcb', { value1: (response.status) }))
   }
   return response.json()
 }
@@ -339,7 +340,7 @@ export async function getWorkflowOps(workflowId, afterRevision = 0) {
   if (!response.ok) {
     let err = {}
     try { err = await response.json() } catch {}
-    const error = new Error(err.error || `获取协作操作失败 (HTTP ${response.status})`)
+    const error = new Error(err.error || translateUi('uiMessages.m32fe6cf16c1a', { value1: (response.status) }))
     error.code = err.code
     error.status = response.status
     throw error
@@ -373,7 +374,7 @@ export async function patchWorkflowNode(workflowId, nodeId, patch, baseVersion, 
   if (response.status === 409) {
     let body = {}
     try { body = await response.json() } catch {}
-    const err = new Error(body.error || '节点版本冲突')
+    const err = new Error(body.error || translateUi('uiMessages.mf9b78fbe3eb8'))
     err.code = body.code || 'VERSION_CONFLICT'
     err.currentVersion = body.currentVersion
     err.currentRevision = body.currentRevision
@@ -385,7 +386,7 @@ export async function patchWorkflowNode(workflowId, nodeId, patch, baseVersion, 
   if (!response.ok) {
     let body = {}
     try { body = await response.json() } catch {}
-    throw new Error(body.error || `更新节点失败 (HTTP ${response.status})`)
+    throw new Error(body.error || translateUi('uiMessages.m2ff9426de185', { value1: (response.status) }))
   }
   const data = await response.json()
   await syncCollaborationResponse(data, workflowId)
@@ -419,7 +420,7 @@ export async function postWorkflowOps(workflowId, ops, collaboration = {}) {
   if (!response.ok) {
     let body = {}
     try { body = await response.json() } catch {}
-    const err = new Error(body.error || `批量 ops 失败 (HTTP ${response.status})`)
+    const err = new Error(body.error || translateUi('uiMessages.mfbc3def1f34e', { value1: (response.status) }))
     err.status = response.status
     err.body = body
     err.code = body.code
@@ -460,7 +461,7 @@ export async function getWorkflowList(params = {}) {
   
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.error || '获取列表失败')
+    throw new Error(error.error || translateUi('uiMessages.m3f15b82a5bf1'))
   }
   
   return response.json()
@@ -478,7 +479,7 @@ export async function deleteWorkflow(workflowId) {
   
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.error || '删除失败')
+    throw new Error(error.error || translateUi('errors.deleteFailed'))
   }
   
   return response.json()
@@ -497,7 +498,7 @@ export async function renameWorkflow(workflowId, newName) {
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '重命名失败')
+    throw new Error(error.error || translateUi('uiMessages.me367f53aeadf'))
   }
   
   return response.json()
@@ -515,7 +516,7 @@ export async function getWorkflowVersions(workflowId) {
   
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.error || '获取版本失败')
+    throw new Error(error.error || translateUi('uiMessages.m6b9605486920'))
   }
   
   return response.json()
@@ -533,7 +534,7 @@ export async function getWorkflowTemplates() {
   
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.error || '获取模板失败')
+    throw new Error(error.error || translateUi('uiMessages.m7f4c3edfad64'))
   }
   
   return response.json()
@@ -552,7 +553,7 @@ export async function restoreWorkflowVersion(workflowId, versionNumber) {
   
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.error || '恢复失败')
+    throw new Error(error.error || translateUi('uiMessages.m89281a45e04f'))
   }
   
   return response.json()
@@ -588,7 +589,7 @@ export function saveWorkflowLocal(workflow) {
     return { success: true, workflow: workflowMeta }
   } catch (error) {
     console.error('[LocalStorage] 保存工作流失败:', error)
-    throw new Error('本地保存失败，可能是存储空间不足')
+    throw new Error(translateUi('uiMessages.m608eeeb5b623'))
   }
 }
 
@@ -601,7 +602,7 @@ export function loadWorkflowLocal(workflowId) {
     const data = localStorage.getItem(key)
     
     if (!data) {
-      throw new Error('工作流不存在')
+      throw new Error(translateUi('uiMessages.m72e7fec71cdd'))
     }
     
     return JSON.parse(data)
@@ -668,7 +669,7 @@ export async function extractVideoFrame({ videoUrl, time = 0, mode = 'time', nod
 
   const data = await response.json().catch(() => ({}))
   if (!response.ok || !data.url) {
-    throw new Error(data.message || data.error || '视频帧截取失败')
+    throw new Error(data.message || data.error || translateUi('uiMessages.m462968fc4169'))
   }
 
   return data

@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, ref, watch } from 'vue'
 import { useTeamStore } from '@/stores/team'
 import {
@@ -37,7 +39,7 @@ const resolvedWorkflowId = computed(() => props.workflowId || props.workflow?.id
 const resolvedSpaceType = computed(() => props.spaceType || props.workflow?.space_type || 'personal')
 const resolvedTeamId = computed(() => props.teamId || props.workflow?.team_id || '')
 const workflowKey = computed(() => String(resolvedWorkflowId.value || ''))
-const workflowTitle = computed(() => props.workflow?.name || '工作流')
+const workflowTitle = computed(() => props.workflow?.name || translateUi('onboarding.workflow.title'))
 const currentMode = computed(() => normalizeWorkflowShareMode(shareState.value?.mode))
 const shareUrl = computed(() => buildWorkflowShareUrl(
   shareState.value?.baseUrl || window.location.origin,
@@ -57,18 +59,18 @@ const hasChanges = computed(() => selectedMode.value !== currentMode.value)
 const modeOptions = [
   {
     value: 'disabled',
-    title: '关闭公开分享',
-    description: '链接立即失效，其他人无法查看。'
+    get title() { return translateUi('uiMessages.m26edc4085bae') },
+    get description() { return translateUi('uiMessages.mee49fa88e8b7') }
   },
   {
     value: 'view',
-    title: '仅查看',
-    description: '访客可以查看工作流和节点详情，但不能克隆。'
+    get title() { return translateUi('uiMessages.m39395c1df20e') },
+    get description() { return translateUi('uiMessages.mf08eb015d12d') }
   },
   {
     value: 'clone',
-    title: '查看并克隆',
-    description: '访客可以查看，并将副本克隆到自己的个人空间。'
+    get title() { return translateUi('uiMessages.mc541907db0f3') },
+    get description() { return translateUi('uiMessages.m8b64ff6b31d9') }
   }
 ]
 
@@ -104,7 +106,7 @@ async function resolveAccess() {
 
 async function loadStatus() {
   if (!workflowKey.value) {
-    errorMessage.value = '工作流尚未保存，保存成功后才能分享。'
+    errorMessage.value = translateUi('uiMessages.m617c562cc213')
     return
   }
 
@@ -118,7 +120,7 @@ async function loadStatus() {
       : await getWorkflowShare(workflowKey.value)
     applyShareState(result?.data || result)
   } catch (error) {
-    errorMessage.value = error.message || '获取分享状态失败'
+    errorMessage.value = error.message || translateUi('uiMessages.m02b66fb77196')
   } finally {
     loading.value = false
   }
@@ -149,7 +151,7 @@ async function saveShareMode() {
     applyShareState(data)
     notifyUpdated(data)
   } catch (error) {
-    errorMessage.value = error.message || '更新分享设置失败'
+    errorMessage.value = error.message || translateUi('uiMessages.m540b784c5e1a')
   } finally {
     saving.value = false
   }
@@ -167,7 +169,7 @@ async function resetShareLink() {
     notifyUpdated(data)
     await copyShareLink(data?.token)
   } catch (error) {
-    errorMessage.value = error.message || '重置分享链接失败'
+    errorMessage.value = error.message || translateUi('uiMessages.mb034033368ce')
   } finally {
     saving.value = false
   }
@@ -183,7 +185,7 @@ async function copyShareLink(token = shareState.value?.token) {
     window.setTimeout(() => { copied.value = false }, 1800)
     return true
   } catch {
-    errorMessage.value = '复制失败，请手动复制链接。'
+    errorMessage.value = translateUi('uiMessages.mf0f268251cb7')
     return false
   }
 }
@@ -209,33 +211,33 @@ watch(
         <header class="workflow-share-header">
           <div>
             <p class="workflow-share-eyebrow">WORKFLOW SHARE</p>
-            <h2 id="workflow-share-title">公开分享</h2>
+            <h2 id="workflow-share-title">{{ translateUi('uiMessages.mcc0b0bca3d60') }}</h2>
             <p class="workflow-share-subtitle">{{ workflowTitle }}</p>
           </div>
-          <button class="workflow-share-close" type="button" aria-label="关闭" @click="close">×</button>
+          <button class="workflow-share-close" type="button" :aria-label="translateUi('common.close')" @click="close">×</button>
         </header>
 
         <div class="workflow-share-body">
-          <div v-if="loading" class="workflow-share-loading">正在读取分享状态…</div>
+          <div v-if="loading" class="workflow-share-loading">{{ translateUi('uiMessages.ma7e10e1cc2a7') }}</div>
           <template v-else>
             <div v-if="errorMessage" class="workflow-share-error" role="alert">{{ errorMessage }}</div>
 
             <div v-if="!workflowKey" class="workflow-share-empty">
-              请先保存工作流，保存成功后再创建公开链接。
+              {{ translateUi('uiMessages.m690de046d57d') }}
             </div>
 
             <button v-else-if="!shareState" class="workflow-share-cancel" type="button" @click="loadStatus">
-              重新加载
+              {{ translateUi('uiMessages.m7bdd5ce1e298') }}
             </button>
 
             <template v-else>
               <div v-if="resolvedSpaceType === 'team' && !canManage" class="workflow-share-readonly">
-                <strong>团队分享状态只读</strong>
-                <span>你可以查看当前状态；只有团队 owner/admin 可以修改分享范围。</span>
+                <strong>{{ translateUi('uiMessages.md6a43b0a5d1d') }}</strong>
+                <span>{{ translateUi('uiMessages.m852e037091bb') }}</span>
               </div>
 
               <fieldset v-if="canManage" class="workflow-share-options">
-                <legend>公开范围</legend>
+                <legend>{{ translateUi('uiMessages.mf4abf68e2926') }}</legend>
                 <label
                   v-for="option in modeOptions"
                   :key="option.value"
@@ -257,36 +259,36 @@ watch(
               </fieldset>
 
               <div v-else class="workflow-share-current">
-                <span>当前状态</span>
+                <span>{{ translateUi('uiMessages.m82b7cf40b5e6') }}</span>
                 <strong>{{ modeOptions.find(option => option.value === currentMode)?.title }}</strong>
               </div>
 
               <label v-if="canManage && needsConfirmation" class="workflow-share-confirm">
                 <input v-model="confirmed" type="checkbox" />
-                <span>我确认：提示词、参数、素材及结果将公开，后续成功保存的修改也会公开。请先检查内容中是否包含秘密；只读不防复制，关闭或重置链接无法收回已获取的内容和副本。</span>
+                <span>{{ translateUi('uiMessages.m4f16392768a7') }}</span>
               </label>
 
               <div v-if="shareUrl" class="workflow-share-link-card">
                 <div class="workflow-share-link-heading">
-                  <span>分享链接</span>
-                  <span class="workflow-share-status">{{ currentMode === 'clone' ? '可克隆' : '仅查看' }}</span>
+                  <span>{{ translateUi('uiMessages.m10ba647975fe') }}</span>
+                  <span class="workflow-share-status">{{ currentMode === 'clone' ? translateUi('uiMessages.m2d338d19a516') : translateUi('uiMessages.m39395c1df20e') }}</span>
                 </div>
                 <div class="workflow-share-link-row">
-                  <input :value="shareUrl" readonly aria-label="分享链接" @focus="$event.target.select()" />
-                  <button type="button" @click="copyShareLink()">{{ copied ? '已复制' : '复制' }}</button>
+                  <input :value="shareUrl" readonly :aria-label="translateUi('uiMessages.m10ba647975fe')" @focus="$event.target.select()" />
+                  <button type="button" @click="copyShareLink()">{{ copied ? translateUi('common.copied') : translateUi('common.copy') }}</button>
                 </div>
                 <div class="workflow-share-link-actions">
-                  <a :href="shareUrl" target="_blank" rel="noopener noreferrer">打开预览</a>
-                  <button v-if="canManage" type="button" :disabled="saving" @click="resetShareLink">重置并复制</button>
+                  <a :href="shareUrl" target="_blank" rel="noopener noreferrer">{{ translateUi('uiMessages.mfbae1674bbbe') }}</a>
+                  <button v-if="canManage" type="button" :disabled="saving" @click="resetShareLink">{{ translateUi('uiMessages.md55754e90a0b') }}</button>
                 </div>
               </div>
-              <p v-else-if="currentMode !== 'disabled'" class="workflow-share-no-token">当前成员可以看到分享状态，但链接仅对管理者显示。</p>
+              <p v-else-if="currentMode !== 'disabled'" class="workflow-share-no-token">{{ translateUi('uiMessages.m9b6efe7e1e42') }}</p>
             </template>
           </template>
         </div>
 
         <footer class="workflow-share-footer">
-          <button class="workflow-share-cancel" type="button" @click="close">关闭</button>
+          <button class="workflow-share-cancel" type="button" @click="close">{{ translateUi('common.close') }}</button>
           <button
             v-if="canManage && workflowKey"
             class="workflow-share-save"
@@ -294,7 +296,7 @@ watch(
             :disabled="saving || loading || !hasChanges || (needsConfirmation && !confirmed)"
             @click="saveShareMode"
           >
-            {{ saving ? '保存中…' : '保存分享设置' }}
+            {{ saving ? translateUi('uiMessages.mff509c9ba052') : translateUi('uiMessages.m34f0d9e52b23') }}
           </button>
         </footer>
       </section>
@@ -386,31 +388,31 @@ watch(
 .workflow-share-save:hover:not(:disabled) { background: #fff; }
 .workflow-share-save:disabled { opacity: 0.45; cursor: not-allowed; }
 
-:global(:root.canvas-theme-light) .workflow-share-dialog { color: #1c1917; background: #fff; border-color: rgba(0, 0, 0, 0.12); }
-:global(:root.canvas-theme-light) .workflow-share-header { border-bottom-color: rgba(0, 0, 0, 0.1); }
-:global(:root.canvas-theme-light) .workflow-share-footer { border-top-color: rgba(0, 0, 0, 0.1); }
-:global(:root.canvas-theme-light) .workflow-share-eyebrow,
-:global(:root.canvas-theme-light) .workflow-share-subtitle,
-:global(:root.canvas-theme-light) .workflow-share-loading,
-:global(:root.canvas-theme-light) .workflow-share-empty,
-:global(:root.canvas-theme-light) .workflow-share-no-token,
-:global(:root.canvas-theme-light) .workflow-share-option-copy span,
-:global(:root.canvas-theme-light) .workflow-share-readonly span { color: #78716c; }
-:global(:root.canvas-theme-light) .workflow-share-option,
-:global(:root.canvas-theme-light) .workflow-share-readonly,
-:global(:root.canvas-theme-light) .workflow-share-current,
-:global(:root.canvas-theme-light) .workflow-share-link-card { background: #fafaf9; border-color: rgba(0, 0, 0, 0.1); }
-:global(:root.canvas-theme-light) .workflow-share-option:hover,
-:global(:root.canvas-theme-light) .workflow-share-option.selected { background: #f5f5f4; border-color: rgba(0, 0, 0, 0.24); }
-:global(:root.canvas-theme-light) .workflow-share-option-copy strong,
-:global(:root.canvas-theme-light) .workflow-share-options legend,
-:global(:root.canvas-theme-light) .workflow-share-current strong,
-:global(:root.canvas-theme-light) .workflow-share-link-heading { color: #292524; }
-:global(:root.canvas-theme-light) .workflow-share-link-row input { color: #44403c; background: #fff; border-color: rgba(0, 0, 0, 0.12); }
-:global(:root.canvas-theme-light) .workflow-share-link-row button,
-:global(:root.canvas-theme-light) .workflow-share-link-actions button,
-:global(:root.canvas-theme-light) .workflow-share-link-actions a,
-:global(:root.canvas-theme-light) .workflow-share-cancel { color: #44403c; border-color: rgba(0, 0, 0, 0.16); }
-:global(:root.canvas-theme-light) .workflow-share-status { color: #57534e; background: rgba(0, 0, 0, 0.06); }
-:global(:root.canvas-theme-light) .workflow-share-save { color: #fff; background: #292524; border-color: #292524; }
+:root.canvas-theme-light .workflow-share-dialog { color: #1c1917; background: #fff; border-color: rgba(0, 0, 0, 0.12); }
+:root.canvas-theme-light .workflow-share-header { border-bottom-color: rgba(0, 0, 0, 0.1); }
+:root.canvas-theme-light .workflow-share-footer { border-top-color: rgba(0, 0, 0, 0.1); }
+:root.canvas-theme-light .workflow-share-eyebrow,
+:root.canvas-theme-light .workflow-share-subtitle,
+:root.canvas-theme-light .workflow-share-loading,
+:root.canvas-theme-light .workflow-share-empty,
+:root.canvas-theme-light .workflow-share-no-token,
+:root.canvas-theme-light .workflow-share-option-copy span,
+:root.canvas-theme-light .workflow-share-readonly span { color: #78716c; }
+:root.canvas-theme-light .workflow-share-option,
+:root.canvas-theme-light .workflow-share-readonly,
+:root.canvas-theme-light .workflow-share-current,
+:root.canvas-theme-light .workflow-share-link-card { background: #fafaf9; border-color: rgba(0, 0, 0, 0.1); }
+:root.canvas-theme-light .workflow-share-option:hover,
+:root.canvas-theme-light .workflow-share-option.selected { background: #f5f5f4; border-color: rgba(0, 0, 0, 0.24); }
+:root.canvas-theme-light .workflow-share-option-copy strong,
+:root.canvas-theme-light .workflow-share-options legend,
+:root.canvas-theme-light .workflow-share-current strong,
+:root.canvas-theme-light .workflow-share-link-heading { color: #292524; }
+:root.canvas-theme-light .workflow-share-link-row input { color: #44403c; background: #fff; border-color: rgba(0, 0, 0, 0.12); }
+:root.canvas-theme-light .workflow-share-link-row button,
+:root.canvas-theme-light .workflow-share-link-actions button,
+:root.canvas-theme-light .workflow-share-link-actions a,
+:root.canvas-theme-light .workflow-share-cancel { color: #44403c; border-color: rgba(0, 0, 0, 0.16); }
+:root.canvas-theme-light .workflow-share-status { color: #57534e; background: rgba(0, 0, 0, 0.06); }
+:root.canvas-theme-light .workflow-share-save { color: #fff; background: #292524; border-color: #292524; }
 </style>

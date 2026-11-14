@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { Camera, Maximize, Pause, Play, Volume1, Volume2, VolumeX } from '@lucide/vue'
 
@@ -157,30 +159,30 @@ function capture(mode) {
 <template>
   <div v-if="fullscreen" class="video-playback-controls fullscreen-controls nodrag nopan" @pointerdown.stop @mousedown.stop @click.stop>
     <div class="fullscreen-controls-row">
-      <button class="playback-button" type="button" :aria-label="playing ? '暂停' : '播放'" :title="playing ? '暂停（空格）' : '播放（空格）'" @click="togglePlay">
+      <button class="playback-button" type="button" :aria-label="playing ? translateUi('common.pause') : translateUi('uiMessages.mc3396195e91c')" :title="playing ? translateUi('uiMessages.m57ff284c7a74') : translateUi('uiMessages.mfa71b66aea7c')" @click="togglePlay">
         <Pause v-if="playing" :size="16" fill="currentColor" />
         <Play v-else :size="16" fill="currentColor" />
       </button>
       <span class="fullscreen-time">{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</span>
-      <button class="speed-button" type="button" title="切换播放速度" @click="cyclePlaybackRate">{{ playbackRate }}x</button>
-      <button class="playback-button" type="button" aria-label="全屏播放" title="全屏播放" @click="toggleFullscreen"><Maximize :size="16" /></button>
+      <button class="speed-button" type="button" :title="translateUi('uiMessages.mcb9a87a92bb8')" @click="cyclePlaybackRate">{{ playbackRate }}x</button>
+      <button class="playback-button" type="button" :aria-label="translateUi('uiMessages.m605e66e72f91')" :title="translateUi('uiMessages.m605e66e72f91')" @click="toggleFullscreen"><Maximize :size="16" /></button>
     </div>
-    <input class="playback-progress fullscreen-progress" type="range" min="0" :max="duration || 0" step="0.01" :value="currentTime" :disabled="!duration" :style="{ '--progress': `${progress}%` }" aria-label="播放进度" @input="seek" />
+    <input class="playback-progress fullscreen-progress" type="range" min="0" :max="duration || 0" step="0.01" :value="currentTime" :disabled="!duration" :style="{ '--progress': `${progress}%` }" :aria-label="translateUi('uiMessages.mfc16e2a0fca6')" @input="seek" />
   </div>
   <div v-else class="video-playback-controls nodrag nopan" @pointerdown.stop @mousedown.stop @click.stop>
-    <button class="playback-button" type="button" :aria-label="playing ? '暂停' : '播放'" :title="playing ? '暂停（空格）' : '播放（空格）'" @click="togglePlay">
+    <button class="playback-button" type="button" :aria-label="playing ? translateUi('common.pause') : translateUi('uiMessages.mc3396195e91c')" :title="playing ? translateUi('uiMessages.m57ff284c7a74') : translateUi('uiMessages.mfa71b66aea7c')" @click="togglePlay">
       <Pause v-if="playing" :size="16" fill="currentColor" />
       <Play v-else :size="16" fill="currentColor" />
     </button>
     <span class="playback-time">{{ formatTime(currentTime) }}</span>
-    <input class="playback-progress" type="range" min="0" :max="duration || 0" step="0.01" :value="currentTime" :disabled="!duration" :style="{ '--progress': `${progress}%` }" aria-label="播放进度" @input="seek" />
+    <input class="playback-progress" type="range" min="0" :max="duration || 0" step="0.01" :value="currentTime" :disabled="!duration" :style="{ '--progress': `${progress}%` }" :aria-label="translateUi('uiMessages.mfc16e2a0fca6')" @input="seek" />
     <span class="playback-time">{{ formatTime(duration) }}</span>
     <div class="volume-control">
       <div class="volume-popover">
         <span>{{ muted ? 0 : volume }}</span>
-        <input type="range" min="0" max="100" :value="muted ? 0 : volume" aria-label="音量" @input="changeVolume" />
+        <input type="range" min="0" max="100" :value="muted ? 0 : volume" :aria-label="translateUi('uiMessages.m8bf8b9780d34')" @input="changeVolume" />
       </div>
-      <button class="playback-button" type="button" :aria-label="muted ? '取消静音' : '静音'" :title="muted ? '取消静音' : '静音'" @click="toggleMute">
+      <button class="playback-button" type="button" :aria-label="muted ? translateUi('uiMessages.m8d01732e7477') : translateUi('uiMessages.m7db2e189ecb0')" :title="muted ? translateUi('uiMessages.m8d01732e7477') : translateUi('uiMessages.m7db2e189ecb0')" @click="toggleMute">
         <VolumeX v-if="muted" :size="16" />
         <Volume1 v-else-if="volume < 50" :size="16" />
         <Volume2 v-else :size="16" />
@@ -188,11 +190,11 @@ function capture(mode) {
     </div>
     <div v-if="allowCapture" class="frame-control" @mouseleave="showFrameMenu = false">
       <div class="frame-menu" :class="{ 'is-open': showFrameMenu }">
-        <button type="button" :disabled="captureBusy" @click="capture('current')">截取当前帧</button>
-        <button type="button" :disabled="captureBusy" @click="capture('first')">截取首帧</button>
-        <button type="button" :disabled="captureBusy || !duration" @click="capture('last')">截取尾帧</button>
+        <button type="button" :disabled="captureBusy" @click="capture('current')">{{ translateUi('uiMessages.mf8974daa333d') }}</button>
+        <button type="button" :disabled="captureBusy" @click="capture('first')">{{ translateUi('uiMessages.ma52462265c73') }}</button>
+        <button type="button" :disabled="captureBusy || !duration" @click="capture('last')">{{ translateUi('canvas.nodeConfig.videoLastFrame.label') }}</button>
       </div>
-      <button class="playback-button" type="button" aria-label="截取视频帧" title="截取视频帧" :aria-expanded="showFrameMenu" :disabled="captureBusy" @click="showFrameMenu = !showFrameMenu">
+      <button class="playback-button" type="button" :aria-label="translateUi('uiMessages.m089a426926c8')" :title="translateUi('uiMessages.m089a426926c8')" :aria-expanded="showFrameMenu" :disabled="captureBusy" @click="showFrameMenu = !showFrameMenu">
         <Camera :size="16" />
       </button>
     </div>

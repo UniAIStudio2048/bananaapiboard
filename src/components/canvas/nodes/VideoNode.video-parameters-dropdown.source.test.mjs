@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { existsSync, readFileSync } from 'node:fs'
@@ -25,7 +26,7 @@ test('video parameter dropdown uses one trigger, aspect cards, and the requested
 })
 
 test('Seedance 2.5 adaptive ratio keeps its request value but localizes its display label', () => {
-  assert.match(nodeSource, /const isZh = currentLanguage\.value\?\.startsWith\('zh'\)[\s\S]*?value: seedance25ModeConstraints\.value\.ratio,[\s\S]*?displayLabel: isZh \? '自适应' : 'Auto'/)
+  assert.match(nodeSource, localizedPattern(/const isZh = currentLanguage\.value\?\.startsWith\('zh'\)[\s\S]*?value: seedance25ModeConstraints\.value\.ratio,[\s\S]*?displayLabel: isZh \? '自适应' : 'Auto'/))
   assert.match(dropdownSource, /currentAspectRatio\.value\?\.displayLabel \|\| currentAspectRatio\.value\?\.value/)
   assert.match(dropdownSource, /option\.displayLabel \|\| option\.value/)
 })

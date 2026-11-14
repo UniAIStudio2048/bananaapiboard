@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed } from 'vue'
 const props = defineProps({ modelValue: { type: Object, default: () => ({}) } })
 const emit = defineEmits(['update:modelValue'])
@@ -10,19 +12,19 @@ function update(key, value) {
 
 <template>
   <details class="seedream55-parameters nodrag nowheel" @click.stop @wheel.stop>
-    <summary>Seedream 5.5 参数</summary>
+    <summary>{{ translateUi('uiMessages.mc103f6517087') }}</summary>
     <div class="seedream55-fields">
-      <label>尺寸方式<select :value="options.sizeMode" @change="update('sizeMode', $event.target.value)"><option value="resolution">分辨率档位</option><option value="custom">自定义像素</option></select></label>
+      <label>{{ translateUi('uiMessages.ma4e90de473a2') }}<select :value="options.sizeMode" @change="update('sizeMode', $event.target.value)"><option value="resolution">{{ translateUi('uiMessages.m0ab4860aeea3') }}</option><option value="custom">{{ translateUi('uiMessages.ma69135eaa354') }}</option></select></label>
       <template v-if="options.sizeMode === 'custom'">
-        <label>宽度<input type="number" min="240" max="8595" :value="options.width" @input="update('width', Number($event.target.value))"></label>
-        <label>高度<input type="number" min="240" max="8595" :value="options.height" @input="update('height', Number($event.target.value))"></label>
-        <small>总像素 921600–4624220，宽高比 1:16–16:1</small>
+        <label>{{ translateUi('uiMessages.m3b730da0ad1a') }}<input type="number" min="240" max="8595" :value="options.width" @input="update('width', Number($event.target.value))"></label>
+        <label>{{ translateUi('uiMessages.m968dd036cbb1') }}<input type="number" min="240" max="8595" :value="options.height" @input="update('height', Number($event.target.value))"></label>
+        <small>{{ translateUi('uiMessages.m047ef55c00d4') }}</small>
       </template>
-      <label>输出格式<select :value="options.outputFormat" @change="update('outputFormat', $event.target.value)"><option value="png">PNG</option><option value="jpeg">JPEG</option></select></label>
-      <label>背景<select :value="options.background" @change="update('background', $event.target.value)"><option value="auto">自动</option><option value="transparent" :disabled="options.outputFormat === 'jpeg'">透明</option><option value="opaque">不透明</option></select></label>
-      <label>水印<input type="checkbox" :checked="options.watermark" @change="update('watermark', $event.target.checked)"></label>
-      <label>用户标识<input maxlength="64" placeholder="可选英文标识" :value="options.safetyIdentifier" @input="update('safetyIdentifier', $event.target.value)"></label>
-      <small>提示词优化：standard。单张输出，最多 10 张参考图。</small>
+      <label>{{ translateUi('uiMessages.m41d0e52f0a91') }}<select :value="options.outputFormat" @change="update('outputFormat', $event.target.value)"><option value="png">PNG</option><option value="jpeg">JPEG</option></select></label>
+      <label>{{ translateUi('uiMessages.mf4b669c55756') }}<select :value="options.background" @change="update('background', $event.target.value)"><option value="auto">{{ translateUi('imageGen.auto') }}</option><option value="transparent" :disabled="options.outputFormat === 'jpeg'">{{ translateUi('uiMessages.m9dddd9f908b2') }}</option><option value="opaque">{{ translateUi('uiMessages.m1bc0b872e7fd') }}</option></select></label>
+      <label>{{ translateUi('uiMessages.maa9f217c8186') }}<input type="checkbox" :checked="options.watermark" @change="update('watermark', $event.target.checked)"></label>
+      <label>{{ translateUi('uiMessages.mcf434320708a') }}<input maxlength="64" :placeholder="translateUi('uiMessages.m5005c20db8e1')" :value="options.safetyIdentifier" @input="update('safetyIdentifier', $event.target.value)"></label>
+      <small>{{ translateUi('uiMessages.ma53e6e29fb73') }}</small>
     </div>
   </details>
 </template>

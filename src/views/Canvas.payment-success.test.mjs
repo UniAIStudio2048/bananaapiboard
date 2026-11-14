@@ -1,3 +1,6 @@
+import * as i18nTestRuntime from '../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -10,7 +13,7 @@ const handler = ast.program.body.find(node => node.type === 'FunctionDeclaration
 function notify(data) {
   const toasts = []; let refreshed = 0
   const context = { data, console: { log() {} }, displayToast: (...args) => toasts.push(args), handleUserInfoUpdated: () => refreshed++ }
-  runInNewContext(`${source.slice(handler.start, handler.end)}\nhandlePurchaseSuccess(data)`, context)
+  runInNewContext(`${source.slice(handler.start, handler.end)}\nhandlePurchaseSuccess(data)`, Object.assign(context, { translateUi, uiLanguage }))
   return { toasts, refreshed }
 }
 test('balance recharge reports recharge success and refreshes user information', () => {

@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi, currentLanguage as uiLanguage } from '@/i18n'
+
 import { openCheckout } from '@/utils/openCheckout'
 /**
  * UserProfilePanel.vue - 画布模式个人中心浮动面板
@@ -376,11 +378,11 @@ function showConfirm(message, title) {
 const menuItems = computed(() => [
   { id: 'home', icon: 'home', label: t('user.home') },
   { id: 'profile', icon: 'settings', label: t('user.accountSettings') },
-  { id: 'teams', icon: 'users', label: '团队空间', badge: teamStore.pendingInvitationsCount.value > 0 ? teamStore.pendingInvitationsCount.value : null },
+  { id: 'teams', icon: 'users', get label() { return translateUi('team.teamSpace') }, badge: teamStore.pendingInvitationsCount.value > 0 ? teamStore.pendingInvitationsCount.value : null },
   { id: 'packages', icon: 'package', label: t('user.packages') },
   { id: 'points', icon: 'diamond', label: t('user.pointsManage') },
   { id: 'voucher', icon: 'ticket', label: t('user.redeemCenter') },
-  ...(props.userInfo?.referral_enabled ? [{ id: 'referral', icon: 'dollar-sign', label: '返利中心' }] : []),
+  ...(props.userInfo?.referral_enabled ? [{ id: 'referral', icon: 'dollar-sign', get label() { return translateUi('uiMessages.m61d68da6ae40') } }] : []),
   { id: 'invite', icon: 'gift', label: t('user.invite') },
   { id: 'help', icon: 'help', label: t('user.tutorial') }
 ])
@@ -467,7 +469,7 @@ async function loadLedger() {
       ledgerTotalPages.value = Math.max(1, Number(data.totalPages || Math.ceil(ledgerTotal.value / ledgerPageSize.value) || 1))
     }
   } catch {
-    if (requestId === ledgerRequestId) ledgerError.value = '积分记录加载失败，请重试'
+    if (requestId === ledgerRequestId) ledgerError.value = translateUi('uiMessages.m71dbdc119edd')
   } finally {
     if (requestId === ledgerRequestId) ledgerLoading.value = false
   }
@@ -573,9 +575,9 @@ async function selectSpace(type, teamId = null) {
 // 获取角色标签
 function getRoleLabel(role) {
   const labels = {
-    owner: '所有者',
-    admin: '管理员',
-    member: '成员'
+    owner: translateUi('uiMessages.m43a7f4b4c5c8'),
+    admin: translateUi('user.roleAdmin'),
+    member: translateUi('uiMessages.m6e6d6ddbb7c1')
   }
   return labels[role] || role
 }
@@ -591,7 +593,7 @@ function openCreateTeamModal() {
 // 创建团队
 async function handleCreateTeam() {
   if (!createTeamForm.value.name.trim()) {
-    createTeamError.value = '请输入团队名称'
+    createTeamError.value = translateUi('uiMessages.maf483fe71075')
     return
   }
   
@@ -609,11 +611,11 @@ async function handleCreateTeam() {
       // 自动切换到新创建的团队
       await teamStore.switchToTeam(result.team.id)
     } else {
-      createTeamError.value = result.message || '创建失败'
+      createTeamError.value = result.message || translateUi('uiMessages.m7e6a71efbf63')
     }
   } catch (error) {
     console.error('[Team] 创建团队失败:', error)
-    createTeamError.value = '创建失败，请重试'
+    createTeamError.value = translateUi('uiMessages.m2bd59cb742b0')
   } finally {
     createTeamLoading.value = false
   }
@@ -631,7 +633,7 @@ function openRenameTeamModal(team) {
 async function handleRenameTeam() {
   const newName = renameTeamForm.value.name.trim()
   if (!newName) {
-    renameTeamError.value = '请输入团队名称'
+    renameTeamError.value = translateUi('uiMessages.maf483fe71075')
     return
   }
   if (newName === renamingTeam.value.name) {
@@ -646,13 +648,13 @@ async function handleRenameTeam() {
     const result = await teamStore.updateTeam(renamingTeam.value.id, { name: newName })
     if (result.success) {
       showRenameTeamModal.value = false
-      showAlert('团队已重命名', '成功')
+      showAlert(translateUi('uiMessages.m0daa9632d689'), translateUi('common.success'))
     } else {
-      renameTeamError.value = result.message || '重命名失败'
+      renameTeamError.value = result.message || translateUi('uiMessages.me367f53aeadf')
     }
   } catch (error) {
     console.error('[Team] 重命名团队失败:', error)
-    renameTeamError.value = '重命名失败，请重试'
+    renameTeamError.value = translateUi('uiMessages.m007628b7091c')
   } finally {
     renameTeamLoading.value = false
   }
@@ -662,9 +664,9 @@ async function handleRenameTeam() {
 async function handleAcceptInvitation(inviteId) {
   const result = await teamStore.acceptInvitation(inviteId)
   if (result.success) {
-    showAlert('已加入团队', '成功')
+    showAlert(translateUi('uiMessages.mad5d41a026f8'), translateUi('common.success'))
   } else {
-    showAlert(result.message || '加入失败', '错误')
+    showAlert(result.message || translateUi('uiMessages.m58dffd23e0fa'), translateUi('common.error'))
   }
 }
 
@@ -672,7 +674,7 @@ async function handleAcceptInvitation(inviteId) {
 async function handleRejectInvitation(inviteId) {
   const result = await teamStore.rejectInvitation(inviteId)
   if (!result.success) {
-    showAlert(result.message || '操作失败', '错误')
+    showAlert(result.message || translateUi('auth.operationFailed'), translateUi('common.error'))
   }
 }
 
@@ -731,7 +733,7 @@ async function handleInviteMember() {
   // 如果选中了用户，使用用户ID邀请
   // 否则检查是否输入了有效邮箱
   if (!selectedUser && !isValidEmail(inputEmail)) {
-    showAlert('请选择要邀请的用户，或输入有效的邮箱地址', '提示')
+    showAlert(translateUi('uiMessages.m273391ac5d5c'), translateUi('common.info'))
     return
   }
   
@@ -747,13 +749,13 @@ async function handleInviteMember() {
     
     if (result.success) {
       if (result.autoAccepted) {
-        showAlert('对方已自动加入团队（你们已有共创空间）', '成功')
+        showAlert(translateUi('uiMessages.mdc2449c379fd'), translateUi('common.success'))
       } else {
-        showAlert('邀请已发送', '成功')
+        showAlert(translateUi('uiMessages.ma28e27c440ef'), translateUi('common.success'))
       }
       showInviteMemberModal.value = false
     } else {
-      showAlert(result.message || '邀请失败', '错误')
+      showAlert(result.message || translateUi('uiMessages.m2135c2ace997'), translateUi('common.error'))
     }
   } finally {
     inviteLoading.value = false
@@ -771,14 +773,14 @@ async function openMemberManageModal(team) {
 
 // 移除成员
 async function handleRemoveMember(team, userId) {
-  const confirmed = await showConfirm('确定要移除该成员吗？')
+  const confirmed = await showConfirm(translateUi('uiMessages.mfdb4049b7afe'))
   if (!confirmed) return
   
   const result = await teamStore.removeMember(team.id, userId)
   if (result.success) {
-    showAlert('已移除成员', '成功')
+    showAlert(translateUi('uiMessages.mf05a0776b50c'), translateUi('common.success'))
   } else {
-    showAlert(result.message || '移除失败', '错误')
+    showAlert(result.message || translateUi('uiMessages.m4757fc1d4709'), translateUi('common.error'))
   }
 }
 
@@ -786,49 +788,49 @@ async function handleRemoveMember(team, userId) {
 async function handleChangeMemberRole(team, userId, newRole) {
   const result = await teamStore.changeMemberRole(team.id, userId, newRole)
   if (result.success) {
-    showAlert('角色已更新', '成功')
+    showAlert(translateUi('uiMessages.m4a7f6eefb5ad'), translateUi('common.success'))
   } else {
-    showAlert(result.message || '修改失败', '错误')
+    showAlert(result.message || translateUi('uiMessages.m11252da5caa9'), translateUi('common.error'))
   }
 }
 
 // 退出团队
 async function handleLeaveTeam(team) {
-  const confirmed = await showConfirm(`确定要退出团队「${team.name}」吗？`)
+  const confirmed = await showConfirm(translateUi('uiMessages.m39a537f7b999', { value1: (team.name) }))
   if (!confirmed) return
   
   const result = await teamStore.leaveTeam(team.id)
   if (result.success) {
-    showAlert('已退出团队', '成功')
+    showAlert(translateUi('uiMessages.m267c3433284e'), translateUi('common.success'))
   } else {
-    showAlert(result.message || '退出失败', '错误')
+    showAlert(result.message || translateUi('uiMessages.m817762ad1f41'), translateUi('common.error'))
   }
 }
 
 // 解散团队
 async function handleDissolveTeam(team) {
-  const confirmed = await showConfirm(`确定要解散团队「${team.name}」吗？此操作不可恢复！`)
+  const confirmed = await showConfirm(translateUi('uiMessages.mce134ae0ed4a', { value1: (team.name) }))
   if (!confirmed) return
   
   const result = await teamStore.dissolveTeam(team.id)
   if (result.success) {
-    showAlert('团队已解散', '成功')
+    showAlert(translateUi('uiMessages.m9078f6d17628'), translateUi('common.success'))
   } else {
-    showAlert(result.message || '解散失败', '错误')
+    showAlert(result.message || translateUi('uiMessages.mfad5442a4a5a'), translateUi('common.error'))
   }
 }
 
 // 转让所有权
 async function handleTransferOwnership(team, newOwnerId) {
-  const confirmed = await showConfirm('确定要转让团队所有权吗？您将变为管理员。')
+  const confirmed = await showConfirm(translateUi('uiMessages.m93c06d15be57'))
   if (!confirmed) return
   
   const result = await teamStore.transferOwnership(team.id, newOwnerId)
   if (result.success) {
-    showAlert('所有权已转让', '成功')
+    showAlert(translateUi('uiMessages.mc543de74b002'), translateUi('common.success'))
     showTransferOwnershipModal.value = false
   } else {
-    showAlert(result.message || '转让失败', '错误')
+    showAlert(result.message || translateUi('uiMessages.m078a1a9b0281'), translateUi('common.error'))
   }
 }
 
@@ -878,27 +880,27 @@ async function redeemVoucher() {
       
       if (autoPurchaseResult.success) {
         // 自动购买成功
-        let actionText = '已自动购买'
+        let actionText = translateUi('uiMessages.m70c8e4b8b88f')
         let detailText = ''
         if (autoPurchaseResult.isRenewal) {
-          actionText = '已自动续费'
-          detailText = `\n• 有效期延长：${autoPurchaseResult.durationDays}天\n• 累加积分：+${formatPoints(autoPurchaseResult.points)}`
+          actionText = translateUi('uiMessages.m49b07b6addbb')
+          detailText = translateUi('uiMessages.m8a589c13aebe', { value1: (autoPurchaseResult.durationDays), value2: (formatPoints(autoPurchaseResult.points)) })
         } else if (autoPurchaseResult.isUpgrade) {
-          actionText = '已自动升级'
-          detailText = `\n• 赠送积分：${formatPoints(autoPurchaseResult.points)}\n• 并发限制：${autoPurchaseResult.concurrentLimit}个\n• 有效期：${autoPurchaseResult.durationDays}天`
+          actionText = translateUi('uiMessages.maf38b7044aa6')
+          detailText = translateUi('uiMessages.m9cf21a388339', { value1: (formatPoints(autoPurchaseResult.points)), value2: (autoPurchaseResult.concurrentLimit), value3: (autoPurchaseResult.durationDays) })
         } else {
-          detailText = `\n• 赠送积分：${formatPoints(autoPurchaseResult.points)}\n• 并发限制：${autoPurchaseResult.concurrentLimit}个\n• 有效期：${autoPurchaseResult.durationDays}天`
+          detailText = translateUi('uiMessages.m9cf21a388339', { value1: (formatPoints(autoPurchaseResult.points)), value2: (autoPurchaseResult.concurrentLimit), value3: (autoPurchaseResult.durationDays) })
         }
-        voucherSuccess.value = `✅ 兑换成功！获得 ${formatMoney(voucherBalance)} 余额\n\n🎉 ${actionText}「${autoPurchaseResult.packageName}」套餐${detailText}\n\n💰 剩余余额：${formatMoney(autoPurchaseResult.remainingBalance)}`
+        voucherSuccess.value = translateUi('uiMessages.m79f806059512', { value1: (formatMoney(voucherBalance)), value2: (actionText), value3: (autoPurchaseResult.packageName), value4: (detailText), value5: (formatMoney(autoPurchaseResult.remainingBalance)) })
       } else if (autoPurchaseResult.reason === 'no_package') {
-        voucherSuccess.value = `✅ 兑换成功！获得 ${formatMoney(voucherBalance)} 余额\n\n💡 ${autoPurchaseResult.message}`
+        voucherSuccess.value = translateUi('uiMessages.mfe5a41b441af', { value1: (formatMoney(voucherBalance)), value2: (autoPurchaseResult.message) })
       } else if (autoPurchaseResult.reason === 'purchase_failed') {
-        voucherSuccess.value = `✅ 兑换成功！获得 ${formatMoney(voucherBalance)} 余额\n\n⚠️ 自动购买套餐失败：${autoPurchaseResult.message}`
+        voucherSuccess.value = translateUi('uiMessages.m3bb4e9dbd126', { value1: (formatMoney(voucherBalance)), value2: (autoPurchaseResult.message) })
       } else {
         voucherSuccess.value = result.message || t('voucher.redeemSuccess')
       }
     } else if (result.points > 0) {
-      voucherSuccess.value = `✅ 成功兑换 ${formatPoints(result.points)} 积分！`
+      voucherSuccess.value = translateUi('uiMessages.m9af7b466b352', { value1: (formatPoints(result.points)) })
     } else {
       voucherSuccess.value = result.message || t('voucher.redeemSuccess')
     }
@@ -918,7 +920,7 @@ async function redeemVoucher() {
 async function tryAutoPurchasePackage(voucherBalance) {
   try {
     if (!token) {
-      return { success: false, reason: 'no_token', message: '未登录' }
+      return { success: false, reason: 'no_token', message: translateUi('uiMessages.mc1f658373079') }
     }
     
     console.log('[Canvas/tryAutoPurchasePackage] 兑换券面值:', voucherBalance, '分')
@@ -927,13 +929,13 @@ async function tryAutoPurchasePackage(voucherBalance) {
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
     const pkgRes = await fetch(getApiUrl('/api/packages'), { headers })
     if (!pkgRes.ok) {
-      return { success: false, reason: 'fetch_failed', message: '获取套餐列表失败' }
+      return { success: false, reason: 'fetch_failed', message: translateUi('uiMessages.m570ee0e20eed') }
     }
     const pkgData = await pkgRes.json()
     const pkgList = pkgData.packages || []
     
     if (pkgList.length === 0) {
-      return { success: false, reason: 'no_package', message: '暂无可用套餐' }
+      return { success: false, reason: 'no_package', message: translateUi('packages.noPackages') }
     }
     
     // 获取当前用户套餐
@@ -958,9 +960,9 @@ async function tryAutoPurchasePackage(voucherBalance) {
     
     if (affordablePackages.length === 0) {
       const minPrice = pkgList.reduce((min, p) => (!min || p.price < min.price) ? p : min, null)?.price || 0
-      let hint = '兑换券面值不足以购买套餐'
+      let hint = translateUi('uiMessages.mf61291b2b2f3')
       if (minPrice > 0 && voucherBalance < minPrice) {
-        hint = `最低套餐需要 ${formatMoney(minPrice)}，兑换券面值 ${formatMoney(voucherBalance)} 不足`
+        hint = translateUi('uiMessages.ma10a7f33c2f1', { value1: (formatMoney(minPrice)), value2: (formatMoney(voucherBalance)) })
       }
       return { success: false, reason: 'no_package', message: hint }
     }
@@ -1004,11 +1006,11 @@ async function tryAutoPurchasePackage(voucherBalance) {
         remainingBalance
       }
     } else {
-      return { success: false, reason: 'purchase_failed', message: purchaseData.message || '购买失败' }
+      return { success: false, reason: 'purchase_failed', message: purchaseData.message || translateUi('uiMessages.m0f18b9ba38bf') }
     }
   } catch (e) {
     console.error('[Canvas/tryAutoPurchasePackage] 异常:', e)
-    return { success: false, reason: 'error', message: e.message || '网络错误' }
+    return { success: false, reason: 'error', message: e.message || translateUi('uiMessages.m88c035ff99b6') }
   }
 }
 
@@ -1141,7 +1143,7 @@ const purchaseInfo = computed(() => {
   const balance = props.userInfo.balance || 0
   
   const isCurrent = isCurrentPackage(pkg.type)
-  const action = isCurrent ? '续费' : '购买'
+  const action = isCurrent ? translateUi('packages.renew') : translateUi('pointsType.purchase')
   
   // 套餐价格
   let finalPrice = pkg.price
@@ -1173,7 +1175,7 @@ const purchaseInfo = computed(() => {
 async function purchasePackage(pkg) {
   // 检查是否为降级购买
   if (isDowngrade(pkg.type)) {
-    showAlert('不支持降级套餐，请选择同级或更高级别的套餐')
+    showAlert(translateUi('uiMessages.mda1212901d07'))
     return
   }
   
@@ -1198,7 +1200,7 @@ function closePurchasePanel() {
 // 应用优惠券
 async function applyPurchaseCoupon() {
   if (!purchaseCouponCode.value || !purchaseCouponCode.value.trim()) {
-    purchaseCouponError.value = '请输入优惠券码'
+    purchaseCouponError.value = translateUi('user.enterCouponCode')
     return
   }
   
@@ -1221,7 +1223,7 @@ async function applyPurchaseCoupon() {
     const data = await res.json()
     
     if (!res.ok) {
-      purchaseCouponError.value = data.message || '优惠券验证失败'
+      purchaseCouponError.value = data.message || translateUi('user.couponValidateFailed')
       return
     }
     
@@ -1231,7 +1233,7 @@ async function applyPurchaseCoupon() {
     
   } catch (e) {
     console.error('[applyPurchaseCoupon] error:', e)
-    purchaseCouponError.value = '优惠券验证失败'
+    purchaseCouponError.value = translateUi('user.couponValidateFailed')
   }
 }
 
@@ -1248,7 +1250,7 @@ async function confirmPurchase() {
   if (!selectedPackage.value || purchaseLoading.value) return
   const input = { kind: 'package', package_id: selectedPackage.value.id,
     ...(appliedPurchaseCoupon.value ? { coupon_code: purchaseCouponCode.value.trim() } : {}) }
-  const title = selectedPackage.value.name || '套餐购买'
+  const title = selectedPackage.value.name || translateUi('pointsType.package_purchase')
   closePurchasePanel()
   const result = await openCheckout(input, title)
   if (result) { await loadData(); emit('update') }
@@ -1263,7 +1265,7 @@ async function openRechargePanel() {
   selectedRechargeCard.value = null
   try {
     const response = await fetch(getApiUrl('/api/recharge-cards'), { headers: getTenantHeaders() })
-    if (!response.ok) throw new Error('充值卡片加载失败')
+    if (!response.ok) throw new Error(translateUi('uiMessages.mc54d2d8aaf79'))
     rechargeCards.value = (await response.json()).recharge_cards || []
   } catch (e) { rechargeCards.value = []; rechargeError.value = e.message }
 }
@@ -1293,7 +1295,7 @@ function getFinalRechargeAmount() {
 async function submitRecharge() {
   const amount = getFinalRechargeAmount()
   if (amount < rechargeLimits.value.minAmount * 100 || amount > rechargeLimits.value.maxAmount * 100) {
-    rechargeError.value = `充值金额须在 ${rechargeLimits.value.minAmount}–${rechargeLimits.value.maxAmount}${currencyUnitLabel.value}之间`
+    rechargeError.value = translateUi('uiMessages.m726e1c06b4a0', { value1: (rechargeLimits.value.minAmount), value2: (rechargeLimits.value.maxAmount), value3: (currencyUnitLabel.value) })
     return
   }
   const input = { kind: 'recharge', amount, ...(selectedRechargeCard.value ? { recharge_card_id: selectedRechargeCard.value.id } : {}) }
@@ -1393,11 +1395,11 @@ async function loadReferralData() {
 
 async function doReferralWithdraw() {
   const amt = Number(referralActionAmount.value)
-  if (!amt || amt <= 0) { showAlert('请输入有效金额', '提示'); return }
-  if (!referralAlipayName.value.trim()) { showAlert('请输入支付宝真实姓名', '提示'); return }
-  if (!referralAlipayAccount.value.trim()) { showAlert('请输入支付宝账号', '提示'); return }
+  if (!amt || amt <= 0) { showAlert(translateUi('uiMessages.maaf9196c9b53'), translateUi('common.info')); return }
+  if (!referralAlipayName.value.trim()) { showAlert(translateUi('uiMessages.mf8c543d10668'), translateUi('common.info')); return }
+  if (!referralAlipayAccount.value.trim()) { showAlert(translateUi('uiMessages.m9c42b89e096d'), translateUi('common.info')); return }
   const amtFen = Math.round(amt * 100)
-  const confirmed = await showConfirm(`确定申请提现 ${currencySymbol.value}${amt.toFixed(2)} 到支付宝账号 ${referralAlipayAccount.value} 吗？提现需要审核通过后才能到账。`, '确认提现')
+  const confirmed = await showConfirm(translateUi('uiMessages.m118bed5879a9', { value1: (currencySymbol.value), value2: (amt.toFixed(2)), value3: (referralAlipayAccount.value) }), translateUi('uiMessages.mdf4bac5562fd'))
   if (!confirmed) return
   referralSubmitting.value = true
   try {
@@ -1412,14 +1414,14 @@ async function doReferralWithdraw() {
       })
     })
     const data = await res.json()
-    if (!res.ok) throw new Error(data.message || '提现失败')
-    showAlert('提现申请已提交，等待审核', '成功')
+    if (!res.ok) throw new Error(data.message || translateUi('uiMessages.mc77b03159dce'))
+    showAlert(translateUi('uiMessages.m331550be5683'), translateUi('common.success'))
     referralActionAmount.value = ''
     referralAlipayName.value = ''
     referralAlipayAccount.value = ''
     loadReferralData()
   } catch (e) {
-    showAlert(e.message, '错误')
+    showAlert(e.message, translateUi('common.error'))
   } finally {
     referralSubmitting.value = false
   }
@@ -1427,22 +1429,22 @@ async function doReferralWithdraw() {
 
 async function doReferralTransfer() {
   const amt = Number(referralActionAmount.value)
-  if (!amt || amt <= 0) { showAlert('请输入有效金额', '提示'); return }
+  if (!amt || amt <= 0) { showAlert(translateUi('uiMessages.maaf9196c9b53'), translateUi('common.info')); return }
   const amtFen = Math.round(amt * 100)
-  const confirmed = await showConfirm(`确定将 ${currencySymbol.value}${amt.toFixed(2)} 划转到余额吗？划转后不可再提现。`, '确认划转')
+  const confirmed = await showConfirm(translateUi('uiMessages.m64f6ebdc6e36', { value1: (currencySymbol.value), value2: (amt.toFixed(2)) }), translateUi('user.confirmTransfer'))
   if (!confirmed) return
   referralSubmitting.value = true
   try {
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
     const res = await fetch(getApiUrl('/api/user/referral/transfer'), { method: 'POST', headers, body: JSON.stringify({ amount: amtFen }) })
     const data = await res.json()
-    if (!res.ok) throw new Error(data.message || '划转失败')
-    showAlert('划转成功，已到账余额', '成功')
+    if (!res.ok) throw new Error(data.message || translateUi('uiMessages.m035abb665e84'))
+    showAlert(translateUi('uiMessages.m04b75ad2999a'), translateUi('common.success'))
     referralActionAmount.value = ''
     loadReferralData()
     emit('update')
   } catch (e) {
-    showAlert(e.message, '错误')
+    showAlert(e.message, translateUi('common.error'))
   } finally {
     referralSubmitting.value = false
   }
@@ -1454,7 +1456,7 @@ function formatRebateAmount(fen) {
 
 function formatRebateTime(ts) {
   if (!ts) return '-'
-  return new Date(ts).toLocaleString('zh-CN')
+  return new Date(ts).toLocaleString(uiLanguage.value)
 }
 
 // 退出登录
@@ -1503,7 +1505,7 @@ function closeSupportQrModal() {
 
 // 格式化时间
 function formatTime(ts) {
-  return new Date(ts).toLocaleString('zh-CN')
+  return new Date(ts).toLocaleString(uiLanguage.value)
 }
 
 // 格式化过期时间
@@ -1543,7 +1545,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
           :class="{ 'is-expanded': isProfileExpanded }"
           :style="isProfileExpanded ? {} : { left: `${position.x}px`, top: `${position.y}px` }"
           :role="isProfileExpanded ? 'dialog' : undefined"
-          :aria-label="isProfileExpanded ? '个人中心' : undefined"
+          :aria-label="isProfileExpanded ? translateUi('nav.user') : undefined"
           @keydown.esc.stop="isProfileExpanded ? isProfileExpanded = false : closePanel()"
         >
           <!-- 用户信息头部 -->
@@ -1558,15 +1560,15 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
             <button
               type="button"
               class="profile-expand-btn"
-              :aria-label="isProfileExpanded ? '还原个人中心' : '放大个人中心'"
-              :title="isProfileExpanded ? '还原个人中心' : '放大个人中心'"
+              :aria-label="isProfileExpanded ? translateUi('uiMessages.m0adfb5c2925d') : translateUi('uiMessages.mf1f121c3cf64')"
+              :title="isProfileExpanded ? translateUi('uiMessages.m0adfb5c2925d') : translateUi('uiMessages.mf1f121c3cf64')"
               :aria-expanded="isProfileExpanded"
               @click="isProfileExpanded = !isProfileExpanded"
             >
               <Minimize2 v-if="isProfileExpanded" :size="16" aria-hidden="true" />
               <Maximize2 v-else :size="16" aria-hidden="true" />
             </button>
-            <button type="button" class="close-btn" aria-label="收起个人中心" title="收起个人中心" @click="closePanel">
+            <button type="button" class="close-btn" :aria-label="translateUi('uiMessages.m1314e315e4cc')" :title="translateUi('uiMessages.m1314e315e4cc')" @click="closePanel">
               <ChevronLeft :size="18" aria-hidden="true" />
             </button>
           </div>
@@ -1598,7 +1600,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
               >
                 <UsersRound class="space-icon" aria-hidden="true" />
                 <span class="team-name">{{ team.name }}</span>
-                <span class="team-meta">{{ team.member_count }}人 · {{ getRoleLabel(team.my_role) }}</span>
+                <span class="team-meta">{{ translateUi('uiMessages.m9c95c6e0fc85', { value1: (team.member_count), value2: (getRoleLabel(team.my_role)) }) }}</span>
                 <span v-if="teamStore.globalTeamId.value === team.id" class="check-mark">✓</span>
               </div>
               <div class="space-divider"></div>
@@ -1612,20 +1614,20 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                 @click="activeMenu = 'teams'; showSpaceDropdown = false"
               >
                 <Mail class="space-icon" aria-hidden="true" />
-                <span>邀请通知</span>
+                <span>{{ translateUi('uiMessages.m8dcf6f4bce6d') }}</span>
                 <span class="invite-badge">{{ teamStore.pendingInvitationsCount.value }}</span>
               </div>
             </div>
           </div>
 
-          <RouterLink v-if="userInfo && !userInfo.is_subuser && userInfo.has_subusers" to="/subuser" class="profile-subuser-link block p-3 text-emerald-500">子用户管理</RouterLink>
+          <RouterLink v-if="userInfo && !userInfo.is_subuser && userInfo.has_subusers" to="/subuser" class="profile-subuser-link block p-3 text-emerald-500">{{ translateUi('uiMessages.md19c97e3879d') }}</RouterLink>
           <!-- 快捷数据 -->
           <div class="quick-stats">
             <button type="button" class="stat-item stat-action" @click="openAccountAction('convert'); closePanel()">
               <span class="stat-icon" v-html="icons.diamond"></span>
               <span class="stat-value">{{ formatPoints(getPermanentUserPoints(userInfo)) }}</span>
               <span class="stat-label">{{ t('user.permanentPoints') }}</span>
-              <span v-if="userInfo?.is_subuser" class="col-span-2 text-xs text-gray-500" title="分配部分按有效期使用，未消费部分可由主用户回收">其中分配 {{ formatPoints(userInfo.subuser_points || 0) }}</span>
+              <span v-if="userInfo?.is_subuser" class="col-span-2 text-xs text-gray-500" :title="translateUi('uiMessages.m19c5b9ec2a1c')">{{ translateUi('uiMessages.m11df74d8a241', { value1: (formatPoints(userInfo.subuser_points || 0)) }) }}</span>
             </button>
             <button type="button" class="stat-item stat-action" @click="openAccountAction('packages'); closePanel()">
               <span class="stat-icon" v-html="icons.star"></span>
@@ -1721,7 +1723,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
             <!-- 账户管理 -->
             <div v-else-if="activeMenu === 'profile'" class="content-section account-section">
               <RouterLink v-if="userInfo && !userInfo.is_subuser && userInfo.has_subusers" to="/subuser" class="account-subuser-link">
-                <UsersRound :size="15" aria-hidden="true" /> 创建子用户
+                <UsersRound :size="15" aria-hidden="true" /> {{ translateUi('uiMessages.ma84fdcb1634a') }}
               </RouterLink>
               <section class="account-card account-profile-card">
                 <div class="account-card-heading">
@@ -1782,7 +1784,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
               <!-- 待处理邀请 -->
               <div v-if="teamStore.pendingInvitations.value.length > 0" class="invitations-section">
                 <h4 class="section-title">
-                  <Mail :size="16" aria-hidden="true" /> 待处理邀请 ({{ teamStore.pendingInvitations.value.length }})
+                  <Mail :size="16" aria-hidden="true" /> {{ translateUi('uiMessages.m6264e3066377', { value1: (teamStore.pendingInvitations.value.length) }) }}
                 </h4>
                 <div class="invitation-list">
                   <div 
@@ -1794,13 +1796,13 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                       <div class="team-avatar"><UsersRound :size="16" aria-hidden="true" /></div>
                       <div class="invitation-details">
                         <div class="team-name">{{ invite.team_name }}</div>
-                        <div class="inviter-info">{{ invite.inviter_username }} 邀请您加入</div>
+                        <div class="inviter-info">{{ translateUi('uiMessages.m7b7146511028', { value1: (invite.inviter_username) }) }}</div>
                         <div v-if="invite.message" class="invite-message">「{{ invite.message }}」</div>
                       </div>
                     </div>
                     <div class="invitation-actions">
-                      <button class="btn-accept" @click="handleAcceptInvitation(invite.id)">接受</button>
-                      <button class="btn-reject" @click="handleRejectInvitation(invite.id)">拒绝</button>
+                      <button class="btn-accept" @click="handleAcceptInvitation(invite.id)">{{ translateUi('uiMessages.m329fcec61856') }}</button>
+                      <button class="btn-reject" @click="handleRejectInvitation(invite.id)">{{ translateUi('uiMessages.m136de7a8c46f') }}</button>
                     </div>
                   </div>
                 </div>
@@ -1809,16 +1811,16 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
               <!-- 我的团队 -->
               <div class="my-teams-section">
                 <div class="section-header">
-                  <h4 class="section-title team-section-heading"><UsersRound :size="16" aria-hidden="true" /> 我的团队 <span class="team-count">{{ teamStore.myTeams.value.length }}</span></h4>
+                  <h4 class="section-title team-section-heading"><UsersRound :size="16" aria-hidden="true" /> {{ translateUi('uiMessages.mae24533b7d54') }} <span class="team-count">{{ teamStore.myTeams.value.length }}</span></h4>
                   <button class="btn-create-team" @click="openCreateTeamModal">
-                    <Plus :size="15" aria-hidden="true" /> 创建团队
+                    <Plus :size="15" aria-hidden="true" /> {{ translateUi('uiMessages.md2ec1c315266') }}
                   </button>
                 </div>
                 
                 <div v-if="teamStore.myTeams.value.length === 0" class="empty-teams">
                   <span class="team-empty-icon"><UsersRound :size="20" aria-hidden="true" /></span>
-                  <p>您还没有加入任何团队</p>
-                  <p class="hint">创建团队或接受邀请来开始协作</p>
+                  <p>{{ translateUi('uiMessages.m29a6e07481c9') }}</p>
+                  <p class="hint">{{ translateUi('uiMessages.m2a23b559a9eb') }}</p>
                 </div>
                 
                 <div v-else class="team-list">
@@ -1836,7 +1838,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                           <span class="team-name">{{ team.name }}</span>
                           <span class="role-tag" :class="'role-' + team.my_role">{{ getRoleLabel(team.my_role) }}</span>
                         </div>
-                        <div class="team-meta">{{ team.member_count }} 名成员</div>
+                        <div class="team-meta">{{ translateUi('uiMessages.mba2ce58b601f', { value1: (team.member_count) }) }}</div>
                       </div>
                     </div>
                     <!-- 第二行：操作按钮 -->
@@ -1845,7 +1847,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                         v-if="team.my_role === 'owner' || team.my_role === 'admin'"
                         class="btn-team-action"
                         @click="openInviteMemberModal(team)"
-                        title="邀请成员"
+                        :title="translateUi('uiMessages.maddfc25ab35b')"
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                           <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
@@ -1853,25 +1855,25 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                           <line x1="19" y1="8" x2="19" y2="14"/>
                           <line x1="22" y1="11" x2="16" y2="11"/>
                         </svg>
-                        <span>邀请</span>
+                        <span>{{ translateUi('uiMessages.m1955b265d568') }}</span>
                       </button>
                       <button
                         v-if="team.my_role === 'owner'"
                         class="btn-team-action"
                         @click="openRenameTeamModal(team)"
-                        title="重命名团队"
+                        :title="translateUi('uiMessages.mf2bbfa46ef9d')"
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                           <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
                           <path d="m15 5 4 4"/>
                         </svg>
-                        <span>重命名</span>
+                        <span>{{ translateUi('canvas.assetPanel.directory.rename') }}</span>
                       </button>
                       <button
                         v-if="team.my_role === 'owner'"
                         class="btn-team-action"
                         @click="openMemberManageModal(team)"
-                        title="管理成员"
+                        :title="translateUi('uiMessages.ma939322f0a44')"
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -1879,33 +1881,33 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                           <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
                           <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                         </svg>
-                        <span>管理</span>
+                        <span>{{ translateUi('uiMessages.mbb6d995724f4') }}</span>
                       </button>
                       <button 
                         v-if="team.my_role === 'owner'"
                         class="btn-team-action danger"
                         @click="handleDissolveTeam(team)"
-                        title="解散团队"
+                        :title="translateUi('uiMessages.m4978783a269b')"
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                           <path d="M3 6h18"/>
                           <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
                           <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
                         </svg>
-                        <span>解散</span>
+                        <span>{{ translateUi('uiMessages.m5c551062c8a5') }}</span>
                       </button>
                       <button 
                         v-if="team.my_role !== 'owner'"
                         class="btn-team-action"
                         @click="handleLeaveTeam(team)"
-                        title="退出团队"
+                        :title="translateUi('uiMessages.mc86c82e35636')"
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
                           <polyline points="16 17 21 12 16 7"/>
                           <line x1="21" y1="12" x2="9" y2="12"/>
                         </svg>
-                        <span>退出</span>
+                        <span>{{ translateUi('uiMessages.m498e1d59b4d7') }}</span>
                       </button>
                     </div>
                   </div>
@@ -1938,8 +1940,8 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                     :disabled="isDowngrade(pkg.type)"
                     @click="purchasePackage(pkg)"
                   >
-                    <template v-if="isCurrentPackage(pkg.type)">续费</template>
-                    <template v-else-if="isDowngrade(pkg.type)">不可降级</template>
+                    <template v-if="isCurrentPackage(pkg.type)">{{ translateUi('packages.renew') }}</template>
+                    <template v-else-if="isDowngrade(pkg.type)">{{ translateUi('packages.cannotDowngrade') }}</template>
                     <template v-else>{{ t('packages.buy') }}</template>
                   </button>
                 </div>
@@ -2008,19 +2010,19 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
 
               <div class="ledger-header">
                 <h4 class="section-title">{{ t('user.pointsRecord') }}</h4>
-                <span class="ledger-total" :title="`共 ${ledgerTotal} 条记录`">共{{ ledgerTotal }}条</span>
-                <select class="ledger-page-size" aria-label="积分记录每页条数" :value="ledgerPageSize" :disabled="ledgerLoading" @change="changeLedgerPageSize">
-                  <option v-for="size in ledgerPageSizeOptions" :key="size" :value="size">{{ size }}条/页</option>
+                <span class="ledger-total" :title="translateUi('uiMessages.m461359dad186', { value1: (ledgerTotal) })">{{ translateUi('uiMessages.m1328b5c23070', { value1: (ledgerTotal) }) }}</span>
+                <select class="ledger-page-size" :aria-label="translateUi('uiMessages.md60ea9850c28')" :value="ledgerPageSize" :disabled="ledgerLoading" @change="changeLedgerPageSize">
+                  <option v-for="size in ledgerPageSizeOptions" :key="size" :value="size">{{ translateUi('uiMessages.m64315e0a0215', { value1: (size) }) }}</option>
                 </select>
                 <button class="ledger-expand-btn" @click="showLedgerDetails = true">
-                  查看详情
+                  {{ translateUi('uiMessages.ma748cc074f78') }}
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15 3h6v6M21 3l-7 7M9 21H3v-6M3 21l7-7"/></svg>
                 </button>
               </div>
-              <div v-if="ledgerLoading" class="empty-hint">加载中...</div>
+              <div v-if="ledgerLoading" class="empty-hint">{{ translateUi('common.loading') }}</div>
               <div v-else-if="ledgerError" class="ledger-error" role="alert">
                 {{ ledgerError }}
-                <button class="ledger-page-btn" @click="loadLedger">重新加载</button>
+                <button class="ledger-page-btn" @click="loadLedger">{{ translateUi('uiMessages.m7bdd5ce1e298') }}</button>
               </div>
               <div v-else-if="!Array.isArray(ledger) || ledger.length === 0" class="empty-hint">{{ t('user.noRecord') }}</div>
               <div v-else class="ledger-list">
@@ -2029,10 +2031,10 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                   <div class="ledger-info">
                     <div class="ledger-header-row">
                       <span class="ledger-type">{{ getLedgerTypeText(item.type) }}</span>
-                      <span class="ledger-points-type">{{ item.points_type === 'subuser' ? '分配' : item.points_type === 'team' ? '团队' : item.points_type === 'package' ? '套餐' : '永久' }}</span>
+                      <span class="ledger-points-type">{{ item.points_type === 'subuser' ? translateUi('uiMessages.mfc135337a267') : item.points_type === 'team' ? translateUi('uiMessages.macdf17f4e9c4') : item.points_type === 'package' ? translateUi('uiMessages.mc1cfa1340c62') : translateUi('canvas.contextMenu.permanent') }}</span>
                     </div>
                     <span class="ledger-time">{{ formatTime(item.ts) }}</span>
-                    <span v-if="item.task_id" class="ledger-desc">任务ID：{{ item.task_id }}</span>
+                    <span v-if="item.task_id" class="ledger-desc">{{ translateUi('uiMessages.m637263718da0', { value1: (item.task_id) }) }}</span>
                     <span v-if="item.memo" class="ledger-desc">{{ item.memo }}</span>
                     <span v-if="getPointsLedgerGenerationDetailsText(item)" class="ledger-desc">{{ getPointsLedgerGenerationDetailsText(item) }}</span>
                   </div>
@@ -2042,9 +2044,9 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                 </div>
               </div>
               <div v-if="ledgerTotalPages > 1" class="ledger-pagination">
-                <button class="ledger-page-btn" :disabled="ledgerPage <= 1 || ledgerLoading" @click="goLedgerPage(ledgerPage - 1)">上一页</button>
-                <span class="ledger-page-info">第 {{ ledgerPage }} / {{ ledgerTotalPages }} 页</span>
-                <button class="ledger-page-btn" :disabled="ledgerPage >= ledgerTotalPages || ledgerLoading" @click="goLedgerPage(ledgerPage + 1)">下一页</button>
+                <button class="ledger-page-btn" :disabled="ledgerPage <= 1 || ledgerLoading" @click="goLedgerPage(ledgerPage - 1)">{{ translateUi('uiMessages.mc9b9ae7a6144') }}</button>
+                <span class="ledger-page-info">{{ translateUi('uiMessages.m494b82c0e36c', { value1: (ledgerPage), value2: (ledgerTotalPages) }) }}</span>
+                <button class="ledger-page-btn" :disabled="ledgerPage >= ledgerTotalPages || ledgerLoading" @click="goLedgerPage(ledgerPage + 1)">{{ translateUi('uiMessages.m8a8542f69648') }}</button>
               </div>
             </div>
 
@@ -2080,19 +2082,19 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
               <!-- 统计卡片 -->
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
                 <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;text-align:center;">
-                  <div style="font-size:11px;color:#aaa;margin-bottom:4px;">可用返利</div>
+                  <div style="font-size:11px;color:#aaa;margin-bottom:4px;">{{ translateUi('uiMessages.m2bee6ad281b4') }}</div>
                   <div style="font-size:18px;font-weight:bold;color:#e5e7eb;">{{ currencySymbol }}{{ formatRebateAmount(referralStats.available) }}</div>
                 </div>
                 <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;text-align:center;">
-                  <div style="font-size:11px;color:#aaa;margin-bottom:4px;">累计返利</div>
+                  <div style="font-size:11px;color:#aaa;margin-bottom:4px;">{{ translateUi('uiMessages.m2acc6d552b0e') }}</div>
                   <div style="font-size:18px;font-weight:bold;color:#e5e7eb;">{{ currencySymbol }}{{ formatRebateAmount(referralStats.total_earned) }}</div>
                 </div>
                 <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;text-align:center;">
-                  <div style="font-size:11px;color:#aaa;margin-bottom:4px;">待审核提现</div>
+                  <div style="font-size:11px;color:#aaa;margin-bottom:4px;">{{ translateUi('uiMessages.m5e97661cd612') }}</div>
                   <div style="font-size:18px;font-weight:bold;color:#e5e7eb;">{{ currencySymbol }}{{ formatRebateAmount(referralStats.pending) }}</div>
                 </div>
                 <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;text-align:center;">
-                  <div style="font-size:11px;color:#aaa;margin-bottom:4px;">邀请人数</div>
+                  <div style="font-size:11px;color:#aaa;margin-bottom:4px;">{{ translateUi('uiMessages.mda4766c793d9') }}</div>
                   <div style="font-size:18px;font-weight:bold;color:#e5e7eb;">{{ referralStats.invitee_count }}</div>
                 </div>
               </div>
@@ -2100,50 +2102,50 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
                 <!-- 申请提现 -->
                 <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;">
-                  <div style="font-size:12px;font-weight:600;color:#f59e0b;margin-bottom:10px;">申请提现到支付宝</div>
+                  <div style="font-size:12px;font-weight:600;color:#f59e0b;margin-bottom:10px;">{{ translateUi('uiMessages.m01c7e6569a15') }}</div>
                   <div style="margin-bottom:8px;">
-                    <div style="font-size:11px;color:#aaa;margin-bottom:4px;">提现金额（{{ currencyUnitLabel }}）</div>
-                    <input v-model.number="referralActionAmount" type="number" step="0.01" min="0.01" placeholder="输入提现金额"
+                    <div style="font-size:11px;color:#aaa;margin-bottom:4px;">{{ translateUi('uiMessages.mb58691d60350', { value1: (currencyUnitLabel) }) }}</div>
+                    <input v-model.number="referralActionAmount" type="number" step="0.01" min="0.01" :placeholder="translateUi('uiMessages.m41dc91c7102b')"
                       style="width:100%;padding:6px 10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:13px;outline:none;box-sizing:border-box;" />
                   </div>
                   <div style="margin-bottom:8px;">
-                    <div style="font-size:11px;color:#aaa;margin-bottom:4px;">支付宝真实姓名</div>
-                    <input v-model="referralAlipayName" type="text" placeholder="请输入收款人姓名" maxlength="50"
+                    <div style="font-size:11px;color:#aaa;margin-bottom:4px;">{{ translateUi('uiMessages.md04ea08e0634') }}</div>
+                    <input v-model="referralAlipayName" type="text" :placeholder="translateUi('uiMessages.m5429005d4ef2')" maxlength="50"
                       style="width:100%;padding:6px 10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:13px;outline:none;box-sizing:border-box;" />
                   </div>
                   <div style="margin-bottom:8px;">
-                    <div style="font-size:11px;color:#aaa;margin-bottom:4px;">支付宝账号</div>
-                    <input v-model="referralAlipayAccount" type="text" placeholder="手机号或邮箱" maxlength="200"
+                    <div style="font-size:11px;color:#aaa;margin-bottom:4px;">{{ translateUi('uiMessages.m4e7d073b32f6') }}</div>
+                    <input v-model="referralAlipayAccount" type="text" :placeholder="translateUi('uiMessages.mae3a6b9f14ae')" maxlength="200"
                       style="width:100%;padding:6px 10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:13px;outline:none;box-sizing:border-box;" />
                   </div>
                   <button @click="doReferralWithdraw" :disabled="referralSubmitting"
                     style="width:100%;background:rgba(255,255,255,0.15);color:#e5e7eb;border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:8px;font-size:12px;cursor:pointer;">
-                    {{ referralSubmitting ? '处理中...' : '申请提现' }}
+                    {{ referralSubmitting ? translateUi('common.processing') : translateUi('uiMessages.mfaf08c5bb453') }}
                   </button>
-                  <div style="font-size:11px;color:#888;margin-top:6px;">提现需管理员审核通过后打款到您的支付宝</div>
+                  <div style="font-size:11px;color:#888;margin-top:6px;">{{ translateUi('uiMessages.mb8f6451dcd2f') }}</div>
                 </div>
                 <!-- 划转余额 -->
                 <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;">
-                  <div style="font-size:12px;font-weight:600;color:#10b981;margin-bottom:10px;">划转到账户余额</div>
+                  <div style="font-size:12px;font-weight:600;color:#10b981;margin-bottom:10px;">{{ translateUi('uiMessages.mc4c5afc4d969') }}</div>
                   <div style="margin-bottom:8px;">
-                    <div style="font-size:11px;color:#aaa;margin-bottom:4px;">划转金额（{{ currencyUnitLabel }}）</div>
-                    <input v-model.number="referralActionAmount" type="number" step="0.01" min="0.01" placeholder="输入划转金额"
+                    <div style="font-size:11px;color:#aaa;margin-bottom:4px;">{{ translateUi('uiMessages.m3f1fed5cf9e7', { value1: (currencyUnitLabel) }) }}</div>
+                    <input v-model.number="referralActionAmount" type="number" step="0.01" min="0.01" :placeholder="translateUi('uiMessages.mb2270e77b4bd')"
                       style="width:100%;padding:6px 10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:13px;outline:none;box-sizing:border-box;" />
                   </div>
                   <button @click="doReferralTransfer" :disabled="referralSubmitting"
                     style="width:100%;background:rgba(255,255,255,0.25);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:6px;padding:8px;font-size:12px;cursor:pointer;">
-                    {{ referralSubmitting ? '处理中...' : '划转余额' }}
+                    {{ referralSubmitting ? translateUi('common.processing') : translateUi('uiMessages.ma6dfe6e354e6') }}
                   </button>
-                  <div style="font-size:11px;color:#888;margin-top:6px;">即时到账，划转后可用于消费但不可再提现</div>
+                  <div style="font-size:11px;color:#888;margin-top:6px;">{{ translateUi('uiMessages.mda04287740e5') }}</div>
                 </div>
               </div>
               <!-- 返利记录 -->
               <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;margin-bottom:12px;">
-                <div style="font-size:13px;font-weight:600;margin-bottom:10px;">返利记录</div>
-                <div v-if="referralRecords.length === 0" style="text-align:center;color:#888;font-size:12px;padding:16px 0;">暂无返利记录</div>
+                <div style="font-size:13px;font-weight:600;margin-bottom:10px;">{{ translateUi('uiMessages.m3267f9df018a') }}</div>
+                <div v-if="referralRecords.length === 0" style="text-align:center;color:#888;font-size:12px;padding:16px 0;">{{ translateUi('uiMessages.m9cad99ca6d6a') }}</div>
                 <div v-for="r in referralRecords" :key="r.id" style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px;">
                   <div>
-                    <div style="color:#ddd;">{{ r.invitee_name || r.invitee_email || '用户' }}</div>
+                    <div style="color:#ddd;">{{ r.invitee_name || r.invitee_email || translateUi('common.user') }}</div>
                     <div style="color:#888;font-size:11px;">{{ formatRebateTime(r.created_at) }}</div>
                   </div>
                   <div style="text-align:right;">
@@ -2154,21 +2156,21 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
               </div>
               <!-- 提现记录 -->
               <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;">
-                <div style="font-size:13px;font-weight:600;margin-bottom:10px;">提现记录</div>
-                <div v-if="referralWithdrawals.length === 0" style="text-align:center;color:#888;font-size:12px;padding:16px 0;">暂无提现记录</div>
+                <div style="font-size:13px;font-weight:600;margin-bottom:10px;">{{ translateUi('uiMessages.mb09fb09b6f7c') }}</div>
+                <div v-if="referralWithdrawals.length === 0" style="text-align:center;color:#888;font-size:12px;padding:16px 0;">{{ translateUi('uiMessages.m852966eb1107') }}</div>
                 <div v-for="w in referralWithdrawals" :key="w.id" style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px;">
                   <div style="display:flex;justify-content:space-between;align-items:center;">
                     <div>
-                      <span :style="{ color: w.type === 'withdraw' ? '#f59e0b' : '#3b82f6', fontWeight: 500 }">{{ w.type === 'withdraw' ? '提现' : '划转余额' }}</span>
+                      <span :style="{ color: w.type === 'withdraw' ? '#f59e0b' : '#3b82f6', fontWeight: 500 }">{{ w.type === 'withdraw' ? translateUi('uiMessages.mdf9d5cbb40da') : translateUi('uiMessages.ma6dfe6e354e6') }}</span>
                       <span :style="{ color: w.status === 'approved' ? '#10b981' : w.status === 'rejected' ? '#ef4444' : '#eab308', marginLeft: '6px' }">
-                        {{ w.status === 'approved' ? '已通过' : w.status === 'rejected' ? '已拒绝' : '待审核' }}
+                        {{ w.status === 'approved' ? translateUi('uiMessages.m3fa9b684903a') : w.status === 'rejected' ? translateUi('uiMessages.mf098218a3032') : translateUi('uiMessages.m7bf25421c6df') }}
                       </span>
                     </div>
                     <div style="color:#ddd;font-weight:600;">{{ currencySymbol }}{{ formatRebateAmount(w.amount) }}</div>
                   </div>
                   <div v-if="w.alipay_name" style="color:#888;font-size:11px;margin-top:2px;">{{ w.alipay_name }} · {{ w.alipay_account }}</div>
                   <div style="color:#888;font-size:11px;margin-top:2px;">{{ formatRebateTime(w.created_at) }}</div>
-                  <div v-if="w.admin_note" style="color:#888;font-size:11px;margin-top:2px;">备注：{{ w.admin_note }}</div>
+                  <div v-if="w.admin_note" style="color:#888;font-size:11px;margin-top:2px;">{{ translateUi('uiMessages.mf142eb1f0ffa', { value1: (w.admin_note) }) }}</div>
                 </div>
               </div>
             </div>
@@ -2201,12 +2203,12 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                 <h5>{{ t('user.inviteRules') }}</h5>
                 <ul>
                   <template v-if="inviteRewardAfterFirstPayment">
-                    <li>好友完成首次充值后，您获得 {{ formatPoints(appSettings.inviter_bonus || 10) }} 积分</li>
-                    <li>好友首次充值后也可获得 {{ formatPoints(appSettings.invitee_bonus || 5) }} 积分奖励</li>
+                    <li>{{ translateUi('uiMessages.m50b0202a7e6e', { value1: (formatPoints(appSettings.inviter_bonus || 10)) }) }}</li>
+                    <li>{{ translateUi('uiMessages.md284b2efe584', { value1: (formatPoints(appSettings.invitee_bonus || 5)) }) }}</li>
                   </template>
                   <template v-else>
-                    <li>每邀请一位好友注册，您获得 {{ formatPoints(appSettings.inviter_bonus || 10) }} 积分</li>
-                    <li>被邀请人也可获得 {{ formatPoints(appSettings.invitee_bonus || 5) }} 积分奖励</li>
+                    <li>{{ translateUi('uiMessages.m9c45d3d7f0ca', { value1: (formatPoints(appSettings.inviter_bonus || 10)) }) }}</li>
+                    <li>{{ translateUi('uiMessages.m66ae73e92a99', { value1: (formatPoints(appSettings.invitee_bonus || 5)) }) }}</li>
                   </template>
                   <li>{{ t('user.inviteRule3') }}</li>
                 </ul>
@@ -2325,7 +2327,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
 
             <!-- 充值卡片选择 -->
             <div v-if="rechargeCards.length > 0" class="form-section">
-              <label class="form-label">{{ t('user.selectRechargeCard') || '选择充值卡片' }}</label>
+              <label class="form-label">{{ t('user.selectRechargeCard') || translateUi('user.selectRechargeCard') }}</label>
               <div class="recharge-amounts">
                 <button
                   v-for="card in rechargeCards"
@@ -2338,8 +2340,8 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                   <div class="card-amount-v2">{{ currencySymbol }}{{ (card.amount / 100).toFixed(0) }}</div>
                   <!-- 奖励说明：悬停时显示 -->
                   <div v-if="card.bonus_enabled" class="card-bonus-hover">
-                    <span v-if="card.bonus_type === 'random'">+{{ formatPoints(card.bonus_min) }}~{{ formatPoints(card.bonus_max) }} 随机积分</span>
-                    <span v-else>+{{ formatPoints(card.bonus_fixed) }} 积分奖励</span>
+                    <span v-if="card.bonus_type === 'random'">{{ translateUi('uiMessages.m36c92eefe1c4', { value1: (formatPoints(card.bonus_min)), value2: (formatPoints(card.bonus_max)) }) }}</span>
+                    <span v-else>{{ translateUi('uiMessages.mff467e49bb29', { value1: (formatPoints(card.bonus_fixed)) }) }}</span>
                   </div>
                 </button>
               </div>
@@ -2452,53 +2454,53 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
         >
           <header class="ledger-details-header">
             <div>
-              <h3 id="ledger-details-title">积分记录详情</h3>
-              <p>查看积分的收入、支出与完整说明</p>
+              <h3 id="ledger-details-title">{{ translateUi('uiMessages.mb5b97d732249') }}</h3>
+              <p>{{ translateUi('uiMessages.meb9284329ae3') }}</p>
             </div>
-            <button class="ledger-details-close" aria-label="关闭积分记录详情" @click="showLedgerDetails = false">
+            <button class="ledger-details-close" :aria-label="translateUi('uiMessages.m30d3224b8bc4')" @click="showLedgerDetails = false">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
             </button>
           </header>
           <div class="ledger-details-toolbar">
-            <span>共 <strong>{{ ledgerTotal }}</strong> 条记录<span class="ledger-details-sort"> · 按时间从新到旧</span></span>
+            <span>{{ translateUi('canvas.historyPanel.total') }} <strong>{{ ledgerTotal }}</strong> {{ translateUi('uiMessages.m6016bf63b0ff') }}<span class="ledger-details-sort"> {{ translateUi('uiMessages.m0c2152a7a289') }}</span></span>
             <label class="ledger-controls">
-              每页显示
+              {{ translateUi('uiMessages.m3be014d77813') }}
               <select class="ledger-page-size" :value="ledgerPageSize" :disabled="ledgerLoading" @change="changeLedgerPageSize">
-                <option v-for="size in ledgerPageSizeOptions" :key="size" :value="size">{{ size }} 条</option>
+                <option v-for="size in ledgerPageSizeOptions" :key="size" :value="size">{{ translateUi('uiMessages.me8b42616df91', { value1: (size) }) }}</option>
               </select>
             </label>
           </div>
           <div class="ledger-details-body" :aria-busy="ledgerLoading">
-            <div v-if="ledgerLoading" class="ledger-details-state" role="status">正在加载积分记录...</div>
+            <div v-if="ledgerLoading" class="ledger-details-state" role="status">{{ translateUi('uiMessages.m35adea71b66e') }}</div>
             <div v-else-if="ledgerError" class="ledger-details-state ledger-error" role="alert">
               <span>{{ ledgerError }}</span>
-              <button class="ledger-page-btn" @click="loadLedger">重新加载</button>
+              <button class="ledger-page-btn" @click="loadLedger">{{ translateUi('uiMessages.m7bdd5ce1e298') }}</button>
             </div>
             <div v-else-if="!ledgerDisplayItems.length" class="ledger-details-state">{{ t('user.noRecord') }}</div>
             <table v-else class="ledger-details-table">
-              <thead><tr><th scope="col">时间</th><th scope="col">类型</th><th scope="col">积分来源</th><th scope="col">积分变动</th><th scope="col">详细说明</th></tr></thead>
+              <thead><tr><th scope="col">{{ translateUi('user.transactionTime') }}</th><th scope="col">{{ translateUi('canvas.assetPanel.type') }}</th><th scope="col">{{ translateUi('uiMessages.mee5010991d05') }}</th><th scope="col">{{ translateUi('user.ledgerType.other') }}</th><th scope="col">{{ translateUi('uiMessages.mb110d4b5ef2f') }}</th></tr></thead>
               <tbody>
                 <tr v-for="item in ledgerDisplayItems" :key="item.id || `${item.ts}-${item.type}-${item.value}`">
                   <td data-label="时间" class="ledger-details-time">{{ formatTime(item.ts) }}</td>
                   <td data-label="类型" class="ledger-details-type">{{ getLedgerTypeText(item.type) }}</td>
-                  <td data-label="积分来源"><span class="ledger-points-type">{{ item.points_type === 'subuser' ? '分配' : item.points_type === 'team' ? '团队' : item.points_type === 'package' ? '套餐' : '永久' }}</span></td>
+                  <td data-label="积分来源"><span class="ledger-points-type">{{ item.points_type === 'subuser' ? translateUi('uiMessages.mfc135337a267') : item.points_type === 'team' ? translateUi('uiMessages.macdf17f4e9c4') : item.points_type === 'package' ? translateUi('uiMessages.mc1cfa1340c62') : translateUi('canvas.contextMenu.permanent') }}</span></td>
                   <td data-label="积分变动" :class="['ledger-amount', item.value > 0 ? 'positive' : 'negative']">{{ item.value > 0 ? '+' : '' }}{{ formatPoints(item.value) }}</td>
                   <td data-label="详细说明" class="ledger-details-description">
                     <div>{{ item.memo || '—' }}</div>
                     <div v-if="getPointsLedgerGenerationDetailsText(item)" class="ledger-details-params">{{ getPointsLedgerGenerationDetailsText(item) }}</div>
-                    <div v-if="item.task_id" class="ledger-details-task">任务编号：{{ item.task_id }}</div>
+                    <div v-if="item.task_id" class="ledger-details-task">{{ translateUi('uiMessages.mb2a8c0c3ae63', { value1: (item.task_id) }) }}</div>
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
           <footer class="ledger-details-footer">
-            <span class="ledger-page-info">第 {{ ledgerPage }} / {{ ledgerTotalPages }} 页</span>
+            <span class="ledger-page-info">{{ translateUi('uiMessages.m494b82c0e36c', { value1: (ledgerPage), value2: (ledgerTotalPages) }) }}</span>
             <div class="ledger-pagination">
-              <button class="ledger-page-btn" :disabled="ledgerPage <= 1 || ledgerLoading" @click="goLedgerPage(1)">首页</button>
-              <button class="ledger-page-btn" :disabled="ledgerPage <= 1 || ledgerLoading" @click="goLedgerPage(ledgerPage - 1)">上一页</button>
-              <button class="ledger-page-btn" :disabled="ledgerPage >= ledgerTotalPages || ledgerLoading" @click="goLedgerPage(ledgerPage + 1)">下一页</button>
-              <button class="ledger-page-btn" :disabled="ledgerPage >= ledgerTotalPages || ledgerLoading" @click="goLedgerPage(ledgerTotalPages)">末页</button>
+              <button class="ledger-page-btn" :disabled="ledgerPage <= 1 || ledgerLoading" @click="goLedgerPage(1)">{{ translateUi('nav.home') }}</button>
+              <button class="ledger-page-btn" :disabled="ledgerPage <= 1 || ledgerLoading" @click="goLedgerPage(ledgerPage - 1)">{{ translateUi('uiMessages.mc9b9ae7a6144') }}</button>
+              <button class="ledger-page-btn" :disabled="ledgerPage >= ledgerTotalPages || ledgerLoading" @click="goLedgerPage(ledgerPage + 1)">{{ translateUi('uiMessages.m8a8542f69648') }}</button>
+              <button class="ledger-page-btn" :disabled="ledgerPage >= ledgerTotalPages || ledgerLoading" @click="goLedgerPage(ledgerTotalPages)">{{ translateUi('uiMessages.m4aa79629b562') }}</button>
             </div>
           </footer>
         </div>
@@ -2513,7 +2515,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
         <div class="purchase-modal">
           <!-- 弹窗头部 -->
           <div class="purchase-modal-header">
-            <h3>{{ purchaseInfo?.action || '购买' }}套餐</h3>
+            <h3>{{ translateUi('uiMessages.m13d30a975aae', { value1: (purchaseInfo?.action || translateUi('pointsType.purchase')) }) }}</h3>
             <button class="modal-close-btn" @click="closePurchasePanel">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M18 6L6 18M6 6l12 12"/>
@@ -2532,24 +2534,24 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                   <div class="package-detail-card" v-if="selectedPackage">
                     <div class="package-detail-header">
                       <span class="package-detail-name">{{ selectedPackage.name }}</span>
-                      <span v-if="purchaseInfo?.isCurrent" class="package-current-tag">当前套餐</span>
+                      <span v-if="purchaseInfo?.isCurrent" class="package-current-tag">{{ translateUi('packages.currentPlan') }}</span>
                     </div>
                     <div class="package-detail-price">
                       <span class="price-amount">{{ currencySymbol }}{{ (selectedPackage.price / 100).toFixed(0) }}</span>
-                      <span class="price-unit">/{{ selectedPackage.duration_days }}天</span>
+                      <span class="price-unit">{{ translateUi('uiMessages.mb3a61e562ec9', { value1: (selectedPackage.duration_days) }) }}</span>
                     </div>
                     <div class="package-detail-features">
                       <div class="feature-item">
                         <span class="feature-icon">💎</span>
-                        <span class="feature-text">{{ selectedPackage.points }} 积分</span>
+                        <span class="feature-text">{{ translateUi('uiMessages.md901f70479c8', { value1: (selectedPackage.points) }) }}</span>
                       </div>
                       <div class="feature-item">
                         <span class="feature-icon">⏱️</span>
-                        <span class="feature-text">{{ selectedPackage.duration_days }} 天有效期</span>
+                        <span class="feature-text">{{ translateUi('uiMessages.mffd9fcd5e618', { value1: (selectedPackage.duration_days) }) }}</span>
                       </div>
                       <div class="feature-item">
                         <span class="feature-icon">⚡</span>
-                        <span class="feature-text">{{ selectedPackage.concurrent_limit || 1 }} 个并发</span>
+                        <span class="feature-text">{{ translateUi('uiMessages.mf1eb4eb32522', { value1: (selectedPackage.concurrent_limit || 1) }) }}</span>
                       </div>
                     </div>
                     <p v-if="selectedPackage.description" class="package-detail-desc">
@@ -2562,13 +2564,13 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                 <div class="purchase-right">
                   <!-- 优惠券 -->
                   <div class="purchase-section">
-                    <label class="section-label">优惠券</label>
+                    <label class="section-label">{{ translateUi('uiMessages.m3e2581c8de38') }}</label>
                     <div class="coupon-input-row">
                       <input 
                         v-model="purchaseCouponCode" 
                         type="text" 
                         class="coupon-input"
-                        placeholder="输入优惠券码（可选）"
+                        :placeholder="translateUi('uiMessages.m065c34e84bf3')"
                         :disabled="!!appliedPurchaseCoupon"
                         @input="purchaseCouponCode = purchaseCouponCode.toUpperCase()"
                       />
@@ -2578,45 +2580,45 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                         @click="applyPurchaseCoupon"
                         :disabled="!purchaseCouponCode.trim()"
                       >
-                        应用
+                        {{ translateUi('directorStudio.inspector.apply') }}
                       </button>
                       <button 
                         v-else
                         class="btn-coupon-remove" 
                         @click="removePurchaseCoupon"
                       >
-                        移除
+                        {{ translateUi('user.removeCoupon') }}
                       </button>
                     </div>
                     <div v-if="purchaseCouponError" class="coupon-error">{{ purchaseCouponError }}</div>
                     <div v-if="appliedPurchaseCoupon" class="coupon-success">
-                      ✓ 已优惠 {{ formatMoney(purchaseCouponDiscount) }}
+                      {{ translateUi('uiMessages.m7dcb7a1eef68', { value1: (formatMoney(purchaseCouponDiscount)) }) }}
                     </div>
                   </div>
                   
                   
                   <!-- 价格明细 -->
                   <div class="purchase-section">
-                    <label class="section-label">支付明细</label>
+                    <label class="section-label">{{ translateUi('uiMessages.me98fe367cec2') }}</label>
                     <div class="price-breakdown" v-if="purchaseInfo">
                       <div class="price-line">
-                        <span>套餐价格</span>
+                        <span>{{ translateUi('uiMessages.m91886a0922ef') }}</span>
                         <span>{{ formatMoney(purchaseInfo.totalAmount) }}</span>
                       </div>
                       <div v-if="purchaseInfo.couponDiscount > 0" class="price-line discount">
-                        <span>优惠券</span>
+                        <span>{{ translateUi('uiMessages.m3e2581c8de38') }}</span>
                         <span>-{{ formatMoney(purchaseInfo.couponDiscount) }}</span>
                       </div>
                       <div class="price-line">
-                        <span>账户余额</span>
+                        <span>{{ translateUi('packages.accountBalance') }}</span>
                         <span>{{ formatMoney(purchaseInfo.balance) }}</span>
                       </div>
                       <div v-if="purchaseInfo.balanceUsed > 0" class="price-line used">
-                        <span>余额抵扣</span>
+                        <span>{{ translateUi('uiMessages.mf79076a7fdba') }}</span>
                         <span>-{{ formatMoney(purchaseInfo.balanceUsed) }}</span>
                       </div>
                       <div class="price-line final">
-                        <span>{{ purchaseInfo.needOnlinePayment ? '还需支付' : '余额支付' }}</span>
+                        <span>{{ purchaseInfo.needOnlinePayment ? translateUi('uiMessages.mcb89a0f8aefb') : translateUi('uiMessages.m55c5630730c0') }}</span>
                         <span class="final-amount">
                           {{ purchaseInfo.needOnlinePayment 
                             ? formatMoney(purchaseInfo.needPay) 
@@ -2631,8 +2633,8 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                   
                   <!-- 提示信息 -->
                   <div class="purchase-hint">
-                    <span v-if="purchaseInfo?.canPayWithBalance">💡 余额充足，将直接从余额扣款</span>
-                    <span v-else>💡 余额不足 {{ formatMoney(purchaseInfo?.needPay || 0) }}，需在线支付</span>
+                    <span v-if="purchaseInfo?.canPayWithBalance">{{ translateUi('uiMessages.m3fc55369baf2') }}</span>
+                    <span v-else>{{ translateUi('uiMessages.me3531d4ba8a3', { value1: (formatMoney(purchaseInfo?.needPay || 0)) }) }}</span>
                   </div>
                 </div>
               </div>
@@ -2642,14 +2644,14 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
           <!-- 弹窗底部 -->
           <div class="purchase-modal-footer">
             <button class="btn-modal-cancel" @click="closePurchasePanel">
-              取消
+              {{ translateUi('common.cancel') }}
             </button>
             <button 
               class="btn-modal-confirm"
               @click="confirmPurchase" 
               :disabled="purchaseLoading"
             >
-              {{ purchaseLoading ? '处理中...' : (purchaseInfo?.needOnlinePayment ? '去支付 →' : '确认购买') }}
+              {{ purchaseLoading ? translateUi('common.processing') : (purchaseInfo?.needOnlinePayment ? translateUi('uiMessages.m8c76a0831445') : translateUi('packages.purchaseConfirm')) }}
             </button>
           </div>
         </div>
@@ -2671,8 +2673,8 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
             <button class="support-qr-close" @click="closeSupportQrModal">×</button>
           </div>
           <div class="support-qr-body">
-            <img :src="supportQrImage" alt="客服二维码" class="support-qr-image" />
-            <p class="support-qr-tip">请使用微信扫描二维码</p>
+            <img :src="supportQrImage" :alt="translateUi('uiMessages.m32fddbbf37d9')" class="support-qr-image" />
+            <p class="support-qr-tip">{{ translateUi('uiMessages.m30e727236108') }}</p>
             <!-- 如果有链接也显示 -->
             <button 
               v-if="appSettings?.help_links?.contact_support"
@@ -2682,7 +2684,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
               <svg class="link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
               </svg>
-              <span>{{ appSettings?.help_links?.contact_support_name || '在线客服' }}</span>
+              <span>{{ appSettings?.help_links?.contact_support_name || translateUi('uiMessages.m1857aa1f2171') }}</span>
             </button>
           </div>
         </div>
@@ -2701,20 +2703,20 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
           </div>
           <div class="modal-body">
             <div class="form-group">
-              <label>团队名称 <span class="required">*</span></label>
+              <label>{{ translateUi('uiMessages.m492fd0457fc4') }} <span class="required">*</span></label>
               <input 
                 v-model="createTeamForm.name" 
                 type="text" 
-                placeholder="输入团队名称" 
+                :placeholder="translateUi('uiMessages.m4127bfb0be18')"
                 maxlength="50"
                 @keyup.enter="handleCreateTeam"
               />
             </div>
             <div class="form-group">
-              <label>团队描述</label>
+              <label>{{ translateUi('uiMessages.m37a4d7363635') }}</label>
               <textarea 
                 v-model="createTeamForm.description" 
-                placeholder="简单描述您的团队（可选）" 
+                :placeholder="translateUi('uiMessages.m5bf2e3bba4c7')"
                 rows="3"
                 maxlength="200"
               ></textarea>
@@ -2722,9 +2724,9 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
             <div v-if="createTeamError" class="error-message">{{ createTeamError }}</div>
           </div>
           <div class="modal-footer">
-            <button class="btn-cancel" @click="showCreateTeamModal = false">取消</button>
+            <button class="btn-cancel" @click="showCreateTeamModal = false">{{ translateUi('common.cancel') }}</button>
             <button class="btn-confirm" @click="handleCreateTeam" :disabled="createTeamLoading">
-              {{ createTeamLoading ? '创建中...' : '创建团队' }}
+              {{ createTeamLoading ? translateUi('uiMessages.m687d8f3ba99e') : translateUi('uiMessages.md2ec1c315266') }}
             </button>
           </div>
         </div>
@@ -2738,16 +2740,16 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
       <div v-if="showRenameTeamModal" class="modal-overlay" @click.self="showRenameTeamModal = false">
         <div class="modal-content team-modal">
           <div class="modal-header">
-            <h3>重命名团队</h3>
+            <h3>{{ translateUi('uiMessages.mf2bbfa46ef9d') }}</h3>
             <button class="modal-close" @click="showRenameTeamModal = false">×</button>
           </div>
           <div class="modal-body">
             <div class="form-group">
-              <label>团队名称 <span class="required">*</span></label>
+              <label>{{ translateUi('uiMessages.m492fd0457fc4') }} <span class="required">*</span></label>
               <input
                 v-model="renameTeamForm.name"
                 type="text"
-                placeholder="输入新的团队名称"
+                :placeholder="translateUi('uiMessages.mfe28a29d241e')"
                 maxlength="50"
                 @keyup.enter="handleRenameTeam"
               />
@@ -2755,9 +2757,9 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
             <div v-if="renameTeamError" class="error-message">{{ renameTeamError }}</div>
           </div>
           <div class="modal-footer">
-            <button class="btn-cancel" @click="showRenameTeamModal = false">取消</button>
+            <button class="btn-cancel" @click="showRenameTeamModal = false">{{ translateUi('common.cancel') }}</button>
             <button class="btn-confirm" @click="handleRenameTeam" :disabled="renameTeamLoading">
-              {{ renameTeamLoading ? '保存中...' : '确认' }}
+              {{ renameTeamLoading ? translateUi('common.saving') : translateUi('common.confirm') }}
             </button>
           </div>
         </div>
@@ -2771,19 +2773,19 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
       <div v-if="showInviteMemberModal" class="modal-overlay" @click.self="showInviteMemberModal = false">
         <div class="modal-content team-modal">
           <div class="modal-header">
-            <h3>邀请成员加入「{{ editingTeam?.name }}」</h3>
+            <h3>{{ translateUi('uiMessages.m51caebfb87fa', { value1: (editingTeam?.name) }) }}</h3>
             <button class="modal-close" @click="showInviteMemberModal = false">×</button>
           </div>
           <div class="modal-body">
             <div class="form-group">
-              <label>搜索用户或输入邮箱</label>
+              <label>{{ translateUi('uiMessages.mec3091142182') }}</label>
               <input 
                 v-model="inviteMemberForm.query" 
                 type="text" 
-                placeholder="输入用户名/邮箱搜索，或直接输入邮箱邀请" 
+                :placeholder="translateUi('uiMessages.m0340e57d5f98')"
                 @input="handleSearchUsers(inviteMemberForm.query)"
               />
-              <div v-if="inviteSearchLoading" class="search-loading">搜索中...</div>
+              <div v-if="inviteSearchLoading" class="search-loading">{{ translateUi('uiMessages.md2f4a2fda307') }}</div>
               <div v-else-if="inviteSearchResults.length > 0" class="search-results">
                 <div 
                   v-for="user in inviteSearchResults" 
@@ -2799,36 +2801,36 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                 </div>
               </div>
               <div v-else-if="inviteMemberForm.query && inviteMemberForm.query.length >= 5 && !inviteSearchLoading" class="search-hint">
-                未找到用户？可直接输入完整邮箱发送邀请
+                {{ translateUi('uiMessages.m99a293dd9bf1') }}
               </div>
             </div>
             <div v-if="inviteMemberForm.selectedUser" class="selected-user">
-              已选择: <strong>{{ inviteMemberForm.selectedUser.username }}</strong>
+              {{ translateUi('uiMessages.m33a8e0818ade') }} <strong>{{ inviteMemberForm.selectedUser.username }}</strong>
             </div>
             <div v-else-if="isValidEmail(inviteMemberForm.query)" class="selected-user email-invite">
-              将邀请邮箱: <strong>{{ inviteMemberForm.query }}</strong>
+              {{ translateUi('uiMessages.ma42b4ee785a3') }} <strong>{{ inviteMemberForm.query }}</strong>
             </div>
             <div class="form-group">
-              <label>成员角色</label>
+              <label>{{ translateUi('uiMessages.m5ec073971764') }}</label>
               <select v-model="inviteMemberForm.role">
-                <option value="member">成员</option>
-                <option value="admin">管理员</option>
+                <option value="member">{{ translateUi('uiMessages.m6e6d6ddbb7c1') }}</option>
+                <option value="admin">{{ translateUi('user.roleAdmin') }}</option>
               </select>
             </div>
             <div class="form-group">
-              <label>邀请留言（可选）</label>
+              <label>{{ translateUi('uiMessages.m8b5e40b96964') }}</label>
               <input 
                 v-model="inviteMemberForm.message" 
                 type="text" 
-                placeholder="给对方的留言" 
+                :placeholder="translateUi('uiMessages.mbed00a5b8cb6')"
                 maxlength="100"
               />
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn-cancel" @click="showInviteMemberModal = false">取消</button>
+            <button class="btn-cancel" @click="showInviteMemberModal = false">{{ translateUi('common.cancel') }}</button>
             <button class="btn-confirm" @click="handleInviteMember" :disabled="inviteLoading || !canSendInvite()">
-              {{ inviteLoading ? '发送中...' : '发送邀请' }}
+              {{ inviteLoading ? translateUi('auth.sending') : translateUi('uiMessages.m3a3bcf41a1ab') }}
             </button>
           </div>
         </div>
@@ -2842,12 +2844,12 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
       <div v-if="showMemberManageModal" class="modal-overlay" @click.self="showMemberManageModal = false">
         <div class="modal-content team-modal member-manage-modal">
           <div class="modal-header">
-            <h3>管理成员 - {{ memberManageTeam?.name }}</h3>
+            <h3>{{ translateUi('uiMessages.m2a19b70c6a7b', { value1: (memberManageTeam?.name) }) }}</h3>
             <button class="modal-close" @click="showMemberManageModal = false">×</button>
           </div>
           <div class="modal-body">
-            <div v-if="memberManageLoading" class="loading-hint">加载中...</div>
-            <div v-else-if="teamStore.teamMembers.value.length === 0" class="empty-hint">暂无成员</div>
+            <div v-if="memberManageLoading" class="loading-hint">{{ translateUi('common.loading') }}</div>
+            <div v-else-if="teamStore.teamMembers.value.length === 0" class="empty-hint">{{ translateUi('uiMessages.m51c54a24eb22') }}</div>
             <div v-else class="member-list">
               <div 
                 v-for="member in teamStore.teamMembers.value" 
@@ -2870,16 +2872,16 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                     @change="handleChangeMemberRole(memberManageTeam, member.user_id, $event.target.value)"
                     :disabled="member.user_id === props.userInfo?.id"
                   >
-                    <option value="admin">管理员</option>
-                    <option value="member">成员</option>
+                    <option value="admin">{{ translateUi('user.roleAdmin') }}</option>
+                    <option value="member">{{ translateUi('uiMessages.m6e6d6ddbb7c1') }}</option>
                   </select>
-                  <span v-else class="role-label owner">所有者</span>
+                  <span v-else class="role-label owner">{{ translateUi('uiMessages.m43a7f4b4c5c8') }}</span>
                   <!-- 移除按钮（不能移除owner和自己） -->
                   <button 
                     v-if="member.role !== 'owner' && member.user_id !== props.userInfo?.id"
                     class="btn-remove-member"
                     @click="handleRemoveMember(memberManageTeam, member.user_id)"
-                    title="移除成员"
+                    :title="translateUi('uiMessages.md7e57c297a69')"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <line x1="18" y1="6" x2="6" y2="18"/>
@@ -2891,7 +2893,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn-cancel" @click="showMemberManageModal = false">关闭</button>
+            <button class="btn-cancel" @click="showMemberManageModal = false">{{ translateUi('common.close') }}</button>
           </div>
         </div>
       </div>

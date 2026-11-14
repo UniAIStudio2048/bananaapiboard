@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * LoginModal.vue - 社区登录/注册弹窗
  * 复用 Auth.vue 的登录注册逻辑，以弹窗形式展示
@@ -179,7 +181,7 @@ async function sendVerificationCode() {
     })
     if (!r.ok) {
       const data = await r.json()
-      throw new Error(data.message || '发送失败')
+      throw new Error(data.message || translateUi('uiMessages.mac77953a1e06'))
     }
     codeSent.value = true
     countdown.value = 60
@@ -191,7 +193,7 @@ async function sendVerificationCode() {
       }
     }, 1000)
   } catch (e) {
-    error.value = e.message || '发送验证码失败'
+    error.value = e.message || translateUi('uiMessages.m0a7b29f34fae')
   } finally {
     sendingCode.value = false
   }
@@ -204,38 +206,38 @@ async function submit() {
   const needEmailMode = hasWhitelist.value
   if (mode.value === 'register' && needEmailMode) {
     if (!nickname.value.trim() || !password.value) {
-      error.value = '请填写昵称和密码'
+      error.value = translateUi('uiMessages.m05afc8816e12')
       return
     }
   } else if (!account.value.trim() || !password.value) {
-    error.value = '请填写用户名和密码'
+    error.value = translateUi('uiMessages.me72dfb96ac68')
     return
   }
 
   if (mode.value === 'register') {
     if (!nickname.value.trim()) {
-      error.value = '请填写昵称'
+      error.value = translateUi('uiMessages.m3b18ce572985')
       return
     }
     if (password.value !== confirmPwd.value) {
-      error.value = '两次输入的密码不一致'
+      error.value = translateUi('uiMessages.m58807745708e')
       return
     }
     if (password.value.length < 6) {
-      error.value = '密码长度至少6位'
+      error.value = translateUi('uiMessages.m8eee17404155')
       return
     }
     if (requireInviteCode.value && !inviteCode.value.trim()) {
-      error.value = '请输入邀请码'
+      error.value = translateUi('uiMessages.m884fcf3305da')
       return
     }
     if (hasWhitelist.value && !fullEmail.value) {
-      error.value = '请填写邮箱地址'
+      error.value = translateUi('uiMessages.m5b484f8c6f19')
       return
     }
     if (emailConfig.value.require_email_verification) {
       if (!emailCode.value) {
-        error.value = '请输入邮箱验证码'
+        error.value = translateUi('auth.emailCodeRequired')
         return
       }
     }
@@ -264,11 +266,11 @@ async function submit() {
 
     if (!r.ok) {
       const data = await r.json()
-      if (data.error === 'disabled') error.value = '账号已被禁用'
-      else if (data.error === 'invalid_credentials') error.value = '密码不正确'
-      else if (data.error === 'not_found') error.value = '用户不存在'
-      else if (data.error === 'too_many_requests') error.value = data.message || '密码错误次数过多，请5分钟后重试'
-      else error.value = data.message || '操作失败'
+      if (data.error === 'disabled') error.value = translateUi('auth.accountDisabled')
+      else if (data.error === 'invalid_credentials') error.value = translateUi('auth.invalidCredentials')
+      else if (data.error === 'not_found') error.value = translateUi('auth.userNotFound')
+      else if (data.error === 'too_many_requests') error.value = data.message || translateUi('uiMessages.mdc52a1075134')
+      else error.value = data.message || translateUi('auth.operationFailed')
       return
     }
 
@@ -278,13 +280,13 @@ async function submit() {
     clearWorkflowSession()
     localStorage.removeItem('canvas_background_tasks')
 
-    message.value = mode.value === 'register' ? '注册成功' : '登录成功'
+    message.value = mode.value === 'register' ? translateUi('uiMessages.meab7185db6aa') : translateUi('uiMessages.m645b934deb86')
     setTimeout(() => {
       emit('login-success')
       close()
     }, 500)
   } catch (e) {
-    if (!error.value) error.value = '网络错误，请重试'
+    if (!error.value) error.value = translateUi('auth.networkError')
   } finally {
     loading.value = false
   }
@@ -292,7 +294,7 @@ async function submit() {
 
 async function sendResetCode() {
   if (!resetEmail.value) {
-    error.value = '请输入注册时使用的邮箱'
+    error.value = translateUi('uiMessages.m41e9059e4dd2')
     return
   }
   sendingResetCode.value = true
@@ -305,11 +307,11 @@ async function sendResetCode() {
     })
     if (!r.ok) {
       const data = await r.json()
-      throw new Error(data.message || '发送失败')
+      throw new Error(data.message || translateUi('uiMessages.mac77953a1e06'))
     }
     resetCodeSent.value = true
     resetCountdown.value = 60
-    message.value = '验证码已发送，请查收邮箱'
+    message.value = translateUi('uiMessages.m9744d271502e')
     const timer = setInterval(() => {
       resetCountdown.value--
       if (resetCountdown.value <= 0) {
@@ -318,7 +320,7 @@ async function sendResetCode() {
       }
     }, 1000)
   } catch (e) {
-    error.value = e.message || '发送验证码失败'
+    error.value = e.message || translateUi('uiMessages.m0a7b29f34fae')
   } finally {
     sendingResetCode.value = false
   }
@@ -328,23 +330,23 @@ async function resetPassword() {
   error.value = ''
   message.value = ''
   if (!resetEmail.value) {
-    error.value = '请输入邮箱'
+    error.value = translateUi('user.enterEmail')
     return
   }
   if (!resetEmailCode.value) {
-    error.value = '请输入验证码'
+    error.value = translateUi('uiMessages.mba9192e1bb7a')
     return
   }
   if (!newPassword.value) {
-    error.value = '请输入新密码'
+    error.value = translateUi('user.enterNewPassword')
     return
   }
   if (newPassword.value.length < 6) {
-    error.value = '密码长度至少6位'
+    error.value = translateUi('uiMessages.m8eee17404155')
     return
   }
   if (newPassword.value !== confirmNewPwd.value) {
-    error.value = '两次输入的密码不一致'
+    error.value = translateUi('uiMessages.m58807745708e')
     return
   }
   loading.value = true
@@ -360,16 +362,16 @@ async function resetPassword() {
     })
     if (!r.ok) {
       const data = await r.json()
-      throw new Error(data.message || '密码重置失败')
+      throw new Error(data.message || translateUi('uiMessages.mb0703ade4f60'))
     }
-    message.value = '密码重置成功，请使用新密码登录'
+    message.value = translateUi('uiMessages.m84e22a633bf5')
     setTimeout(() => {
       exitResetMode()
       account.value = resetEmail.value
       password.value = ''
     }, 1500)
   } catch (e) {
-    error.value = e.message || '密码重置失败'
+    error.value = e.message || translateUi('uiMessages.mb0703ade4f60')
   } finally {
     loading.value = false
   }
@@ -399,18 +401,18 @@ function handleSmsAuthenticated() { emit('login-success'); close() }
               v-if="resetMode"
               class="w-7 h-7 flex items-center justify-center rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition"
               @click="exitResetMode"
-              aria-label="返回"
+              :aria-label="translateUi('common.back')"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
             </button>
             <h2 class="text-lg font-semibold text-white">
-              {{ resetMode ? '找回密码' : (mode === 'login' ? '登录' : '注册') }}
+              {{ resetMode ? translateUi('uiMessages.m06eb15b75f01') : (mode === 'login' ? translateUi('nav.login') : translateUi('nav.register')) }}
             </h2>
           </div>
           <button
             class="w-8 h-8 flex items-center justify-center rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition"
             @click="close"
-            aria-label="关闭"
+            :aria-label="translateUi('common.close')"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
@@ -423,12 +425,12 @@ function handleSmsAuthenticated() { emit('login-success'); close() }
               class="flex-1 py-2 rounded-md text-sm font-medium transition"
               :class="mode === 'login' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white/80'"
               @click="mode = 'login'"
-            >登录</button>
+            >{{ translateUi('nav.login') }}</button>
             <button
               class="flex-1 py-2 rounded-md text-sm font-medium transition"
               :class="mode === 'register' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white/80'"
               v-if="policy.registration_enabled" @click="mode = 'register'"
-            >注册</button>
+            >{{ translateUi('nav.register') }}</button>
           </div>
 
           <WechatLoginButton v-if="mode === 'login' && !resetMode" />
@@ -442,28 +444,28 @@ function handleSmsAuthenticated() { emit('login-success'); close() }
           <PhoneAuthForm v-else-if="phoneFormMode" class="text-white" :mode="phoneFormMode" :policy="policy" :invite-code="inviteCode" :require-invite-code="requireInviteCode" @authenticated="handleSmsAuthenticated" @back="backToPassword" @retrieve="resetMode = true; smsLogin = true" />
           <!-- 找回密码表单 -->
           <form v-else-if="resetMode" @submit.prevent="resetPassword" class="space-y-4">
-            <p class="text-sm text-white/50 mb-2">输入注册时使用的邮箱，我们将发送验证码帮你重置密码。</p>
+            <p class="text-sm text-white/50 mb-2">{{ translateUi('uiMessages.m74de2eee39d9') }}</p>
 
             <div>
-              <label class="block text-sm text-white/70 mb-1.5">邮箱</label>
+              <label class="block text-sm text-white/70 mb-1.5">{{ translateUi('auth.email') }}</label>
               <input
                 v-model="resetEmail"
                 type="email"
                 class="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-white/30 focus:outline-none focus:border-blue-500/50 transition"
-                placeholder="请输入注册邮箱"
+                :placeholder="translateUi('uiMessages.m85435c1130e6')"
                 required
               />
             </div>
 
             <div>
-              <label class="block text-sm text-white/70 mb-1.5">验证码</label>
+              <label class="block text-sm text-white/70 mb-1.5">{{ translateUi('uiMessages.mbb015c60bafc') }}</label>
               <div class="flex gap-2">
                 <input
                   v-model="resetEmailCode"
                   type="text"
                   maxlength="6"
                   class="flex-1 px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-white/30 focus:outline-none focus:border-blue-500/50 transition"
-                  placeholder="请输入6位验证码"
+                  :placeholder="translateUi('uiMessages.m6bc8d6f5786b')"
                   required
                 />
                 <button
@@ -472,29 +474,29 @@ function handleSmsAuthenticated() { emit('login-success'); close() }
                   :disabled="sendingResetCode || resetCodeSent || !resetEmail"
                   class="px-4 py-2.5 bg-blue-600/80 text-white text-sm rounded-lg hover:bg-blue-500/80 disabled:opacity-40 disabled:cursor-not-allowed transition whitespace-nowrap"
                 >
-                  {{ sendingResetCode ? '发送中...' : resetCodeSent ? `${resetCountdown}s` : '发送验证码' }}
+                  {{ sendingResetCode ? translateUi('auth.sending') : resetCodeSent ? `${resetCountdown}s` : translateUi('auth.sendCode') }}
                 </button>
               </div>
             </div>
 
             <div>
-              <label class="block text-sm text-white/70 mb-1.5">新密码</label>
+              <label class="block text-sm text-white/70 mb-1.5">{{ translateUi('user.newPassword') }}</label>
               <input
                 v-model="newPassword"
                 type="password"
                 class="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-white/30 focus:outline-none focus:border-blue-500/50 transition"
-                placeholder="请输入新密码（至少6位）"
+                :placeholder="translateUi('uiMessages.medef5df61d32')"
                 required
               />
             </div>
 
             <div>
-              <label class="block text-sm text-white/70 mb-1.5">确认新密码</label>
+              <label class="block text-sm text-white/70 mb-1.5">{{ translateUi('uiMessages.m6fde05a916c6') }}</label>
               <input
                 v-model="confirmNewPwd"
                 type="password"
                 class="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-white/30 focus:outline-none focus:border-blue-500/50 transition"
-                placeholder="请再次输入新密码"
+                :placeholder="translateUi('user.enterConfirmPassword')"
                 required
               />
             </div>
@@ -516,14 +518,14 @@ function handleSmsAuthenticated() { emit('login-success'); close() }
             >
               <span v-if="loading" class="inline-flex items-center">
                 <svg class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>
-                处理中...
+                {{ translateUi('common.processing') }}
               </span>
-              <span v-else>重置密码</span>
+              <span v-else>{{ translateUi('uiMessages.md70928debc2e') }}</span>
             </button>
 
             <div class="text-center">
               <button type="button" class="text-sm text-blue-400 hover:text-blue-300 transition" @click="exitResetMode">
-                返回登录
+                {{ translateUi('uiMessages.m747b0f9082e6') }}
               </button>
             </div>
           </form>
@@ -533,25 +535,25 @@ function handleSmsAuthenticated() { emit('login-success'); close() }
             <PhoneCountrySelect v-if="mode === 'login' && !resetMode" v-model="loginCountry" :countries="loginCountries" :account="account" />
             <!-- 注册：昵称 -->
             <div v-if="mode === 'register'">
-              <label class="block text-sm text-white/70 mb-1.5">昵称 *</label>
+              <label class="block text-sm text-white/70 mb-1.5">{{ translateUi('uiMessages.m2d137954ca84') }}</label>
               <input
                 v-model="nickname"
                 type="text"
                 class="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-white/30 focus:outline-none focus:border-blue-500/50 transition"
-                placeholder="给自己取一个昵称"
+                :placeholder="translateUi('uiMessages.m86c3f85829dd')"
                 required
               />
             </div>
 
             <!-- 白名单模式：前缀+后缀下拉 -->
             <div v-if="mode === 'register' && hasWhitelist">
-              <label class="block text-sm text-white/70 mb-1.5">邮箱 *</label>
+              <label class="block text-sm text-white/70 mb-1.5">{{ translateUi('uiMessages.m54fe405363b6') }}</label>
               <div class="flex items-center gap-1">
                 <input
                   v-model="emailPrefix"
                   type="text"
                   class="flex-[2] min-w-0 px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-white/30 focus:outline-none focus:border-blue-500/50 transition"
-                  placeholder="邮箱前缀"
+                  :placeholder="translateUi('auth.emailPrefix')"
                   required
                 />
                 <span class="text-white/50 text-sm px-1">@</span>
@@ -569,57 +571,57 @@ function handleSmsAuthenticated() { emit('login-success'); close() }
 
             <!-- 普通模式：用户名/邮箱 -->
             <div v-if="!(mode === 'register' && hasWhitelist)">
-              <label class="block text-sm text-white/70 mb-1.5">{{ mode === 'register' ? '邮箱' : copy.loginAccount }}</label>
+              <label class="block text-sm text-white/70 mb-1.5">{{ mode === 'register' ? translateUi('auth.email') : copy.loginAccount }}</label>
               <input
                 v-model="account"
                 :type="mode === 'register' ? 'email' : 'text'"
                 class="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-white/30 focus:outline-none focus:border-blue-500/50 transition"
-                :placeholder="mode === 'register' ? '请输入邮箱地址' : copy.loginAccountPlaceholder"
+                :placeholder="mode === 'register' ? translateUi('uiMessages.m74db7d9f074a') : copy.loginAccountPlaceholder"
                 required
               />
             </div>
 
             <div>
               <div class="flex items-center justify-between mb-1.5">
-                <label class="text-sm text-white/70">密码</label>
+                <label class="text-sm text-white/70">{{ translateUi('auth.password') }}</label>
                 <button
                   v-if="mode === 'login'"
                   type="button"
                   class="text-xs text-blue-400 hover:text-blue-300 transition"
                   @click="enterResetMode"
-                >忘记密码？</button>
+                >{{ translateUi('uiMessages.m1d02d7f1c5c4') }}</button>
               </div>
               <input
                 v-model="password"
                 type="password"
                 class="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-white/30 focus:outline-none focus:border-blue-500/50 transition"
-                placeholder="请输入密码"
+                :placeholder="translateUi('uiMessages.m728a7b601c56')"
                 required
               />
             </div>
 
             <!-- 注册：确认密码 -->
             <div v-if="mode === 'register'">
-              <label class="block text-sm text-white/70 mb-1.5">确认密码</label>
+              <label class="block text-sm text-white/70 mb-1.5">{{ translateUi('user.confirmPassword') }}</label>
               <input
                 v-model="confirmPwd"
                 type="password"
                 class="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-white/30 focus:outline-none focus:border-blue-500/50 transition"
-                placeholder="请再次输入密码"
+                :placeholder="translateUi('uiMessages.m901b301d0a81')"
                 required
               />
             </div>
 
             <!-- 注册：邮箱验证码 -->
             <div v-if="mode === 'register' && emailConfig.require_email_verification">
-              <label class="block text-sm text-white/70 mb-1.5">邮箱验证码 *</label>
+              <label class="block text-sm text-white/70 mb-1.5">{{ translateUi('uiMessages.m05a00a185d20') }}</label>
               <div class="flex gap-2">
                 <input
                   v-model="emailCode"
                   type="text"
                   maxlength="6"
                   class="flex-1 px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-white/30 focus:outline-none focus:border-blue-500/50 transition"
-                  placeholder="请输入6位验证码"
+                  :placeholder="translateUi('uiMessages.m6bc8d6f5786b')"
                   required
                 />
                 <button
@@ -628,7 +630,7 @@ function handleSmsAuthenticated() { emit('login-success'); close() }
                   :disabled="sendingCode || codeSent || !fullEmail"
                   class="px-4 py-2.5 bg-blue-600/80 text-white text-sm rounded-lg hover:bg-blue-500/80 disabled:opacity-40 disabled:cursor-not-allowed transition whitespace-nowrap"
                 >
-                  {{ sendingCode ? '发送中...' : codeSent ? `${countdown}s` : '发送验证码' }}
+                  {{ sendingCode ? translateUi('auth.sending') : codeSent ? `${countdown}s` : translateUi('auth.sendCode') }}
                 </button>
               </div>
             </div>
@@ -636,13 +638,13 @@ function handleSmsAuthenticated() { emit('login-success'); close() }
             <!-- 注册：邀请码 -->
             <div v-if="mode === 'register'">
               <label class="block text-sm text-white/70 mb-1.5">
-                邀请码{{ requireInviteCode ? ' *' : '（可选）' }}
+                {{ translateUi('uiMessages.m6c371bb023ea', { value1: (requireInviteCode ? ' *' : translateUi('uiMessages.m3d5c3c3dbaca')) }) }}
               </label>
               <input
                 v-model="inviteCode"
                 type="text"
                 class="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-white/30 focus:outline-none focus:border-blue-500/50 transition"
-                :placeholder="requireInviteCode ? '必填邀请码' : '有邀请码可填写'"
+                :placeholder="requireInviteCode ? translateUi('uiMessages.m9a4186e44aac') : translateUi('uiMessages.md254fb4900c4')"
               />
             </div>
 
@@ -653,7 +655,7 @@ function handleSmsAuthenticated() { emit('login-success'); close() }
                 v-model="signupSource"
                 class="w-full px-3.5 py-2.5 bg-gray-800 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500/50 transition cursor-pointer"
               >
-                <option value="" class="bg-gray-800 text-white">请选择</option>
+                <option value="" class="bg-gray-800 text-white">{{ translateUi('uiMessages.mda590a8fe3ce') }}</option>
                 <option v-for="option in SIGNUP_SOURCE_OPTIONS" :key="option.value" :value="option.value" class="bg-gray-800 text-white">
                   {{ option.label }}
                 </option>
@@ -677,9 +679,9 @@ function handleSmsAuthenticated() { emit('login-success'); close() }
             >
               <span v-if="loading" class="inline-flex items-center">
                 <svg class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>
-                处理中...
+                {{ translateUi('common.processing') }}
               </span>
-              <span v-else>{{ mode === 'register' ? '注册' : '登录' }}</span>
+              <span v-else>{{ mode === 'register' ? translateUi('nav.register') : translateUi('nav.login') }}</span>
             </button>
           </form>
         </div>

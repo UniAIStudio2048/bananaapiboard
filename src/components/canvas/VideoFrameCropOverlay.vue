@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { frameCropPixels, initialFrameCrop, moveFrameCrop, resizeFrameCrop, setFrameCropAspectRatio } from '@/utils/videoFrameCrop'
 
@@ -111,12 +113,12 @@ onUnmounted(() => {
 
 <template>
   <div ref="surface" class="crop-surface nodrag nopan" :style="surfaceStyle" @pointerdown.stop @click.stop @wheel.stop>
-    <div v-if="ready" class="crop-selection" :style="cropStyle" tabindex="0" role="group" aria-label="移动裁切区域" @pointerdown.stop.prevent="startDrag($event)" @keydown="adjustByKey($event)">
+    <div v-if="ready" class="crop-selection" :style="cropStyle" tabindex="0" role="group" :aria-label="translateUi('uiMessages.m1600e8bd72e0')" @pointerdown.stop.prevent="startDrag($event)" @keydown="adjustByKey($event)">
       <span class="crop-size">{{ pixels.width }} × {{ pixels.height }}</span>
       <div class="crop-grid" aria-hidden="true"></div>
-      <button v-for="handle in handles" :key="handle" type="button" class="crop-handle" :class="`handle-${handle}`" :aria-label="`调整裁切边缘 ${handle}`" @pointerdown.stop.prevent="startDrag($event, handle)" @keydown="adjustByKey($event, handle)"></button>
+      <button v-for="handle in handles" :key="handle" type="button" class="crop-handle" :class="`handle-${handle}`" :aria-label="translateUi('uiMessages.m4907d7d45163', { value1: (handle) })" @pointerdown.stop.prevent="startDrag($event, handle)" @keydown="adjustByKey($event, handle)"></button>
     </div>
-    <span v-else class="crop-loading">视频加载中…</span>
+    <span v-else class="crop-loading">{{ translateUi('uiMessages.m77e8d12080b6') }}</span>
   </div>
 </template>
 

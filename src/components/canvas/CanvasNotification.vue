@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * CanvasNotification.vue - 画布模式通知铃铛组件
  * 支持多条公告消息，按日期分组显示
@@ -181,7 +183,7 @@ onUnmounted(() => {
       class="canvas-notification-trigger"
       :class="{ 'theme-light': props.theme === 'light' }"
       @click.stop="togglePopup"
-      title="查看公告"
+      :title="translateUi('uiMessages.mb0538ff56623')"
     >
       <svg class="bell-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
@@ -206,14 +208,14 @@ onUnmounted(() => {
               :class="{ active: activeTab === 'interactive' }"
               @click="switchTab('interactive')"
             >
-              互动消息
+              {{ translateUi('uiMessages.m88d8401c9a69') }}
             </button>
             <button 
               class="tab-btn" 
               :class="{ active: activeTab === 'platform' }"
               @click="switchTab('platform')"
             >
-              平台消息
+              {{ translateUi('uiMessages.m69fe4cec5159') }}
             </button>
           </div>
           <div class="header-actions">
@@ -229,14 +231,14 @@ onUnmounted(() => {
         <div class="popup-content">
           <div v-if="loading" class="loading-state">
             <div class="loading-spinner"></div>
-            <span>加载中...</span>
+            <span>{{ translateUi('common.loading') }}</span>
           </div>
           
           <div v-else-if="groupedAnnouncements.length === 0" class="empty-state">
             <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <path stroke-linecap="round" stroke-linejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
             </svg>
-            <span>暂无消息</span>
+            <span>{{ translateUi('uiMessages.m98b9751bbf85') }}</span>
           </div>
           
           <div v-else class="announcement-list">

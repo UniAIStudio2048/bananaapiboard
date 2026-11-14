@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 /**
  * SkillsMarket「创建/编辑 Skill 弹窗居中 + 表单布局」回归测试（bugfix）。
  *
@@ -39,7 +40,7 @@ test('编辑状态下隐藏「全部/返回」形态切换按钮', () => {
 test('「返回市场」按钮应使用文本按钮类而非图标按钮类', () => {
   assert.match(
     source,
-    /<button class="all-button" type="button" @click="editing = null">返回市场<\/button>/,
+    localizedPattern(/<button class="all-button" type="button" @click="editing = null">返回市场<\/button>/),
     '返回市场是文本操作，不应使用 32px 方块图标按钮类 ghost-button'
   )
 })

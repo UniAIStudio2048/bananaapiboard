@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * ImageCropper.vue - 图片裁剪/扩图组件
  * 
@@ -49,7 +51,7 @@ const currentPoints = computed(() => {
 
 // 扩图比例预设（参考出图比例）
 const outpaintRatioPresets = [
-  { value: 'free', label: '自由' },
+  { value: 'free', get label() { return translateUi('uiMessages.md1047eed5dd5') } },
   { value: '1:1', label: '1:1' },
   { value: '16:9', label: '16:9' },
   { value: '9:16', label: '9:16' },
@@ -141,7 +143,7 @@ function resetDragState() {
 
 // 比例预设
 const ratioPresets = [
-  { value: 'free', label: '自由' },
+  { value: 'free', get label() { return translateUi('uiMessages.md1047eed5dd5') } },
   { value: '16:9', label: '16:9' },
   { value: '4:3', label: '4:3' },
   { value: '3:2', label: '3:2' },
@@ -149,7 +151,7 @@ const ratioPresets = [
   { value: '2:3', label: '2:3' },
   { value: '3:4', label: '3:4' },
   { value: '9:16', label: '9:16' },
-  { value: 'custom', label: '自定义' }
+  { value: 'custom', get label() { return translateUi('uiMessages.m4eafa9e925b3') } }
 ]
 
 // 计算当前是裁剪还是扩图模式
@@ -545,7 +547,7 @@ function drawCropOverlay() {
   
   // 显示输出尺寸和模式
   const sizeText = `${outputSize.value.width} × ${outputSize.value.height}`
-  const modeText = isExpanding.value ? '扩图' : '裁剪'
+  const modeText = isExpanding.value ? translateUi('uiMessages.mdc76bd45af6f') : translateUi('uiMessages.m184506303bf5')
   
   ctx.font = '13px system-ui, sans-serif'
   const textWidth = Math.max(ctx.measureText(sizeText).width, ctx.measureText(modeText).width)
@@ -1086,12 +1088,12 @@ onUnmounted(() => {
           <!-- 头部工具栏 -->
           <div class="cropper-header">
             <div class="header-left">
-              <button class="close-btn" @click="handleCancel" title="取消 (ESC)">
+              <button class="close-btn" @click="handleCancel" :title="translateUi('uiMessages.m8be5640d28fc')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
               </button>
-              <span class="title">{{ mode === 'outpaint' ? '扩图' : '裁剪 / 扩图' }}</span>
+              <span class="title">{{ mode === 'outpaint' ? translateUi('uiMessages.mdc76bd45af6f') : translateUi('uiMessages.m6bd8d01da1e9') }}</span>
             </div>
             
             <!-- 裁剪模式下显示比例选择 -->
@@ -1117,7 +1119,7 @@ onUnmounted(() => {
                     v-model.number="customWidth"
                     min="10"
                     max="8192"
-                    placeholder="宽"
+                    :placeholder="translateUi('uiMessages.m8dd966ad496e')"
                     class="size-input"
                     @keyup.enter="applyCustomSize"
                   />
@@ -1127,12 +1129,12 @@ onUnmounted(() => {
                     v-model.number="customHeight"
                     min="10"
                     max="8192"
-                    placeholder="高"
+                    :placeholder="translateUi('uiMessages.mb1c27820fec2')"
                     class="size-input"
                     @keyup.enter="applyCustomSize"
                   />
                   <button class="apply-size-btn" @click="applyCustomSize">
-                    应用
+                    {{ translateUi('directorStudio.inspector.apply') }}
                   </button>
                 </div>
               </Transition>
@@ -1154,19 +1156,19 @@ onUnmounted(() => {
             </div>
             
             <div class="header-right">
-              <button class="reset-btn" @click="resetCrop" title="重置">
+              <button class="reset-btn" @click="resetCrop" :title="translateUi('common.reset')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8" stroke-linecap="round" stroke-linejoin="round"/>
                   <path d="M3 3v5h5" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-                重置
+                {{ translateUi('common.reset') }}
               </button>
               <!-- 裁剪模式显示确认按钮 -->
-              <button v-if="mode !== 'outpaint'" class="confirm-btn" @click="applyCrop" title="确认 (Enter)">
+              <button v-if="mode !== 'outpaint'" class="confirm-btn" @click="applyCrop" :title="translateUi('uiMessages.md11b4c24b115')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-                {{ isExpanding ? '确认扩图' : '确认裁剪' }}
+                {{ isExpanding ? translateUi('uiMessages.mcfb36e4eb5f1') : translateUi('uiMessages.m798783f6eae1') }}
               </button>
             </div>
           </div>
@@ -1175,7 +1177,7 @@ onUnmounted(() => {
           <div class="cropper-content">
             <div v-if="isLoading" class="loading-overlay">
               <div class="loading-spinner"></div>
-              <span>加载中...</span>
+              <span>{{ translateUi('common.loading') }}</span>
             </div>
             
             <div class="canvas-wrapper" :style="{ width: canvasWidth + 'px', height: canvasHeight + 'px' }">
@@ -1207,7 +1209,7 @@ onUnmounted(() => {
               <div class="outpaint-info-row">
                 <!-- 图片缩放控制 -->
                 <div class="scale-control">
-                  <button class="scale-btn" @click="scaleOutpaintImage(-1)" title="缩小">
+                  <button class="scale-btn" @click="scaleOutpaintImage(-1)" :title="translateUi('canvas.zoomOut')">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M5 12h14" stroke-linecap="round"/>
                     </svg>
@@ -1223,7 +1225,7 @@ onUnmounted(() => {
                     />
                     <span class="scale-value">{{ Math.round(outpaintImageScale * 100) }}%</span>
                   </div>
-                  <button class="scale-btn" @click="scaleOutpaintImage(1)" title="放大">
+                  <button class="scale-btn" @click="scaleOutpaintImage(1)" :title="translateUi('canvas.zoomIn')">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
                     </svg>
@@ -1232,7 +1234,7 @@ onUnmounted(() => {
                 
                 <!-- 输出尺寸显示 -->
                 <div class="size-display">
-                  <span class="size-label">输出尺寸</span>
+                  <span class="size-label">{{ translateUi('uiMessages.md9091912e724') }}</span>
                   <span class="size-value">{{ outputSize.width }} × {{ outputSize.height }}</span>
                 </div>
               </div>
@@ -1257,20 +1259,20 @@ onUnmounted(() => {
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.636 5.636l2.122 2.122m8.484 8.484l2.122 2.122M5.636 18.364l2.122-2.122m8.484-8.484l2.122-2.122" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
-                  生成扩图
-                  <span class="points-badge">-{{ currentPoints }} 积分</span>
+                  {{ translateUi('uiMessages.m6e37268c47a6') }}
+                  <span class="points-badge">{{ translateUi('uiMessages.m68de3bd6860a', { value1: (currentPoints) }) }}</span>
                 </button>
               </div>
               
-              <span class="outpaint-tip">拖拽移动图片 · 滚轮缩放图片 · 超出画布部分由AI填充</span>
+              <span class="outpaint-tip">{{ translateUi('uiMessages.m5062fdbbb203') }}</span>
             </div>
             <!-- 裁剪模式显示模式指示器 -->
             <template v-else>
               <div class="mode-indicator" :class="{ expanding: isExpanding }">
                 <span class="mode-dot"></span>
-                <span>{{ isExpanding ? '扩图模式 - 超出原图部分将填充白色' : '裁剪模式' }}</span>
+                <span>{{ isExpanding ? translateUi('uiMessages.mc59efbceab04') : translateUi('uiMessages.mb5e364c66254') }}</span>
               </div>
-              <span class="hint">拖拽边框调整区域 · 框超出图片即为扩图 · Enter 确认 · ESC 取消</span>
+              <span class="hint">{{ translateUi('uiMessages.m8ddfc3be82ce') }}</span>
             </template>
           </div>
         </div>

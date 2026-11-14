@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../../i18n/index.js'
 import * as React from 'react'
 
 import { useEffect, useRef, useState } from 'react'
@@ -18,5 +19,5 @@ export function TextOverlay({ layers, time }: { layers: TextLayer[]; time: numbe
  const ref=useRef<HTMLDivElement>(null),[shortSide,setShortSide]=useState(0)
  // Layout size ignores the editor's opening scale animation, which ResizeObserver never reports.
  useEffect(()=>{const element=ref.current;if(!element)return;const measure=()=>setShortSide(Math.min(element.offsetWidth,element.offsetHeight));measure();const observer=new ResizeObserver(measure);observer.observe(element);return()=>observer.disconnect()},[])
- return <div ref={ref} className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg" aria-label="文字预览">{layers.map((layer,index)=>time>=layer.start&&time<layer.end?<TextLayerPreview key={index} layer={layer} time={time} shortSide={shortSide}/>:null)}</div>
+ return <div ref={ref} className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg" data-preview-layer="text" aria-label={translateUi('uiMessages.m0178ab867344')}>{layers.map((layer,index)=>time>=layer.start&&time<layer.end?<TextLayerPreview key={index} layer={layer} time={time} shortSide={shortSide}/>:null)}</div>
 }

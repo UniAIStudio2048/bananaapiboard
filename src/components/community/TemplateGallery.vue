@@ -7,7 +7,7 @@
     <div class="flex items-center justify-between mb-4">
       <span class="text-sm text-neutral-400">{{ communityStore.sectionNames.templates_subtitle }}</span>
       <router-link to="/community/templates" class="text-sm text-neutral-400 hover:text-white transition-colors">
-        查看全部 &gt;
+        {{ translateUi('uiMessages.mad2a28ae6a49') }}
       </router-link>
     </div>
 
@@ -33,7 +33,7 @@
           <!-- Hover overlay -->
           <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <span class="px-3 py-1.5 bg-white text-black text-xs font-medium rounded-full">
-              预览工作流
+              {{ translateUi('uiMessages.m76583f3157df') }}
             </span>
           </div>
         </div>
@@ -43,7 +43,7 @@
 
     <!-- 空状态 -->
     <div v-else class="text-center py-10 text-neutral-600 text-sm">
-      暂无模板
+      {{ translateUi('canvas.templates.noTemplates') }}
     </div>
 
     <!-- WorkflowPreviewModal -->
@@ -58,6 +58,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { defineAsyncComponent, ref, onMounted } from 'vue'
 import { getTemplates } from '@/api/community'
 import { getCanvasThumbnailUrl } from '@/utils/canvasThumbnail'

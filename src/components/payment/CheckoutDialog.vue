@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import QRCode from 'qrcode'
 import { checkoutApi } from '@/api/checkout'
@@ -27,10 +29,10 @@ const remaining = computed(() => {
 })
 const locked = computed(() => attempt.value?.status === 'pending_review')
 const amount = computed(() => attempt.value?.amount_fen ?? state.value.order?.total_fen ?? checkoutRequest.value?.input.amount)
-const title = computed(() => state.value.order?.snapshot?.title || checkoutRequest.value?.title || '订单支付')
+const title = computed(() => state.value.order?.snapshot?.title || checkoutRequest.value?.title || translateUi('uiMessages.m34c2f202026e'))
 const submission = computed(() => state.value.order?.submissions?.find(s => s.attempt_id === attempt.value?.id))
-const bankFields = [['account_name', '收款户名'], ['account_number', '银行账号'], ['bank_name', '开户行'], ['tax_number', '税号'], ['address', '地址'], ['phone', '联系电话'], ['bank_code', '联行号'], ['instructions', '转账说明']]
-const labels = { pending: '待支付', awaiting_receipt: '待提交回执', paid: '已支付', pending_review: '待审核', approved: '审核通过', rejected: '已驳回' }
+const bankFields = [['account_name', translateUi('uiMessages.m22320ca0675e')], ['account_number', translateUi('uiMessages.m0cc3f24453f3')], ['bank_name', translateUi('uiMessages.mc74687bbb415')], ['tax_number', translateUi('uiMessages.m67188379f8ea')], ['address', translateUi('uiMessages.m37aac5b4e639')], ['phone', translateUi('uiMessages.md6981829142a')], ['bank_code', translateUi('uiMessages.m3dc20aa37c90')], ['instructions', translateUi('uiMessages.m7c93f1355bf6')]]
+const labels = { get pending() { return translateUi('uiMessages.m25f4ba580022') }, get awaiting_receipt() { return translateUi('uiMessages.m030a69e17967') }, get paid() { return translateUi('uiMessages.m0a52f8af1bda') }, get pending_review() { return translateUi('uiMessages.m7bf25421c6df') }, get approved() { return translateUi('uiMessages.m70328c527b65') }, get rejected() { return translateUi('uiMessages.m4dbcdec8693b') } }
 
 function dismiss() { controller.close(); closeCheckout() }
 function trapKey(event) {
@@ -53,14 +55,14 @@ async function resume(order) {
   await controller.open({ kind: order.kind }, order.id)
 }
 async function copyBank() {
-  try { await navigator.clipboard.writeText(bankFields.filter(([key]) => attempt.value?.bank_snapshot?.[key]).map(([key, label]) => `${label}：${attempt.value.bank_snapshot[key]}`).join('\n')); receiptError.value = '收款信息已复制' }
-  catch { receiptError.value = '复制失败，请选择收款信息手动复制' }
+  try { await navigator.clipboard.writeText(bankFields.filter(([key]) => attempt.value?.bank_snapshot?.[key]).map(([key, label]) => `${label}：${attempt.value.bank_snapshot[key]}`).join('\n')); receiptError.value = translateUi('uiMessages.m041d42f6bf20') }
+  catch { receiptError.value = translateUi('uiMessages.m34de68853c1f') }
 }
 async function submit() {
   if (submitting.value || !attempt.value) return
   receiptError.value = ''
-  if (!payer.value.trim() || !phone.value.trim() || !receipt.value) { receiptError.value = '请填写付款人、联系电话并上传回执'; return }
-  if (receipt.value.size > 10 * 1024 * 1024) { receiptError.value = '回执不能超过 10 MB'; return }
+  if (!payer.value.trim() || !phone.value.trim() || !receipt.value) { receiptError.value = translateUi('uiMessages.m9b53829a2dc7'); return }
+  if (receipt.value.size > 10 * 1024 * 1024) { receiptError.value = translateUi('uiMessages.mf159a80341ec'); return }
   submitting.value = true; submissionAbort = new AbortController()
   const body = new FormData(); body.append('payer', payer.value.trim()); body.append('phone', phone.value.trim()); body.append('receipt', receipt.value)
   try {
@@ -89,7 +91,7 @@ async function renderQr() {
     // Only insert geometry generated locally by qrcode, never HTML supplied by the gateway.
     const result = await QRCode.toString(value, { type: 'svg', width: 256, margin: 4, errorCorrectionLevel: 'M' })
     if (version === imageVersion) svg.value = result
-  } catch { if (version === imageVersion) qrError.value = '二维码生成失败，请重试' }
+  } catch { if (version === imageVersion) qrError.value = translateUi('uiMessages.m0fa9691a8ed3') }
 }
 watch([() => attempt.value?.id, () => attempt.value?.qr_code || attempt.value?.pay_url], renderQr)
 onBeforeUnmount(() => { controller.close(); clearInterval(clock); submissionAbort?.abort(); closeCheckout() })
@@ -99,32 +101,32 @@ onBeforeUnmount(() => { controller.close(); clearInterval(clock); submissionAbor
   <Teleport to="body">
     <div v-if="checkoutRequest" class="checkout-overlay" :class="{ 'checkout-canvas': canvasMode }" @click.self="dismiss" @keydown="trapKey">
       <section ref="card" role="dialog" aria-modal="true" aria-labelledby="checkout-title" tabindex="-1" class="checkout-card">
-        <header class="checkout-header"><div><h2 id="checkout-title">{{ title }}</h2><p>{{ isBank ? '审核通过后到账／开通' : '请选择支付方式完成购买' }}</p></div><button class="checkout-close" aria-label="关闭支付窗口" @click="dismiss">×</button></header>
+        <header class="checkout-header"><div><h2 id="checkout-title">{{ title }}</h2><p>{{ isBank ? translateUi('uiMessages.meb076395c018') : translateUi('uiMessages.m03fd75724446') }}</p></div><button class="checkout-close" :aria-label="translateUi('uiMessages.m8e7ad9aaae6f')" @click="dismiss">×</button></header>
         <div class="checkout-content">
-          <div class="checkout-methods" role="group" aria-label="支付方式">
+          <div class="checkout-methods" role="group" :aria-label="translateUi('user.paymentMethod')">
             <button v-for="method in state.methods" :key="method.id" :disabled="state.busy || locked || submitting" :aria-pressed="state.selected === method.id" :class="{ selected: state.selected === method.id }" @click="controller.choose(method.id)">
               <img v-if="method.icon_url" :src="method.icon_url" alt="" />{{ method.name }}<span v-if="state.selected === method.id" aria-hidden="true"> ✓</span>
             </button>
           </div>
-          <p v-if="!state.busy && !state.methods.length && !attempt" class="checkout-hint">暂无可用支付方式，请联系管理员。</p>
+          <p v-if="!state.busy && !state.methods.length && !attempt" class="checkout-hint">{{ translateUi('uiMessages.mbd4bbcb8d5ab') }}</p>
           <p v-if="state.error" role="alert" class="checkout-error">{{ state.error }}</p>
-          <div v-if="state.busy" class="checkout-loading" role="status">正在获取支付信息…</div>
+          <div v-if="state.busy" class="checkout-loading" role="status">{{ translateUi('uiMessages.m89f69d79d640') }}</div>
           <template v-else-if="isBank">
-            <div class="checkout-bank-summary"><strong>{{ formatMoney(amount) }}</strong><span>{{ state.order?.id }}</span><p v-if="state.order?.kind === 'package'">对公转账按优惠后全额付款，不使用账户余额。</p></div>
+            <div class="checkout-bank-summary"><strong>{{ formatMoney(amount) }}</strong><span>{{ state.order?.id }}</span><p v-if="state.order?.kind === 'package'">{{ translateUi('uiMessages.m87b80dc1bc85') }}</p></div>
             <div class="checkout-bank-grid">
-              <div><h3>收款信息</h3><dl><template v-for="[key, label] in bankFields" :key="key"><template v-if="attempt.bank_snapshot?.[key]"><dt>{{ label }}</dt><dd>{{ attempt.bank_snapshot[key] }}</dd></template></template></dl><button class="checkout-secondary" @click="copyBank">复制收款信息</button></div>
-              <div v-if="locked"><h3>回执已提交，等待审核</h3><p class="checkout-hint">可以关闭窗口，在订单记录中查看审核进度。审核期间不能切换支付方式。</p></div>
-              <form v-else @submit.prevent="submit"><h3>提交付款回执</h3><p v-if="submission?.status === 'rejected'" class="checkout-error">驳回原因：{{ submission.note }}</p><label>企业名称／付款人姓名<input v-model="payer" maxlength="255" required autocomplete="name" /></label><label>联系电话<input v-model="phone" type="tel" maxlength="40" required autocomplete="tel" /></label><label>付款回执<input type="file" accept="image/jpeg,image/png,application/pdf" required @change="receipt = $event.target.files[0]" /></label><p class="checkout-hint">支持 JPG、PNG、PDF，单份不超过 10 MB。</p><button class="checkout-primary" :disabled="submitting">{{ submitting ? '正在提交…' : '提交审核' }}</button></form>
+              <div><h3>{{ translateUi('uiMessages.m79bf11a5532f') }}</h3><dl><template v-for="[key, label] in bankFields" :key="key"><template v-if="attempt.bank_snapshot?.[key]"><dt>{{ label }}</dt><dd>{{ attempt.bank_snapshot[key] }}</dd></template></template></dl><button class="checkout-secondary" @click="copyBank">{{ translateUi('uiMessages.m7944fab368b3') }}</button></div>
+              <div v-if="locked"><h3>{{ translateUi('uiMessages.mdf5224bb6342') }}</h3><p class="checkout-hint">{{ translateUi('uiMessages.m3cb50aa813d2') }}</p></div>
+              <form v-else @submit.prevent="submit"><h3>{{ translateUi('uiMessages.mf7bd43edec10') }}</h3><p v-if="submission?.status === 'rejected'" class="checkout-error">{{ translateUi('uiMessages.m6453bab687cd', { value1: (submission.note) }) }}</p><label>{{ translateUi('uiMessages.m2869cdcdc39a') }}<input v-model="payer" maxlength="255" required autocomplete="name" /></label><label>{{ translateUi('uiMessages.md6981829142a') }}<input v-model="phone" type="tel" maxlength="40" required autocomplete="tel" /></label><label>{{ translateUi('uiMessages.m934a02cb7fdb') }}<input type="file" accept="image/jpeg,image/png,application/pdf" required @change="receipt = $event.target.files[0]" /></label><p class="checkout-hint">{{ translateUi('uiMessages.m259ca54966b2') }}</p><button class="checkout-primary" :disabled="submitting">{{ submitting ? translateUi('uiMessages.m26ef00b7d061') : translateUi('uiMessages.m034829aca81d') }}</button></form>
             </div>
           </template>
           <div v-else-if="attempt" class="checkout-pay-grid">
-            <div class="checkout-qr"><div v-if="svg" class="checkout-qr-svg" role="img" aria-label="支付二维码" v-html="svg"></div><img v-else-if="image && !qrError" :key="image" :src="image" alt="支付二维码" @error="qrError = '二维码显示失败，请重试'" /><div v-else class="checkout-qr-placeholder"><template v-if="qrError"><span role="alert">{{ qrError }}</span><button class="checkout-qr-retry" @click="renderQr">重新显示二维码</button></template><template v-else>{{ attempt.status === 'creating' ? '通道正在确认订单' : (attempt.qr_code || attempt.pay_url ? '正在生成二维码…' : '暂无支付二维码，请重试获取') }}</template></div><div v-if="expired || attempt.status === 'creating' || (!attempt.qr_code && !attempt.pay_url)" class="checkout-qr-cover"><strong>{{ expired ? '二维码已过期' : '支付信息暂未就绪' }}</strong><button @click="controller.refresh">{{ expired ? '↻ 点击刷新' : '重试获取' }}</button></div></div>
-            <div class="checkout-payment-info"><div class="checkout-amount">{{ formatMoney(amount) }}</div><p v-if="attempt.balance_fen > 0" class="checkout-hint">余额抵扣 {{ formatMoney(attempt.balance_fen) }}</p><p v-if="state.order?.balance_fen !== undefined && attempt.balance_fen > state.order.balance_fen" class="checkout-error">账户余额已变化，请先补足 {{ formatMoney(attempt.balance_fen - state.order.balance_fen) }}。如果已扫码付款，请勿重复支付，补足后会自动开通。</p><p>{{ attempt.qr_code ? '请使用对应支付应用扫码支付' : '请扫码打开通道收银台，继续完成支付' }}</p><p v-if="!expired" class="checkout-hint">有效期剩余 {{ remaining }}，支付成功后自动关闭。</p><a v-if="attempt.pay_url && !expired" class="checkout-mobile-link" :href="attempt.pay_url" target="_blank" rel="noopener noreferrer">前往支付</a><p class="checkout-hint">切换或刷新后，请使用当前二维码，避免重复付款。</p></div>
+            <div class="checkout-qr"><div v-if="svg" class="checkout-qr-svg" role="img" :aria-label="translateUi('uiMessages.m9739c55bbbf4')" v-html="svg"></div><img v-else-if="image && !qrError" :key="image" :src="image" :alt="translateUi('uiMessages.m9739c55bbbf4')" @error="qrError = '二维码显示失败，请重试'" /><div v-else class="checkout-qr-placeholder"><template v-if="qrError"><span role="alert">{{ qrError }}</span><button class="checkout-qr-retry" @click="renderQr">{{ translateUi('uiMessages.me4af0166c5d4') }}</button></template><template v-else>{{ attempt.status === 'creating' ? translateUi('uiMessages.m979e82841492') : (attempt.qr_code || attempt.pay_url ? translateUi('uiMessages.mef27938ce7e1') : translateUi('uiMessages.me642a8cb0817')) }}</template></div><div v-if="expired || attempt.status === 'creating' || (!attempt.qr_code && !attempt.pay_url)" class="checkout-qr-cover"><strong>{{ expired ? translateUi('uiMessages.mdbcac8ae7d65') : translateUi('uiMessages.m8c32d7388042') }}</strong><button @click="controller.refresh">{{ expired ? translateUi('uiMessages.m19532876db9e') : translateUi('uiMessages.m42d47a69b5f2') }}</button></div></div>
+            <div class="checkout-payment-info"><div class="checkout-amount">{{ formatMoney(amount) }}</div><p v-if="attempt.balance_fen > 0" class="checkout-hint">{{ translateUi('uiMessages.me643dcd8eb21', { value1: (formatMoney(attempt.balance_fen)) }) }}</p><p v-if="state.order?.balance_fen !== undefined && attempt.balance_fen > state.order.balance_fen" class="checkout-error">{{ translateUi('uiMessages.mc47d312556a8', { value1: (formatMoney(attempt.balance_fen - state.order.balance_fen)) }) }}</p><p>{{ attempt.qr_code ? translateUi('uiMessages.md362ce60f94f') : translateUi('uiMessages.meb754e9770f5') }}</p><p v-if="!expired" class="checkout-hint">{{ translateUi('uiMessages.m7ea0bcb55958', { value1: (remaining) }) }}</p><a v-if="attempt.pay_url && !expired" class="checkout-mobile-link" :href="attempt.pay_url" target="_blank" rel="noopener noreferrer">{{ translateUi('uiMessages.m304e20af30ca') }}</a><p class="checkout-hint">{{ translateUi('uiMessages.m85533079475b') }}</p></div>
           </div>
-          <p v-else-if="state.methods.length" class="checkout-empty">选择上方支付方式后，在这里完成支付。</p>
+          <p v-else-if="state.methods.length" class="checkout-empty">{{ translateUi('uiMessages.m87e96b1a3f3f') }}</p>
           <p v-if="receiptError" role="status" class="checkout-hint">{{ receiptError }}</p>
-          <footer class="checkout-footer"><button class="checkout-text" @click="loadHistory">{{ showHistory ? '收起订单记录' : '查看订单记录／对公审核进度' }}</button><span v-if="state.order">订单 {{ state.order.id }}</span></footer>
-          <div v-if="showHistory" class="checkout-history"><p v-if="historyError" role="alert">{{ historyError }}</p><p v-else-if="!history.length">暂无订单</p><button v-for="order in history" :key="order.id" :disabled="order.status === 'paid'" @click="resume(order)"><span>{{ order.title }} · {{ formatMoney(order.total_fen) }}</span><span>{{ labels[order.display_status || order.status] || order.status }}{{ order.status !== 'paid' ? ' · 查看' : '' }}</span></button></div>
+          <footer class="checkout-footer"><button class="checkout-text" @click="loadHistory">{{ showHistory ? translateUi('uiMessages.m560325f6041c') : translateUi('uiMessages.m4cc7dbaaa068') }}</button><span v-if="state.order">{{ translateUi('uiMessages.m91322e4a3dd3', { value1: (state.order.id) }) }}</span></footer>
+          <div v-if="showHistory" class="checkout-history"><p v-if="historyError" role="alert">{{ historyError }}</p><p v-else-if="!history.length">{{ translateUi('uiMessages.m2755c543af34') }}</p><button v-for="order in history" :key="order.id" :disabled="order.status === 'paid'" @click="resume(order)"><span>{{ order.title }} · {{ formatMoney(order.total_fen) }}</span><span>{{ labels[order.display_status || order.status] || order.status }}{{ order.status !== 'paid' ? translateUi('uiMessages.m40dadcadbcc7') : '' }}</span></button></div>
         </div>
       </section>
     </div>

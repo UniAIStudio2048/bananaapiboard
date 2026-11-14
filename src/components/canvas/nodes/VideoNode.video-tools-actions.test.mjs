@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import { readFileSync } from 'node:fs'
 import { strict as assert } from 'node:assert'
 import { fileURLToPath } from 'node:url'
@@ -17,20 +18,20 @@ assert.match(source, /const\s+showSubtitleEraseToolbarAction\s*=\s*computed\(\(\
 assert.match(source, /mode\s*===\s*VIDEO_TOOL_MODAL_MODES\.subtitle\.initialMode[\s\S]*!subtitleEraseToolbarEnabled\.value[\s\S]*return/, 'VideoNode should block direct subtitle erase modal opening when the master switch is disabled')
 
 for (const label of ['剪辑', '字幕擦除']) {
-  assert.match(source, new RegExp(`title="${label}"|title='${label}'|title:\\s*'${label}'`), `VideoNode should expose ${label} as an action title`)
-  assert.match(source, new RegExp(label), `VideoNode should render ${label}`)
+  assert.match(source, localizedPattern(new RegExp(`title="${label}"|title='${label}'|title:\\s*'${label}'`)), `VideoNode should expose ${label} as an action title`)
+  assert.match(source, localizedPattern(new RegExp(label)), `VideoNode should render ${label}`)
 }
 
-const toolbarBlock = source.match(/<div v-show="showToolbar[^"]*" class="video-toolbar[^\"]*"[^>]*>[\s\S]*?<\/div>\s*\n\s*<!-- 节点标签 -->/)
+const toolbarBlock = source.match(localizedPattern(/<div v-show="showToolbar[^"]*" class="video-toolbar[^\"]*"[^>]*>[\s\S]*?<\/div>\s*\n\s*<!-- 节点标签 -->/))
 assert.ok(toolbarBlock, 'VideoNode should keep video actions inside the node toolbar block')
 assert.match(
   source,
   /<div v-show="showToolbar && !showSegmentClip && !showFrameCrop" class="video-toolbar nodrag nopan nowheel" @pointerdown\.stop @mousedown\.stop>/,
   'Video toolbar pointer events must not start Vue Flow drag or pan'
 )
-assert.match(toolbarBlock[0], /title="剪辑"|title='剪辑'/, 'VideoNode should expose edit action in the node toolbar')
-assert.match(toolbarBlock[0], /title="字幕擦除"|title='字幕擦除'/, 'VideoNode should expose subtitle erase action in the node toolbar')
-assert.match(toolbarBlock[0], /<button\s+v-if=["']showSubtitleEraseToolbarAction["'][\s\S]*title=["']字幕擦除["']/, 'VideoNode should hide the subtitle erase toolbar button when the master switch is disabled')
+assert.match(toolbarBlock[0], localizedPattern(/title="剪辑"|title='剪辑'/), 'VideoNode should expose edit action in the node toolbar')
+assert.match(toolbarBlock[0], localizedPattern(/title="字幕擦除"|title='字幕擦除'/), 'VideoNode should expose subtitle erase action in the node toolbar')
+assert.match(toolbarBlock[0], localizedPattern(/<button\s+v-if=["']showSubtitleEraseToolbarAction["'][\s\S]*title=["']字幕擦除["']/), 'VideoNode should hide the subtitle erase toolbar button when the master switch is disabled')
 assert.doesNotMatch(source, /class="video-tool-actions"/, 'VideoNode should not render video tool actions over the video preview')
 assert.doesNotMatch(source, /\.video-tool-actions\b/, 'VideoNode should not keep overlay styles for video tool actions')
 
@@ -41,9 +42,9 @@ assert.match(source, /<VideoSegmentClipBar\s+v-if="showSegmentClip"/, 'Segment c
 assert.match(source, /<VideoFrameCropOverlay\s+v-if="showFrameCrop"/, 'Frame crop UI should stay mounted while the crop session is active')
 assert.match(source, /:aspect-ratio="frameCropAspectRatio"/, 'Frame crop overlay should receive the selected quick ratio')
 for (const ratio of ['16:9', '9:16', '1:1', '3:4', '4:3', '21:9']) {
-  assert.match(source, new RegExp(`value: '${ratio}'`), `Frame crop ratio menu should include ${ratio}`)
+  assert.match(source, localizedPattern(new RegExp(`value: '${ratio}'`)), `Frame crop ratio menu should include ${ratio}`)
 }
-assert.doesNotMatch(source, /frameCropRatioOptions[\s\S]*?value:\s*['"](?:auto|adaptive|智能)/, 'Frame crop ratio menu should not include a smart ratio option')
+assert.doesNotMatch(source, localizedPattern(/frameCropRatioOptions[\s\S]*?value:\s*['"](?:auto|adaptive|智能)/), 'Frame crop ratio menu should not include a smart ratio option')
 assert.match(source, /<div v-if="showFrameCrop" class="frame-crop-controls nodrag nopan"/, 'Frame crop controls should not disappear when toolbar selection briefly changes')
 assert.doesNotMatch(source, /watch\(showToolbar, visible => \{ if \(!visible && showSegmentClip\.value\) closeSegmentClip\(\) \}\)/, 'Toolbar visibility must not cancel an active segment clip session')
 assert.doesNotMatch(source, /watch\(showToolbar, visible => \{ if \(!visible && showFrameCrop\.value\) closeFrameCrop\(\) \}\)/, 'Toolbar visibility must not cancel an active frame crop session')

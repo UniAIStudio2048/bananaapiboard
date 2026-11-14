@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../i18n/index.js'
 /**
  * workflowAutoSave.js - 工作流自动保存服务
  * 
@@ -883,9 +884,9 @@ export function formatSaveTime(timestamp) {
   const now = Date.now()
   const diff = now - timestamp
   
-  if (diff < 60000) return '刚刚'
-  if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`
+  if (diff < 60000) return translateUi('time.justNow')
+  if (diff < 3600000) return translateUi('uiMessages.mc83a5dfaa9ad', { value1: (Math.floor(diff / 60000)) })
+  if (diff < 86400000) return translateUi('uiMessages.m3b4c666b9dc5', { value1: (Math.floor(diff / 3600000)) })
   
   const date = new Date(timestamp)
   return date.toLocaleString('zh-CN', {

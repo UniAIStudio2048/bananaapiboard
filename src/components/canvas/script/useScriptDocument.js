@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../../i18n/index.js'
 import { ref, computed, onUnmounted } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
 import { useTeamStore } from '@/stores/team'
@@ -17,11 +18,11 @@ export function useScriptDocument(nodeId) {
   const busy = computed(() => loading.value || running.value || mediaBusy.value || submitting.value)
   const steps = computed(() => completion(document.value))
   let context, alive = true, timer, mediaTimer, saveQueue = Promise.resolve(), revision = 0, saveFailure = null, stopMedia = false
-  function assertContext() { if (!alive || context && store.getCurrentTab()?.id !== context.tabId) throw new Error('画布已切换，请回到原画布继续') }
+  function assertContext() { if (!alive || context && store.getCurrentTab()?.id !== context.tabId) throw new Error(translateUi('uiMessages.m21c4d882d692')) }
   async function ensureContext() {
     if (context) { assertContext(); return context }
     const tab = store.getCurrentTab()
-    if (!tab) throw new Error('画布不可用')
+    if (!tab) throw new Error(translateUi('uiMessages.md2ea0ca6d99b'))
     context = { tabId: tab.id, workflowId: tab.workflowId }
     if (!context.workflowId) {
       const space = tab.workflowSpaceType ? { spaceType: tab.workflowSpaceType, teamId: tab.workflowTeamId } : teams.getSpaceParams('current')
@@ -52,7 +53,7 @@ export function useScriptDocument(nodeId) {
     } catch (e) { error.value = e.message } finally { loading.value = false }
   }
   function save() {
-    if (!loaded.value || running.value) return Promise.reject(new Error('脚本尚未加载或正在生成'))
+    if (!loaded.value || running.value) return Promise.reject(new Error(translateUi('uiMessages.mf82d309c4a14')))
     const snapshot = JSON.parse(JSON.stringify(document.value)), ownRevision = ++revision
     saving.value++
     const operation = saveQueue.then(async () => {
@@ -64,7 +65,7 @@ export function useScriptDocument(nodeId) {
       if (ownRevision === revision) error.value = ''
       await refreshNodeSummary()
       return state
-    }).catch(e => { saveFailure = e; error.value = `${e.message}；当前编辑尚未保存，可复制内容后重新加载`; throw e }).finally(() => { saving.value-- })
+    }).catch(e => { saveFailure = e; error.value = translateUi('uiMessages.mef860f3ac2ee', { value1: (e.message) }); throw e }).finally(() => { saving.value-- })
     saveQueue = operation.catch(() => {})
     operation.catch(() => {})
     return operation
@@ -117,7 +118,7 @@ export function useScriptDocument(nodeId) {
           if (e.code !== 'VERSION_CONFLICT' || attempt === 2) throw e
           const latest = await getWorkflowNodesBatch(context.workflowId, [node.id])
           const current = latest.nodes?.find(n => n.id === node.id)
-          if (!current) throw new Error('结果节点已删除')
+          if (!current) throw new Error(translateUi('uiMessages.m0bcfb876c031'))
           baseVersion = current.version
         }
       }
@@ -160,7 +161,7 @@ export function useScriptDocument(nodeId) {
       if (source) document.value.sourceText = source
       else if (entry === 'story' && !document.value.sourceText) {
         document.value.sourceText = '第一场 日 内 图书馆\n小林发现一本夹着旧车票的书。\n小林：原来你一直记得那次旅行。\n窗外阳光落在书页上，她轻轻合上书。'
-        await connectNode({ id: `text_${crypto.randomUUID()}`, type: 'text-input', position: { x: parent.position.x - 500, y: parent.position.y }, data: { title: '剧本原文', text: document.value.sourceText } }, true)
+        await connectNode({ id: `text_${crypto.randomUUID()}`, type: 'text-input', position: { x: parent.position.x - 500, y: parent.position.y }, data: { get title() { return translateUi('uiMessages.m78f6336d9cfd') }, text: document.value.sourceText } }, true)
       }
       await save()
     } catch (e) { error.value = e.message }
@@ -235,18 +236,18 @@ export function useScriptDocument(nodeId) {
             assertContext()
             store.updateNodeData(node.id, patch)
             node = store.nodes.find(n => n.id === node.id)
-            if (!taskId && !immediateUrl) throw new Error('生成服务未返回任务或媒体')
+            if (!taskId && !immediateUrl) throw new Error(translateUi('uiMessages.m0c6687eedd1c'))
           }
           const result = node.data.output?.url ? { url: node.data.output.url } : await pollTaskStatus(node.data.taskId, mediaType, { timeout: mediaType === 'video' ? 40 * 60000 : 8 * 60000 })
           assertContext()
           const url = getTaskMediaUrl(result, mediaType)
-          if (!url) throw new Error('生成结果缺少媒体地址')
+          if (!url) throw new Error(translateUi('uiMessages.m306b50c5eab6'))
           const patch = { status: 'success', output: { type: mediaType, url }, [urlKey]: url, error: null }
           store.updateNodeData(node.id, patch); await persistCanvasNode(node, patch)
           record[urlKey] = url; await save()
         } catch (e) {
           assertContext()
-          error.value = `${item.name}：${e.message}。已完成项保留，可稍后重试缺项。`
+          error.value = translateUi('uiMessages.m899b77da6243', { value1: (item.name), value2: (e.message) })
           // A polling/network failure does not prove upstream failure. Keep task ID for recovery.
           let confirmedFailure = !node?.data.taskId
           if (node?.data.taskId) {

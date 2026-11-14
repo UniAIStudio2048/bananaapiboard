@@ -1,3 +1,6 @@
+import * as i18nTestRuntime from '../../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -63,7 +66,7 @@ function harness({ taskFailure = false, addVersion = 7, patchVersion = 8 } = {})
     showToast: (message, kind) => calls.push(['toast', message, kind])
   }
   assert.ok(body)
-  const handle = new Function(...Object.keys(deps), `${body}; return handleToolbarDepth`)(...Object.values(deps))
+  const handle = new Function('translateUi', 'uiLanguage', ...Object.keys(deps), `${body}; return handleToolbarDepth`)(translateUi, uiLanguage, ...Object.values(deps))
   return { handle, calls, store, tab, getAddedNodeId: () => addedNodeId }
 }
 

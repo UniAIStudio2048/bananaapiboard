@@ -3,14 +3,14 @@
     <div class="mx-auto flex h-screen max-w-[1400px] flex-col px-4 py-4 sm:px-6">
       <div class="mb-4 flex items-center justify-between gap-3">
         <div>
-          <h1 class="text-2xl font-semibold text-white">社区私信</h1>
-          <p class="mt-1 text-sm text-white/45">未互关用户最多可发送3条消息，互关后无限制</p>
+          <h1 class="text-2xl font-semibold text-white">{{ translateUi('uiMessages.m40e27b2eddbe') }}</h1>
+          <p class="mt-1 text-sm text-white/45">{{ translateUi('uiMessages.m4ef659627fe4') }}</p>
         </div>
         <router-link
           to="/community"
           class="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/80 transition hover:bg-white/10 hover:text-white"
         >
-          返回社区
+          {{ translateUi('uiMessages.m939bc79bd1c9') }}
         </router-link>
       </div>
 
@@ -18,14 +18,14 @@
         <aside class="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm">
           <div class="border-b border-white/10 px-4 py-4">
             <div class="flex items-center justify-between gap-3">
-              <h2 class="text-base font-medium text-white">会话</h2>
+              <h2 class="text-base font-medium text-white">{{ translateUi('uiMessages.ma63280253f17') }}</h2>
               <button
                 type="button"
                 class="text-sm text-white/40 transition hover:text-white/80"
                 :disabled="conversationListLoading"
                 @click="loadConversations"
               >
-                刷新
+                {{ translateUi('common.refresh') }}
               </button>
             </div>
           </div>
@@ -41,7 +41,7 @@
               class="mt-3 rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-white/90"
               @click="loadConversations"
             >
-              重试
+              {{ translateUi('common.retry') }}
             </button>
           </div>
 
@@ -72,14 +72,14 @@
                   <span class="shrink-0 text-xs text-white/30">{{ formatTime(item.last_message_at || item.updated_at || item.created_at) }}</span>
                 </div>
                 <p class="mt-1 line-clamp-2 text-xs leading-5 text-white/45">
-                  {{ item.last_message_text || item.last_message?.content || '暂无消息' }}
+                  {{ item.last_message_text || item.last_message?.content || translateUi('uiMessages.m98b9751bbf85') }}
                 </p>
               </div>
             </button>
           </div>
 
           <div v-else class="flex flex-1 items-center justify-center px-6 text-center text-sm text-white/35">
-            暂无会话，去作者主页与互关作者开始聊天吧
+            {{ translateUi('uiMessages.mefb4217dc945') }}
           </div>
         </aside>
 
@@ -104,10 +104,10 @@
                       :to="`/community/users/${activePeer.userId}`"
                       class="text-xs text-white/40 transition hover:text-white/80"
                     >
-                      查看主页
+                      {{ translateUi('uiMessages.m186d0afe0a7e') }}
                     </router-link>
                   </div>
-                  <p class="mt-1 text-xs text-white/35">最近消息时间：{{ formatTime(activeConversation.last_message_at || activeConversation.updated_at || activeConversation.created_at) || '暂无' }}</p>
+                  <p class="mt-1 text-xs text-white/35">{{ translateUi('uiMessages.m24a48aa81681', { value1: (formatTime(activeConversation.last_message_at || activeConversation.updated_at || activeConversation.created_at) || translateUi('uiMessages.mb336a174cd1f')) }) }}</p>
                 </div>
               </div>
             </header>
@@ -124,7 +124,7 @@
                   class="mt-3 rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-white/90"
                   @click="loadMessages(selectedConversationId)"
                 >
-                  重新加载
+                  {{ translateUi('uiMessages.m7bdd5ce1e298') }}
                 </button>
               </div>
 
@@ -152,7 +152,7 @@
               </div>
 
               <div v-else class="flex h-full items-center justify-center text-sm text-white/35">
-                还没有消息，发送第一条消息开始对话吧
+                {{ translateUi('uiMessages.m17ab9505cafb') }}
               </div>
             </div>
 
@@ -165,15 +165,15 @@
                 <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span v-if="isMessageLimitReached">已达到消息上限，请先互相关注后继续对话</span>
-                <span v-else>未互关状态，剩余可发送 {{ remainingMessages }} 条消息</span>
+                <span v-if="isMessageLimitReached">{{ translateUi('uiMessages.m871d1cbd8a32') }}</span>
+                <span v-else>{{ translateUi('uiMessages.me0ad1e6c310b', { value1: (remainingMessages) }) }}</span>
               </div>
               <div class="flex items-end gap-3">
                 <textarea
                   v-model="messageInput"
                   rows="1"
                   maxlength="1000"
-                  :placeholder="isMessageLimitReached ? '互关后才能继续发送消息' : '输入消息内容...'"
+                  :placeholder="isMessageLimitReached ? translateUi('uiMessages.m7fe00d141646') : translateUi('uiMessages.m842f071df799')"
                   class="min-h-[44px] flex-1 resize-none rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-white/20 focus:outline-none disabled:opacity-50"
                   :disabled="sending || isMessageLimitReached"
                   @keydown.enter.exact.prevent="handleSendMessage"
@@ -183,7 +183,7 @@
                   class="inline-flex h-11 items-center justify-center rounded-2xl bg-white px-5 text-sm font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
                   :disabled="sending || !messageInput.trim() || isMessageLimitReached"
                 >
-                  {{ sending ? '发送中...' : '发送' }}
+                  {{ sending ? translateUi('auth.sending') : translateUi('uiMessages.medecf0ae6e51') }}
                 </button>
               </div>
               <p v-if="sendError" class="mt-2 text-sm text-red-300">{{ sendError }}</p>
@@ -196,9 +196,9 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.721C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
             </div>
-            <h2 class="mt-5 text-lg font-medium text-white">选择一个会话开始聊天</h2>
+            <h2 class="mt-5 text-lg font-medium text-white">{{ translateUi('uiMessages.m11a7fc15cd37') }}</h2>
             <p class="mt-2 max-w-md text-sm leading-6 text-white/40">
-              左侧会显示你与互关作者的私信会话。若从作者主页进入，会自动尝试打开对应会话。
+              {{ translateUi('uiMessages.m9612bdf6ff2c') }}
             </p>
           </div>
         </section>
@@ -208,6 +208,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
@@ -280,13 +282,13 @@ function extractMessageList(response) {
 
 function normalizeConversationPeer(conversation) {
   if (!conversation) {
-    return { userId: '', name: '未知用户', avatar: '', initial: '?' }
+    return { userId: '', name: translateUi('uiMessages.m1ac13841ba2e'), avatar: '', initial: '?' }
   }
 
   const rawPeer = conversation.peer || conversation.partner || conversation.target_user || conversation.user || null
   const participants = Array.isArray(conversation.participants) ? conversation.participants : []
   const peerFromParticipants = participants.find(item => String(item?.id || item?.user_id) !== currentUserId.value)
-  const fallbackName = conversation.peer_name || conversation.partner_username || conversation.target_username || conversation.username || conversation.title || '未知用户'
+  const fallbackName = conversation.peer_name || conversation.partner_username || conversation.target_username || conversation.username || conversation.title || translateUi('uiMessages.m1ac13841ba2e')
   const name = rawPeer?.username || rawPeer?.name || peerFromParticipants?.username || peerFromParticipants?.name || fallbackName
   const avatar = rawPeer?.avatar_url || rawPeer?.avatar || peerFromParticipants?.avatar_url || peerFromParticipants?.avatar || conversation.peer_avatar || conversation.partner_avatar_url || conversation.target_avatar || ''
   const userId = String(rawPeer?.id || rawPeer?.user_id || peerFromParticipants?.id || peerFromParticipants?.user_id || conversation.peer_user_id || conversation.partner_id || conversation.target_user_id || '')
@@ -394,7 +396,7 @@ async function loadConversations(preferredUserId) {
     }
   } catch (error) {
     console.error('[CommunityMessages] 加载会话失败:', error)
-    conversationError.value = error?.message || '加载会话失败'
+    conversationError.value = error?.message || translateUi('uiMessages.m1e2831c52f6d')
   } finally {
     conversationListLoading.value = false
   }
@@ -414,7 +416,7 @@ async function loadMessages(conversationId) {
     await scrollToBottom()
   } catch (error) {
     console.error('[CommunityMessages] 加载消息失败:', error)
-    messagesError.value = error?.message || '加载消息失败'
+    messagesError.value = error?.message || translateUi('uiMessages.m9c6c8506a084')
   } finally {
     messagesLoading.value = false
   }
@@ -448,7 +450,7 @@ async function ensureConversation(userId) {
     }
   } catch (error) {
     console.error('[CommunityMessages] 创建会话失败:', error)
-    conversationError.value = error?.message || '无法打开该私信会话'
+    conversationError.value = error?.message || translateUi('uiMessages.m0b6eff5c073e')
     return
   }
 
@@ -493,7 +495,7 @@ async function handleSendMessage() {
     await scrollToBottom()
   } catch (error) {
     console.error('[CommunityMessages] 发送消息失败:', error)
-    sendError.value = error?.message || '发送失败，请稍后重试'
+    sendError.value = error?.message || translateUi('uiMessages.mc57c7ed1ca56')
   } finally {
     sending.value = false
   }

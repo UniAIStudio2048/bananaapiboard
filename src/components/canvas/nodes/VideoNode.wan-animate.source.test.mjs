@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -15,7 +16,7 @@ test('Wan animate mix canvas defaults use explicit model mode, no watermark, and
   assert.match(source, /seedance_watermark',\s*currentModelConfig\.value\?\.wanConfig\?\.watermark === true \? 'true' : 'false'/)
   assert.match(source, /currentModelConfig\.value\?\.wanConfig\?\.defaultDuration \|\| 10/)
   assert.match(source, /const wanAnimateCostPerSecond = computed/)
-  assert.match(source, /isWanModel && selectedWanMode === 'animate_mix'[\s\S]*formatPoints\(wanAnimateCostPerSecond\)[\s\S]*积分\/s/)
+  assert.match(source, localizedPattern(/isWanModel && selectedWanMode === 'animate_mix'[\s\S]*formatPoints\(wanAnimateCostPerSecond\)[\s\S]*积分\/s/))
 })
 
 test('Wan animate mode ref does not read currentModelConfig before initialization', () => {

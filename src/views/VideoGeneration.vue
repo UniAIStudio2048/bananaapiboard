@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi, currentLanguage as uiLanguage } from '@/i18n'
+
 import { streamVideo as vStreamVideo } from '@/directives/streamVideo'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { getMe, isQiniuCdnUrl, buildVideoDownloadUrl, uploadImages } from '@/api/client'
@@ -82,12 +84,12 @@ const isRunningHubAiAppVideoV31Model = computed(() => currentModelConfig.value?.
 
 // RunningHub 全能视频 V3.1 六种生成模式
 const RUNNINGHUB_V31_MODES = [
-  { value: 't2v', label: '文生视频', icon: '✍️', needsImages: 0, needsAudio: false },
-  { value: 'i2v', label: '图生视频（首帧）', icon: '🎬', needsImages: 1, needsAudio: false },
-  { value: 'first_last_frame', label: '首尾帧生视频', icon: '🖼️', needsImages: 2, needsAudio: false },
-  { value: 'last_frame', label: '尾帧生视频', icon: '🔚', needsImages: 1, needsAudio: false },
-  { value: 'multi_image', label: '多图生视频（≤3图）', icon: '🗂️', needsImages: 1, maxImages: 3, needsAudio: false },
-  { value: 'image_audio', label: '图像+音频生视频', icon: '🎵', needsImages: 1, needsAudio: true }
+  { value: 't2v', get label() { return translateUi('canvas.nodeTypes.textToVideo') }, icon: '✍️', needsImages: 0, needsAudio: false },
+  { value: 'i2v', get label() { return translateUi('uiMessages.mcba35bf1fba8') }, icon: '🎬', needsImages: 1, needsAudio: false },
+  { value: 'first_last_frame', get label() { return translateUi('uiMessages.mffac1f54a210') }, icon: '🖼️', needsImages: 2, needsAudio: false },
+  { value: 'last_frame', get label() { return translateUi('uiMessages.m01d4729a767b') }, icon: '🔚', needsImages: 1, needsAudio: false },
+  { value: 'multi_image', get label() { return translateUi('uiMessages.macf43c0bc42e') }, icon: '🗂️', needsImages: 1, maxImages: 3, needsAudio: false },
+  { value: 'image_audio', get label() { return translateUi('uiMessages.mac958a0778ba') }, icon: '🎵', needsImages: 1, needsAudio: true }
 ]
 const v31Mode = ref('t2v')
 const v31AudioFile = ref(null)
@@ -132,12 +134,12 @@ const availableAspectRatios = computed(() => {
       if (typeof ar === 'string') {
         // 根据比例值生成友好的标签
         const labelMap = {
-          '16:9': '横屏 (16:9)',
-          '9:16': '竖屏 (9:16)',
-          '1:1': '方形 (1:1)',
+          '16:9': translateUi('uiMessages.m848cb51e297f'),
+          '9:16': translateUi('uiMessages.m1f7a6c75ad56'),
+          '1:1': translateUi('uiMessages.m2c2c18d9f020'),
           '4:3': '4:3',
           '3:4': '3:4',
-          '21:9': '超宽 (21:9)'
+          '21:9': translateUi('uiMessages.mb8950982437a')
         }
         return {
           value: ar,
@@ -150,8 +152,8 @@ const availableAspectRatios = computed(() => {
   }
   // 兜底默认值
   return [
-    { value: '16:9', label: '横屏 (16:9)' },
-    { value: '9:16', label: '竖屏 (9:16)' }
+    { value: '16:9', get label() { return translateUi('uiMessages.m848cb51e297f') } },
+    { value: '9:16', get label() { return translateUi('uiMessages.m1f7a6c75ad56') } }
   ]
 })
 
@@ -292,28 +294,28 @@ const klingV3OmniRefImageInputRef = ref(null)
 
 // Seedance 模式定义
 const SEEDANCE_MODES = [
-  { value: 'text2video', label: '文生视频', icon: '✍️' },
-  { value: 'image2video_first', label: '首帧', icon: '🖼️' },
-  { value: 'image2video_first_last', label: '首尾帧', icon: '🎞️' },
-  { value: 'multimodal_ref', label: '多模态', icon: '🎨' },
-  { value: 'video_edit', label: '编辑', icon: '✂️' },
-  { value: 'video_extend', label: '延长', icon: '⏩' }
+  { value: 'text2video', get label() { return translateUi('canvas.nodeTypes.textToVideo') }, icon: '✍️' },
+  { value: 'image2video_first', get label() { return translateUi('uiMessages.m0eee51419641') }, icon: '🖼️' },
+  { value: 'image2video_first_last', get label() { return translateUi('uiMessages.ma44f24ac18b3') }, icon: '🎞️' },
+  { value: 'multimodal_ref', get label() { return translateUi('uiMessages.m5d7b7e77768b') }, icon: '🎨' },
+  { value: 'video_edit', get label() { return translateUi('common.edit') }, icon: '✂️' },
+  { value: 'video_extend', get label() { return translateUi('uiMessages.m2895115abd8a') }, icon: '⏩' }
 ]
 
 const WAN3_MODES = [
-  { value: 'text2video', label: '文生视频', icon: '✍️' },
-  { value: 'image2video_first', label: '首帧', icon: '🖼️' },
-  { value: 'image2video_first_last', label: '首尾帧', icon: '🎞️' },
-  { value: 'multimodal_ref', label: '多模态参考', icon: '🎨' },
-  { value: 'file', label: '参考文件', icon: '📄' },
-  { value: 'link', label: '网页链接', icon: '🔗' }
+  { value: 'text2video', get label() { return translateUi('canvas.nodeTypes.textToVideo') }, icon: '✍️' },
+  { value: 'image2video_first', get label() { return translateUi('uiMessages.m0eee51419641') }, icon: '🖼️' },
+  { value: 'image2video_first_last', get label() { return translateUi('uiMessages.ma44f24ac18b3') }, icon: '🎞️' },
+  { value: 'multimodal_ref', get label() { return translateUi('uiMessages.mb5ea8197a734') }, icon: '🎨' },
+  { value: 'file', get label() { return translateUi('uiMessages.m14fbb41e2e68') }, icon: '📄' },
+  { value: 'link', get label() { return translateUi('uiMessages.m6ff9e899b83c') }, icon: '🔗' }
 ]
 
 const WAN3_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/bmp', 'image/webp'])
 const WAN3_DOCUMENT_EXTENSIONS = new Set(['.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.pdf', '.txt', '.key', '.pages', '.numbers', '.md'])
 
 const SEEDANCE_RATIOS = [
-  { value: 'adaptive', label: '自适应' },
+  { value: 'adaptive', get label() { return translateUi('uiMessages.m8f1f75950e38') } },
   { value: '16:9', label: '16:9' },
   { value: '4:3', label: '4:3' },
   { value: '1:1', label: '1:1' },
@@ -370,12 +372,12 @@ const seedanceAvailableModes = computed(() => {
 
 // Kling v3 Omni 模式定义
 const KLING_V3_OMNI_MODES = [
-  { value: 'text2video', label: '文生视频', icon: '✍' },
-  { value: 'image2video', label: '图生视频', icon: '🖼' },
-  { value: 'first_last_frame', label: '首尾帧', icon: '🎞' },
-  { value: 'subject_control', label: '主体控制', icon: '🎭' },
-  { value: 'video_reference', label: '视频参考', icon: '📹' },
-  { value: 'multi_shot', label: '多镜头', icon: '🎬' }
+  { value: 'text2video', get label() { return translateUi('canvas.nodeTypes.textToVideo') }, icon: '✍' },
+  { value: 'image2video', get label() { return translateUi('canvas.nodeTypes.imageToVideo') }, icon: '🖼' },
+  { value: 'first_last_frame', get label() { return translateUi('uiMessages.ma44f24ac18b3') }, icon: '🎞' },
+  { value: 'subject_control', get label() { return translateUi('uiMessages.med8546148e1e') }, icon: '🎭' },
+  { value: 'video_reference', get label() { return translateUi('uiMessages.mc85d51e6e4b6') }, icon: '📹' },
+  { value: 'multi_shot', get label() { return translateUi('uiMessages.m4d5610ea36d3') }, icon: '🎬' }
 ]
 
 // 当前模型是否为 Kling v3 Omni
@@ -618,7 +620,7 @@ const availableModels = computed(() => {
 })
 
 function getModelPackageMessage(modelInfo) {
-  return modelInfo?.accessMessage || '需要购买对应套餐后使用'
+  return modelInfo?.accessMessage || translateUi('uiMessages.m861a77c9f9fb')
 }
 
 // 获取模型显示名称
@@ -633,27 +635,27 @@ const getModelName = (modelKey) => {
   // 默认名称
   const defaultNames = {
     // Sora 系列（新版）
-    'sora-2-33': 'Sora 2 普通版',
+    'sora-2-33': translateUi('uiMessages.m4143964107e6'),
     'sora2-pro': 'Sora 2 Pro',
-    'sora-2-duomi': 'Sora 2 角色创建版',
+    'sora-2-duomi': translateUi('uiMessages.m5d0e60c3ae18'),
     // Sora 系列（旧版，已弃用）
     'sora-2': 'Sora 2',
     'sora-2-pro': 'Sora 2 Pro',
     // VEO 系列
     'veo3.1-components': 'VEO 3.1',
-    'veo3.1': 'VEO 3.1 标准',
+    'veo3.1': translateUi('uiMessages.md16c42eba9bb'),
     'veo3.1-pro': 'VEO 3.1 Pro',
     'veo3.1-4k': 'VEO 4K',
-    'veo3.1-components-4k': 'VEO 4K 多图',
+    'veo3.1-components-4k': translateUi('uiMessages.m5f6386b39ca5'),
     'veo3.1-pro-4k': 'VEO 4K Pro',
-    'veo_3_1-fast': 'VEO 快速版'
+    'veo_3_1-fast': translateUi('uiMessages.m7c51680cf33b')
   }
   return defaultNames[modelKey] || modelKey
 }
 
 function formatPointsTitle() {
   if (!me.value) return ''
-  return `分配积分：${formatPoints(me.value.subuser_points || 0)} | 套餐积分：${formatPoints(me.value.package_points || 0)} | 永久积分：${formatPoints(me.value.points || 0)}`
+  return translateUi('uiMessages.m7c8f481340fa', { value1: (formatPoints(me.value.subuser_points || 0)), value2: (formatPoints(me.value.package_points || 0)), value3: (formatPoints(me.value.points || 0)) })
 }
 
 // 监听模型变化，更新时长和方向选项
@@ -668,7 +670,7 @@ watch(model, (newModel) => {
   }
 
   // 更新方向选项 - 兼容两种格式
-  const aspectRatios = modelConfig?.aspectRatios || [{ value: '16:9', label: '横屏' }]
+  const aspectRatios = modelConfig?.aspectRatios || [{ value: '16:9', get label() { return translateUi('uiMessages.m055a6b3a3de7') } }]
   const aspectValues = aspectRatios.map(ar => {
     // 兼容字符串和对象格式
     return typeof ar === 'string' ? ar : ar.value
@@ -871,9 +873,9 @@ const quickImageReviewSummary = computed(() => {
   const approved = reviews.filter(item => item.status === 'approved').length
   const processing = reviews.filter(item => item.status === 'processing').length
   const failed = reviews.filter(item => item.status === 'failed').length
-  if (processing > 0) return `审核中 ${processing}/${files.length}`
-  if (failed > 0) return `过审失败 ${failed}/${files.length}`
-  if (approved === files.length) return `已过审 ${approved}/${files.length}`
+  if (processing > 0) return translateUi('uiMessages.md65efdedf390', { value1: (processing), value2: (files.length) })
+  if (failed > 0) return translateUi('uiMessages.me0f045e149cc', { value1: (failed), value2: (files.length) })
+  if (approved === files.length) return translateUi('uiMessages.m7f8b553ad5ff', { value1: (approved), value2: (files.length) })
   return ''
 })
 
@@ -932,16 +934,16 @@ async function loadReviewChannel() {
       }
     })
     const data = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(data.message || data.error || '当前模型不支持图片过审')
+    if (!response.ok) throw new Error(data.message || data.error || translateUi('uiMessages.me03d7829a8ec'))
     if (!data.channelId || !Number.isInteger(Number(data.channelIndex)) || !data.providerType) {
-      throw new Error('当前模型没有可用的图片过审渠道')
+      throw new Error(translateUi('uiMessages.mccb8a37d49d7'))
     }
     if (requestId !== reviewChannelRequestId) return null
     reviewChannel.value = data
     return data
   } catch (reviewError) {
     if (requestId !== reviewChannelRequestId) return null
-    reviewChannelMessage.value = reviewError.message || '当前模型未配置可用的图片过审渠道'
+    reviewChannelMessage.value = reviewError.message || translateUi('uiMessages.m6657158a5712')
     return null
   }
 }
@@ -953,7 +955,7 @@ async function handleQuickImageReview() {
 
   const channel = reviewChannel.value || await loadReviewChannel()
   if (!channel) {
-    error.value = reviewChannelMessage.value || '当前模型未配置可用的图片过审渠道'
+    error.value = reviewChannelMessage.value || translateUi('uiMessages.m6657158a5712')
     return
   }
 
@@ -965,16 +967,16 @@ async function handleQuickImageReview() {
       if (existing?.status === 'processing') continue
 
       const [url] = await uploadImages([file])
-      if (!url) throw new Error('上传图片失败')
+      if (!url) throw new Error(translateUi('uiMessages.mdbd401fec5cd'))
       const result = await createQuickSeedanceCharacterAsset({
         URL: url,
-        Name: `新手视频过审_${Date.now()}_${index + 1}`,
+        Name: translateUi('uiMessages.m92cc153f3da9', { value1: (Date.now()), value2: (index + 1) }),
         providerType: channel.providerType,
         spaceType: getBeginnerSpaceParams().spaceType,
         teamId: getBeginnerSpaceParams().teamId
       })
       const assetId = result.quickAsset?.assetId || result.asset?.Id || result.asset?.FaceCode || result.Id
-      if (!assetId) throw new Error('图片过审接口返回数据异常')
+      if (!assetId) throw new Error(translateUi('uiMessages.mf17ade8ae6b1'))
 
       const providerType = result.quickAsset?.providerType || channel.providerType
       const initialFaceCode = result.quickAsset?.faceCode || result.asset?.FaceCode || result.asset?.faceCode || assetId
@@ -1001,13 +1003,13 @@ async function handleQuickImageReview() {
         })
       }).catch((pollError) => {
         console.error('[VideoGeneration] 图片过审轮询失败:', pollError)
-        updateImageReview(file, { status: 'failed', error: pollError.message || '图片过审失败' })
+        updateImageReview(file, { status: 'failed', error: pollError.message || translateUi('uiMessages.m68a5550b1ebe') })
       })
     }
-    successMessage.value = '图片已提交过审，审核完成后会自动使用对应渠道的素材格式生成视频'
+    successMessage.value = translateUi('uiMessages.mb70fdc9b89fa')
   } catch (reviewError) {
     console.error('[VideoGeneration] 图片过审失败:', reviewError)
-    error.value = `提交图片过审失败：${reviewError.message || '未知错误'}`
+    error.value = translateUi('uiMessages.m9c9a03d3b62a', { value1: (reviewError.message || translateUi('canvas.unknownError')) })
   } finally {
     isQuickImageReviewSubmitting.value = false
   }
@@ -1032,7 +1034,7 @@ async function prepareSeedanceImageFile(file) {
   if (!file || !file.type.startsWith('image/')) return null
   const isWan3 = isWan3Model.value
   if (isWan3 && !WAN3_IMAGE_MIME_TYPES.has(String(file.type || '').toLowerCase())) {
-    throw new Error('万相 3.0 图片仅支持 JPEG、JPG、PNG、BMP 或 WEBP')
+    throw new Error(translateUi('uiMessages.m541a91216f58'))
   }
   const compressed = await compressImage(file, {
     maxSizeMB: isWan3 ? 20 : 30,
@@ -1054,11 +1056,11 @@ async function prepareSeedanceImageFile(file) {
     const shortSide = Math.min(Number(dimensions?.width) || 0, Number(dimensions?.height) || 0)
     const longSide = Math.max(Number(dimensions?.width) || 0, Number(dimensions?.height) || 0)
     if (shortSide < 240 || longSide > 8000 || longSide / shortSide > 8) {
-      throw new Error('万相 3.0 图片单边需为240至8000像素，宽高比不能超过8:1')
+      throw new Error(translateUi('uiMessages.mf97231be0de3'))
     }
   }
   if (isWan3 && compressed.size > 20 * 1024 * 1024) {
-    throw new Error('万相 3.0 图片不能超过20MB')
+    throw new Error(translateUi('uiMessages.m0ed77cfedfd0'))
   }
   return compressed
 }
@@ -1075,7 +1077,7 @@ function getLocalMediaDuration(file, mediaType) {
     }
     el.onerror = () => {
       cleanup()
-      reject(new Error(mediaType === 'audio' ? '无法读取音频时长，请更换音频文件' : '无法读取视频时长，请更换视频文件'))
+      reject(new Error(mediaType === 'audio' ? translateUi('uiMessages.m696a39979f43') : translateUi('uiMessages.m856c308013df')))
     }
     el.src = url
   })
@@ -1091,7 +1093,7 @@ async function handleSeedanceFirstFrame(e) {
     seedanceFirstFrameFile.value = prepared
     seedanceFirstFramePreview.value = URL.createObjectURL(prepared)
   } catch (err) {
-    error.value = err.message || '图片处理失败，请更换图片'
+    error.value = err.message || translateUi('uiMessages.m6122906e4aea')
   } finally {
     e.target.value = ''
   }
@@ -1113,7 +1115,7 @@ async function handleSeedanceLastFrame(e) {
     seedanceLastFrameFile.value = prepared
     seedanceLastFramePreview.value = URL.createObjectURL(prepared)
   } catch (err) {
-    error.value = err.message || '图片处理失败，请更换图片'
+    error.value = err.message || translateUi('uiMessages.m6122906e4aea')
   } finally {
     e.target.value = ''
   }
@@ -1138,7 +1140,7 @@ async function handleSeedanceRefImages(e) {
     seedanceRefImages.value.push(...selected)
     seedanceRefImagePreviews.value.push(...selected.map(f => URL.createObjectURL(f)))
   } catch (err) {
-    error.value = err.message || '图片处理失败，请更换图片'
+    error.value = err.message || translateUi('uiMessages.m6122906e4aea')
   } finally {
     e.target.value = ''
   }
@@ -1156,14 +1158,14 @@ async function handleSeedanceRefVideos(e) {
   const remaining = MAX - seedanceRefVideos.value.length - seedanceRefVideoUrls.value.length
   const invalidFormat = files.find(f => !['video/mp4', 'video/quicktime'].includes(f.type))
   if (invalidFormat) {
-    error.value = '参考视频格式不受支持，请使用 MP4 或 MOV'
+    error.value = translateUi('uiMessages.mcdb1aecb1f02')
     e.target.value = ''
     return
   }
   const maxVideoBytes = isWan3Model.value ? 100 * 1024 * 1024 : 50 * 1024 * 1024
   const tooLarge = files.find(f => f.size > maxVideoBytes)
   if (tooLarge) {
-    error.value = `参考视频不能超过${isWan3Model.value ? 100 : 50}MB`
+    error.value = translateUi('uiMessages.mfa3b7cd8305f', { value1: (isWan3Model.value ? 100 : 50) })
     e.target.value = ''
     return
   }
@@ -1183,7 +1185,7 @@ async function handleSeedanceRefVideos(e) {
         maxDuration: seedanceMaxDuration.value
       })) {
         error.value = isWan3Model.value
-          ? '万相 3.0 参考视频需为1至15秒、单边240至4096像素且宽高比不超过8:1'
+          ? translateUi('uiMessages.m9cf74bdf6904')
           : validateSeedanceVideoMetadata(metadata, {
             index: seedanceRefVideos.value.length + seedanceRefVideoUrls.value.length + index,
             apiType: currentModelConfig.value?.apiType,
@@ -1194,12 +1196,12 @@ async function handleSeedanceRefVideos(e) {
       }
       const maxTotalDuration = isWan3Model.value ? 15 : seedanceModelLimits.value.maxReferenceVideoDuration
       if (totalDuration + metadata.duration > maxTotalDuration) {
-        error.value = `参考视频总时长不能超过${maxTotalDuration}秒`
+        error.value = translateUi('uiMessages.mf222801ef042', { value1: (maxTotalDuration) })
         e.target.value = ''
         return
       }
       if (isWan3Model.value && totalDuration + metadata.duration + Number(wan3Duration.value) > 30) {
-        error.value = '输入视频总时长与输出视频时长之和不能超过30秒'
+        error.value = translateUi('uiMessages.mfcc613bd4bda')
         e.target.value = ''
         return
       }
@@ -1207,7 +1209,7 @@ async function handleSeedanceRefVideos(e) {
       selected.push({ file, ...metadata })
     }
   } catch (err) {
-    error.value = err.message || '无法读取视频时长，请更换视频文件'
+    error.value = err.message || translateUi('uiMessages.m856c308013df')
     e.target.value = ''
     return
   }
@@ -1237,13 +1239,13 @@ async function handleSeedanceRefAudios(e) {
   const remaining = MAX - seedanceRefAudios.value.length - seedanceRefAudioUrls.value.length
   const invalidFormat = files.find(f => !['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav'].includes(f.type))
   if (invalidFormat) {
-    error.value = '参考音频格式不受支持，请使用 MP3 或 WAV'
+    error.value = translateUi('uiMessages.m267770710e80')
     e.target.value = ''
     return
   }
   const tooLarge = files.find(f => f.size > 15 * 1024 * 1024)
   if (tooLarge) {
-    error.value = '参考音频不能超过15MB'
+    error.value = translateUi('uiMessages.m8b3b28be30b4')
     e.target.value = ''
     return
   }
@@ -1254,13 +1256,13 @@ async function handleSeedanceRefAudios(e) {
       const dur = await getLocalMediaDuration(file, 'audio')
       const seedanceAudioMax = isWan3Model.value ? 15 : (seedanceModelLimits.value.maxReferenceMediaDuration || 15)
       if (isWan3Model.value ? (dur < 1 || dur > seedanceAudioMax) : (dur < 2 || dur > seedanceAudioMax)) {
-        error.value = isWan3Model.value ? '万相 3.0 参考音频时长需在1到15秒之间' : `参考音频时长需在2到${seedanceAudioMax}秒之间`
+        error.value = isWan3Model.value ? translateUi('uiMessages.m2c3db819d47b') : translateUi('uiMessages.m5c7acba7c630', { value1: (seedanceAudioMax) })
         e.target.value = ''
         return
       }
       const seedanceAudioTotalMax = isWan3Model.value ? 15 : (seedanceModelLimits.value.maxTotalReferenceMediaDuration || 15)
       if (totalDuration + dur > seedanceAudioTotalMax) {
-        error.value = `参考音频总时长不能超过${seedanceAudioTotalMax}秒`
+        error.value = translateUi('uiMessages.m1c414bb36e0f', { value1: (seedanceAudioTotalMax) })
         e.target.value = ''
         return
       }
@@ -1268,7 +1270,7 @@ async function handleSeedanceRefAudios(e) {
       selected.push({ file, duration: dur })
     }
   } catch (err) {
-    error.value = err.message || '无法读取音频时长，请更换音频文件'
+    error.value = err.message || translateUi('uiMessages.m696a39979f43')
     e.target.value = ''
     return
   }
@@ -1292,7 +1294,7 @@ function addSeedanceRefImageUrl() {
   const url = seedanceRefImageUrl.value.trim()
   const maxImages = isWan3Model.value ? wan3MaxRefImages.value : seedanceMaxRefImages.value
   if (seedanceRefImages.value.length + seedanceRefImageUrls.value.length >= maxImages) {
-    error.value = `参考图片数量不能超过${maxImages}张`
+    error.value = translateUi('uiMessages.m1d90fa4a277f', { value1: (maxImages) })
     return
   }
   if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
@@ -1307,7 +1309,7 @@ function addSeedanceRefVideoUrl() {
   const url = seedanceRefVideoUrl.value.trim()
   const maxVideos = isWan3Model.value ? wan3MaxRefVideos.value : seedanceMaxRefVideos.value
   if (seedanceRefVideos.value.length + seedanceRefVideoUrls.value.length >= maxVideos) {
-    error.value = `参考视频数量不能超过${maxVideos}个`
+    error.value = translateUi('uiMessages.mc3f1e409e062', { value1: (maxVideos) })
     return
   }
   if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
@@ -1322,7 +1324,7 @@ function addSeedanceRefAudioUrl() {
   const url = seedanceRefAudioUrl.value.trim()
   const maxAudios = isWan3Model.value ? wan3MaxRefAudios.value : seedanceMaxRefAudios.value
   if (seedanceRefAudios.value.length + seedanceRefAudioUrls.value.length >= maxAudios) {
-    error.value = `参考音频数量不能超过${maxAudios}个`
+    error.value = translateUi('uiMessages.m8c25880b45b1', { value1: (maxAudios) })
     return
   }
   if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
@@ -1365,9 +1367,9 @@ function handleWan3File(e) {
   if (!file) return
   const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
   if (!WAN3_DOCUMENT_EXTENSIONS.has(extension)) {
-    error.value = '参考文件仅支持 doc、docx、xls、xlsx、ppt、pptx、pdf、txt、key、pages、numbers 或 md'
+    error.value = translateUi('uiMessages.m4a105c09dca8')
   } else if (file.size > 100 * 1024 * 1024) {
-    error.value = '参考文件不能超过100MB'
+    error.value = translateUi('uiMessages.m364b7866badc')
   } else {
     wan3File.value = file
   }
@@ -1435,25 +1437,25 @@ function removeKlingV3OmniRefImageUrl(index) {
 }
 
 function formatStatus(status) {
-  if (!status) return '未知状态'
+  if (!status) return translateUi('uiMessages.mec0d9bdb00a4')
   const normalized = status.toString().toLowerCase()
   const map = {
-    pending: '排队中',
-    not_start: '准备中',
-    queued: '排队中',
-    processing: '生成中',
-    in_progress: '生成中',
-    running: '生成中',
-    completed: '已完成',
-    success: '已完成',
-    failure: '生成失败',
-    failed: '生成失败',
-    error: '生成失败',
-    timeout: '生成超时',
-    cancelled: '已取消',
-    file_expired: '文件已过期'
+    pending: translateUi('uiMessages.md6f766f2adf5'),
+    not_start: translateUi('uiMessages.mb53be09930f4'),
+    queued: translateUi('uiMessages.md6f766f2adf5'),
+    processing: translateUi('uiMessages.m969ef41f7e5b'),
+    in_progress: translateUi('uiMessages.m969ef41f7e5b'),
+    running: translateUi('uiMessages.m969ef41f7e5b'),
+    completed: translateUi('canvas.assetPanel.tagCompleted'),
+    success: translateUi('canvas.assetPanel.tagCompleted'),
+    failure: translateUi('canvas.audioNode.generateFailed'),
+    failed: translateUi('canvas.audioNode.generateFailed'),
+    error: translateUi('canvas.audioNode.generateFailed'),
+    timeout: translateUi('uiMessages.mb60976e35087'),
+    cancelled: translateUi('uiMessages.ma37778f17c5f'),
+    file_expired: translateUi('uiMessages.mc5fe26aafac9')
   }
-  return map[normalized] || status || '未知状态'
+  return map[normalized] || status || translateUi('uiMessages.mec0d9bdb00a4')
 }
 
 function statusColor(status) {
@@ -1533,7 +1535,7 @@ function showProcessingTimeoutHint(item) {
 function formatTime(ts) {
   if (!ts) return ''
   const date = new Date(ts)
-  return date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+  return date.toLocaleString(uiLanguage.value, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 function taskKey(item) {
@@ -1558,7 +1560,7 @@ async function generateVideo() {
   console.log('[video] 用户信息:', me.value ? `已登录 (${me.value.username})` : '未登录')
   
   if (!me.value) {
-    error.value = '请先登录'
+    error.value = translateUi('uiMessages.m48144f96c150')
     return
   }
   if (!prompt.value.trim()) {
@@ -1568,12 +1570,12 @@ async function generateVideo() {
     const klingOmniAllowEmpty = isKlingV3OmniModel.value && klingV3OmniMode.value !== 'text2video'
     const wan3AllowEmpty = isWan3Model.value && wan3Mode.value !== 'text2video'
     if (!seedanceAllowEmpty && !klingOmniAllowEmpty && !wan3AllowEmpty) {
-      error.value = '请输入提示词'
+      error.value = translateUi('uiMessages.m673bfd286541')
       return
     }
   }
   if (mode.value === 'image' && !isReferenceVideoModel.value && !isWan3Model.value && !isKlingV3OmniModel.value && imageFiles.value.length === 0) {
-    error.value = '请上传参考图片'
+    error.value = translateUi('uiMessages.mf472131d24a5')
     return
   }
 
@@ -1627,50 +1629,50 @@ async function generateVideo() {
     const hasReference = imageCount + videoCount + audioCount > 0 || Boolean(wan3File.value) || Boolean(wan3Link.value.trim())
 
     if (wan3File.value && wan3Link.value.trim()) {
-      error.value = '万相 3.0 文件和网页链接不能同时使用'
+      error.value = translateUi('uiMessages.m069ddbb2a457')
       return
     }
     if (imageCount > wan3MaxRefImages.value || videoCount > wan3MaxRefVideos.value || audioCount > wan3MaxRefAudios.value) {
-      error.value = '万相 3.0 参考素材数量超过当前模型配置上限'
+      error.value = translateUi('uiMessages.md9a7d6356f4b')
       return
     }
     if (hasFrame && hasReference) {
-      error.value = '万相 3.0 首尾帧不能与参考素材、文件或网页链接同时使用'
+      error.value = translateUi('uiMessages.m2f14c75a3c53')
       return
     }
     if (wan3Mode.value === 'image2video_first' && !firstFrameCount) {
-      error.value = '请上传首帧图片'
+      error.value = translateUi('uiMessages.m898907da0844')
       return
     }
     if (wan3Mode.value === 'image2video_first_last' && (!firstFrameCount || !lastFrameCount)) {
-      error.value = '首尾帧模式需要同时上传首帧和尾帧图片'
+      error.value = translateUi('uiMessages.m60ff66e10ba5')
       return
     }
     if (wan3Mode.value === 'multimodal_ref' && imageCount + videoCount + audioCount === 0) {
-      error.value = '多模态参考模式至少需要一张参考图片、一段视频或一段音频'
+      error.value = translateUi('uiMessages.m3987d157bfe6')
       return
     }
     if (wan3Mode.value === 'file' && !wan3File.value) {
-      error.value = '请上传一个参考文件'
+      error.value = translateUi('uiMessages.mb7d6d54bf857')
       return
     }
     if (wan3Mode.value === 'link' && !/^https?:\/\//i.test(wan3Link.value.trim())) {
-      error.value = '请输入可公开访问的网页链接'
+      error.value = translateUi('uiMessages.me98314d41f6f')
       return
     }
     const requestedWan3Duration = Number(wan3Duration.value)
     if (!Number.isInteger(requestedWan3Duration) || requestedWan3Duration < 2 || requestedWan3Duration > 30) {
-      error.value = '万相 3.0 时长必须为2至30秒的整数'
+      error.value = translateUi('uiMessages.m98b4076a190d')
       return
     }
     const referenceVideoDuration = seedanceRefVideoPreviews.value.reduce((sum, item) => sum + (Number(item.duration) || 0), 0)
     if (referenceVideoDuration + requestedWan3Duration > 30) {
-      error.value = '输入视频总时长与输出视频时长之和不能超过30秒'
+      error.value = translateUi('uiMessages.mfcc613bd4bda')
       return
     }
     const normalizedSeed = wan3Seed.value.trim()
     if (normalizedSeed && (!/^\d+$/.test(normalizedSeed) || Number(normalizedSeed) > 2147483647)) {
-      error.value = '万相 3.0 随机种子必须为0至2147483647的整数'
+      error.value = translateUi('uiMessages.m395ec91a9915')
       return
     }
   }
@@ -1679,11 +1681,11 @@ async function generateVideo() {
   if (isKlingV3OmniModel.value) {
     const km = klingV3OmniMode.value
     if ((km === 'image2video' || km === 'first_last_frame') && !klingV3OmniFirstFrameFile.value && imageFiles.value.length === 0) {
-      error.value = '请上传首帧图片'
+      error.value = translateUi('uiMessages.m898907da0844')
       return
     }
     if (km === 'video_reference' && !klingV3OmniRefVideoUrl.value) {
-      error.value = '请输入参考视频 URL'
+      error.value = translateUi('uiMessages.m25854318b5ed')
       return
     }
   }
@@ -1693,30 +1695,30 @@ async function generateVideo() {
     const requiredImages = v31ModeConfig.value.needsImages
     const needsAudio = v31ModeConfig.value.needsAudio
     if (requiredImages > 0 && imageFiles.value.length === 0) {
-      error.value = `请上传至少 1 张图片`
+      error.value = translateUi('uiMessages.mc45227f62945')
       return
     }
     if (v31Mode.value === 'first_last_frame' && imageFiles.value.length < 2) {
-      error.value = '首尾帧生视频需要 2 张图片（首帧+尾帧），请继续上传'
+      error.value = translateUi('uiMessages.m4c1b50cc0de3')
       return
     }
     if (v31Mode.value === 'multi_image' && imageFiles.value.length > 3) {
-      error.value = '多图生视频最多支持 3 张图片'
+      error.value = translateUi('uiMessages.m50b007f83320')
       return
     }
     if (needsAudio && !v31AudioFile.value) {
-      error.value = '请上传 1 段音频'
+      error.value = translateUi('uiMessages.mf638bd270d3f')
       return
     }
   }
 
   const reviewSubmission = getQuickImageReviewSubmission()
   if (reviewSubmission.hasProcessing) {
-    error.value = '图片正在审核中，请等待审核完成后再生成视频'
+    error.value = translateUi('uiMessages.mc74486adfd4b')
     return
   }
   if (reviewSubmission.hasReviews && !reviewSubmission.approved) {
-    error.value = '请将当前上传图片全部过审后再使用审核素材生成视频'
+    error.value = translateUi('uiMessages.mc6be21c34d65')
     return
   }
 
@@ -1928,7 +1930,7 @@ async function generateVideo() {
     v31AudioFile.value = null
     prompt.value = ''
     loading.value = false
-    successMessage.value = '任务已提交，正在处理...'
+    successMessage.value = translateUi('uiMessages.m10afb056f37d')
     
     // 异步发送请求，不阻塞UI
     const response = await fetch(getApiUrl('/api/videos/generate'), {
@@ -1948,12 +1950,12 @@ async function generateVideo() {
       data = await response.json()
     } catch (parseErr) {
       console.error('[video] 响应解析失败:', parseErr)
-      throw new Error('服务器返回了无效响应，请稍后重试')
+      throw new Error(translateUi('uiMessages.m87d273ac3364'))
     }
     console.log('[video] 响应数据:', data)
     if (!response.ok) {
       console.error('[video] 请求失败:', response.status, data)
-      const err = new Error(getApiErrorMessage(data, '生成失败'))
+      const err = new Error(getApiErrorMessage(data, translateUi('canvas.audioNode.generateFailed')))
       err.status = response.status
       err.body = data
       throw err
@@ -1974,7 +1976,7 @@ async function generateVideo() {
       duration: requestedDuration,
       aspect_ratio: currentAspectRatio,
       status: data.status || 'pending',
-      progress: data.progress || '排队中',
+      progress: data.progress || translateUi('uiMessages.md6f766f2adf5'),
       created_at: Date.now(),
       video_url: data.video_url || null,
       points_cost: pointsCost,
@@ -1993,7 +1995,7 @@ async function generateVideo() {
     startPolling(taskId, isOffPeakTask, Date.now())
     console.log('[video] 已启动轮询, 错峰模式:', isOffPeakTask)
     
-    successMessage.value = '任务已提交，请在历史记录中查看进度'
+    successMessage.value = translateUi('uiMessages.m33e91c627d90')
     console.log('[video] 刷新用户信息')
     await refreshUser()
     console.log('[video] 视频生成流程完成')
@@ -2008,22 +2010,22 @@ async function generateVideo() {
     console.error('[video] generate error:', e)
     loading.value = false
     if (e.status === 402 || e.message.includes('402')) {
-      error.value = '积分不足，请先充值或使用兑换券'
+      error.value = translateUi('uiMessages.m8322d4dc5f1f')
     } else if (e.status === 401) {
-      error.value = '未登录，请先登录'
+      error.value = translateUi('uiMessages.meecc2ccc5175')
     } else if (e.status === 403 && e.body?.error === 'model_package_required') {
-      error.value = e.body.message || '需要购买对应套餐后使用'
+      error.value = e.body.message || translateUi('uiMessages.m861a77c9f9fb')
     } else if (e.status === 429) {
       // 并发限制错误
       const hasPackage = userPackageInfo.value.hasPackage
       const concurrentLimit = e.body?.concurrent_limit || userPackageInfo.value.concurrentLimit
       if (hasPackage) {
-        error.value = `已达到VIP并发限制（${concurrentLimit}个任务），请等待当前任务完成后再试`
+        error.value = translateUi('uiMessages.m4a0a9bbb3a58', { value1: (concurrentLimit) })
       } else {
-        error.value = `已达到并发限制（${concurrentLimit}个任务）。如需多并发，请升级套餐 →`
+        error.value = translateUi('uiMessages.mdce36ce096c2', { value1: (concurrentLimit) })
       }
     } else {
-      error.value = e.message || '生成失败，请稍后再试'
+      error.value = e.message || translateUi('uiMessages.m7ab49f95fc44')
     }
   }
 }
@@ -2082,8 +2084,8 @@ function startPolling(taskId, isOffPeakTask = false, taskCreatedAt = null) {
       console.log(`[VideoGeneration] 任务超时: ${taskId}, 已运行 ${Math.floor(elapsed / 1000 / 60)} 分钟, 错峰模式: ${isOffPeakTask}`)
       mergeTaskUpdate(taskId, {
         status: 'timeout',
-        progress: '生成超时',
-        fail_reason: '生成超时（超过40分钟），已自动退还积分'
+        progress: translateUi('uiMessages.mb60976e35087'),
+        fail_reason: translateUi('uiMessages.maaa706624ce5')
       })
       pollingTimers.delete(taskId)
       return
@@ -2164,8 +2166,8 @@ async function loadHistory(reset = true) {
 
       if (hasVideoGenerationTimedOut(video, now, maxTime)) {
         video.status = 'timeout'
-        video.progress = '生成超时'
-        video.fail_reason = '生成超时（超过40分钟），已自动退还积分'
+        video.progress = translateUi('uiMessages.mb60976e35087')
+        video.fail_reason = translateUi('uiMessages.maaa706624ce5')
       }
 
       return video
@@ -2467,14 +2469,14 @@ function getVideoThumbnail(item) {
 }
 
 async function deleteHistory(item) {
-  if (!confirm('确定删除该记录吗？')) return
+  if (!confirm(translateUi('uiMessages.mc65bbe43558f'))) return
   try {
     const token = localStorage.getItem('token')
     const response = await fetch(getApiUrl(`/api/videos/history/${item.id}`), {
       method: 'DELETE',
       headers: { ...getTenantHeaders(), Authorization: `Bearer ${token}` }
     })
-    if (!response.ok) throw new Error('删除失败')
+    if (!response.ok) throw new Error(translateUi('errors.deleteFailed'))
     history.value = history.value.filter(v => v.id !== item.id)
     gallery.value = gallery.value.filter(v => v.id !== item.id)
   } catch (e) {
@@ -2626,7 +2628,7 @@ async function regenerateFromHistory(item) {
     clearImages()
     
     // 显示加载提示
-    successMessage.value = '正在加载参考图片...'
+    successMessage.value = translateUi('uiMessages.md39e5343e7d7')
     
     try {
       for (const imageUrl of referenceImages) {
@@ -2649,17 +2651,17 @@ async function regenerateFromHistory(item) {
       }
       
       if (imageFiles.value.length > 0) {
-        successMessage.value = `已自动填充参数和${imageFiles.value.length}张参考图片`
+        successMessage.value = translateUi('uiMessages.mda5d3e54706f', { value1: (imageFiles.value.length) })
       } else {
-        successMessage.value = '已填充参数，但参考图片加载失败（可能已过期）'
+        successMessage.value = translateUi('uiMessages.m9b4dcf06ccb7')
       }
     } catch (e) {
       console.error('[VideoGeneration] 加载参考图片失败:', e)
-      successMessage.value = '已填充参数，但参考图片加载失败'
+      successMessage.value = translateUi('uiMessages.m5c9d11d22a8f')
     }
   } else {
     mode.value = 'text'
-    successMessage.value = '已自动填充参数，可以直接生成或修改后生成'
+    successMessage.value = translateUi('uiMessages.mb9a94a249e69')
   }
   
   // 滚动到顶部
@@ -2802,12 +2804,12 @@ onMounted(async () => {
               imageFiles.value = [file]
               previewUrls.value = [previewUrl]
               
-              successMessage.value = '图片已加载，可以开始生成视频'
+              successMessage.value = translateUi('uiMessages.m71b1a4a67951')
               setTimeout(() => { successMessage.value = '' }, 3000)
             }
           } catch (e) {
             console.error('[VideoGeneration] 加载图片失败:', e)
-            error.value = '图片加载失败，请重新上传'
+            error.value = translateUi('uiMessages.m3b2fa454f272')
             setTimeout(() => { error.value = '' }, 3000)
           }
         }
@@ -2855,7 +2857,7 @@ onUnmounted(() => {
               class="flex-1 flex items-center justify-center space-x-2 rounded-lg transition-all duration-200 font-medium py-3 px-4"
             >
               <span class="text-xl">🎬</span>
-              <span class="text-sm">图生视频</span>
+              <span class="text-sm">{{ translateUi('canvas.nodeTypes.imageToVideo') }}</span>
             </button>
             <button 
               @click="mode = 'text'" 
@@ -2865,7 +2867,7 @@ onUnmounted(() => {
               class="flex-1 flex items-center justify-center space-x-2 rounded-lg transition-all duration-200 font-medium py-3 px-4"
             >
               <span class="text-xl">✍️</span>
-              <span class="text-sm">文生视频</span>
+              <span class="text-sm">{{ translateUi('canvas.nodeTypes.textToVideo') }}</span>
             </button>
           </div>
 
@@ -2873,7 +2875,7 @@ onUnmounted(() => {
           <div v-if="isRunningHubAiAppVideoV31Model" class="mb-5">
             <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
               <span>🎛️</span>
-              <span>生成模式</span>
+              <span>{{ translateUi('uiMessages.m29ccb4125180') }}</span>
             </label>
             <div class="grid grid-cols-2 gap-2">
               <button
@@ -2890,7 +2892,7 @@ onUnmounted(() => {
               </button>
             </div>
             <p class="mt-1.5 text-[11px] text-slate-400 dark:text-slate-500">
-              时长 3-15 秒，输出 480p，按秒计费
+              {{ translateUi('uiMessages.mf869688c681d') }}
             </p>
           </div>
 
@@ -2899,11 +2901,11 @@ onUnmounted(() => {
             <div>
               <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
                 <span>🤖</span>
-                <span>模型</span>
+                <span>{{ translateUi('imageGen.model') }}</span>
               </label>
               <select v-model="model" class="input text-sm">
                 <option v-for="m in availableModels" :key="m.value" :value="m.value" :disabled="m.disabled">
-                  {{ m.label }}{{ m.disabled ? ' - 需套餐' : '' }}
+                  {{ m.label }}{{ m.disabled ? translateUi('uiMessages.m5017edab92ad') : '' }}
                 </option>
               </select>
             </div>
@@ -2912,7 +2914,7 @@ onUnmounted(() => {
             <div v-if="!isReferenceVideoModel && !isKlingV3OmniModel">
               <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
                 <span>📐</span>
-                <span>画面方向</span>
+                <span>{{ translateUi('uiMessages.mfa1b9e0e2308') }}</span>
               </label>
               <select v-model="aspectRatio" class="input text-sm">
                 <option 
@@ -2927,22 +2929,22 @@ onUnmounted(() => {
             <div v-if="isWan3Model">
               <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
                 <span>⏱️</span>
-                <span>视频长度</span>
+                <span>{{ translateUi('uiMessages.mf71aceda4e17') }}</span>
               </label>
               <select v-model.number="wan3Duration" class="input text-sm">
                 <option v-for="dur in availableDurations" :key="dur" :value="Number(dur)">
-                  {{ dur }} 秒
+                  {{ translateUi('uiMessages.m8e9c8e4d3e42', { value1: (dur) }) }}
                 </option>
               </select>
             </div>
             <div v-else-if="!isVeo3Model && !isReferenceVideoModel && !isKlingV3OmniModel && availableDurations.length > 0">
               <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
                 <span>⏱️</span>
-                <span>视频长度</span>
+                <span>{{ translateUi('uiMessages.mf71aceda4e17') }}</span>
               </label>
               <select v-model="duration" class="input text-sm">
                 <option v-for="dur in availableDurations" :key="dur" :value="dur">
-                  {{ dur }} 秒
+                  {{ translateUi('uiMessages.m8e9c8e4d3e42', { value1: (dur) }) }}
                 </option>
               </select>
             </div>
@@ -2951,7 +2953,7 @@ onUnmounted(() => {
             <div v-if="isViduModel">
               <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
                 <span>🌙</span>
-                <span>错峰模式</span>
+                <span>{{ translateUi('uiMessages.m6ed18b81206e') }}</span>
               </label>
               <div class="flex items-center space-x-3 p-2.5 bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-800/30 dark:to-gray-900/30 border border-gray-300 dark:border-gray-700 rounded-lg">
                 <label class="relative inline-flex items-center cursor-pointer">
@@ -2960,10 +2962,10 @@ onUnmounted(() => {
                 </label>
                 <div class="flex-1">
                   <p class="text-xs font-medium text-gray-700 dark:text-gray-300">
-                    {{ offPeak ? '已开启' : '已关闭' }}
+                    {{ offPeak ? translateUi('uiMessages.m8a4ef3e48e4e') : translateUi('uiMessages.m6744b4c6a9aa') }}
                   </p>
                   <p class="text-xs text-gray-600 dark:text-gray-400 opacity-80">
-                    {{ offPeak ? '享受错峰优惠，生成时间可能稍长' : '开启后可享受积分折扣' }}
+                    {{ offPeak ? translateUi('uiMessages.m35fd53e25023') : translateUi('uiMessages.mc2fd786c4ef1') }}
                   </p>
                 </div>
               </div>
@@ -2973,7 +2975,7 @@ onUnmounted(() => {
             <div v-if="hasVideoResolutionSelection">
               <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
                 <span>📺</span>
-                <span>清晰度</span>
+                <span>{{ translateUi('uiMessages.m0e22652107f5') }}</span>
               </label>
               <div class="flex space-x-2">
                 <button
@@ -2990,7 +2992,7 @@ onUnmounted(() => {
                 >
                   {{ option.label }}
                   <span v-if="isViduModel && option.value === '720p' && currentModelConfig?.resolution720Discount" class="ml-1 text-xs opacity-80">
-                    ({{ Math.round(currentModelConfig.resolution720Discount * 100) }}%价格)
+                    {{ translateUi('uiMessages.ma2da9c827b9c', { value1: (Math.round(currentModelConfig.resolution720Discount * 100)) }) }}
                   </span>
                 </button>
               </div>
@@ -3000,8 +3002,8 @@ onUnmounted(() => {
             <div v-if="isVeo3Model && mode === 'image'" class="p-2.5 bg-gray-100 dark:bg-gray-800/50 border border-gray-300 dark:border-gray-700 rounded-lg">
               <p class="text-xs text-gray-700 dark:text-gray-300">
                 <span class="font-semibold">{{ getModelName(model) }}</span> 
-                <span v-if="model === 'veo3.1-components' || model === 'veo3.1-components-4k'">支持最多 3 张参考图</span>
-                <span v-else>支持最多 2 张参考图（首尾帧），固定生成 8 秒视频</span>
+                <span v-if="model === 'veo3.1-components' || model === 'veo3.1-components-4k'">{{ translateUi('uiMessages.m72ab6d27e3f8') }}</span>
+                <span v-else>{{ translateUi('uiMessages.m693dd773c04c') }}</span>
               </p>
             </div>
 
@@ -3009,12 +3011,12 @@ onUnmounted(() => {
             <div v-if="isHdAvailable">
               <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
                 <span>⚙️</span>
-                <span>选项</span>
+                <span>{{ translateUi('uiMessages.mbb7486f4410f') }}</span>
               </label>
               <div class="space-y-2">
                 <label class="flex items-center space-x-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
                   <input type="checkbox" v-model="hd" class="rounded accent-gray-600" />
-                  <span>HD 高清 (+{{ formatPoints(pointsCostConfig.hd_extra) }}积分)</span>
+                  <span>{{ translateUi('uiMessages.m3f300534e4a9', { value1: (formatPoints(pointsCostConfig.hd_extra)) }) }}</span>
                 </label>
               </div>
             </div>
@@ -3023,13 +3025,13 @@ onUnmounted(() => {
             <div>
               <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
                 <span>📝</span>
-                <span>提示词</span>
+                <span>{{ translateUi('directorStudio.inspector.prompt') }}</span>
               </label>
               <textarea
                 v-model="prompt"
                 rows="3"
                 class="input text-sm resize-none"
-                placeholder="描述你想要的视频场景、角色、镜头语言等"
+                :placeholder="translateUi('uiMessages.me5869b6ffdcd')"
               ></textarea>
             </div>
 
@@ -3044,7 +3046,7 @@ onUnmounted(() => {
                 >
                   <span class="flex items-center space-x-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
                     <span>🎬</span>
-                    <span>生成模式</span>
+                    <span>{{ translateUi('uiMessages.m29ccb4125180') }}</span>
                     <span class="ml-1 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-xs">
                       {{ SEEDANCE_MODES.find(m => m.value === seedanceMode)?.label }}
                     </span>
@@ -3085,17 +3087,17 @@ onUnmounted(() => {
               <!-- 首帧图片上传（image2video_first / image2video_first_last） -->
               <div v-if="seedanceMode === 'image2video_first' || seedanceMode === 'image2video_first_last'">
                 <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
-                  <span>🖼️</span><span>首帧图片</span>
+                  <span>🖼️</span><span>{{ translateUi('uiMessages.m5f960b0d9032') }}</span>
                 </label>
                 <div v-if="!seedanceFirstFrameFile" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-gray-400 transition-colors" @click="seedanceFirstFrameInputRef?.click()">
                   <div class="text-2xl mb-1">📤</div>
-                  <p class="text-xs text-slate-500 dark:text-slate-400">点击上传首帧图片</p>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m5030e7b4964b') }}</p>
                   <input ref="seedanceFirstFrameInputRef" type="file" accept="image/*" @change="handleSeedanceFirstFrame" class="hidden" />
                 </div>
                 <div v-else class="flex items-center space-x-2 bg-slate-50 dark:bg-dark-700 rounded-lg p-2 border border-slate-200 dark:border-dark-600">
                   <div class="relative flex-shrink-0">
                     <img :src="seedanceFirstFramePreview" class="w-12 h-12 object-cover rounded" />
-                    <span v-if="imageReviews.get(seedanceFirstFrameFile)?.status === 'approved'" class="absolute left-0 top-0 rounded-br bg-emerald-600 px-1 py-0.5 text-[10px] leading-none text-white">已过审</span>
+                    <span v-if="imageReviews.get(seedanceFirstFrameFile)?.status === 'approved'" class="absolute left-0 top-0 rounded-br bg-emerald-600 px-1 py-0.5 text-[10px] leading-none text-white">{{ translateUi('uiMessages.m93632ccd0ab5') }}</span>
                   </div>
                   <div class="flex-1 min-w-0">
                     <p class="text-xs text-slate-700 dark:text-slate-300 truncate">{{ seedanceFirstFrameFile.name }}</p>
@@ -3108,17 +3110,17 @@ onUnmounted(() => {
               <!-- 尾帧图片上传（image2video_first_last） -->
               <div v-if="seedanceMode === 'image2video_first_last'">
                 <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
-                  <span>🖼️</span><span>尾帧图片</span>
+                  <span>🖼️</span><span>{{ translateUi('uiMessages.m9b31d6cfb16f') }}</span>
                 </label>
                 <div v-if="!seedanceLastFrameFile" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-gray-400 transition-colors" @click="seedanceLastFrameInputRef?.click()">
                   <div class="text-2xl mb-1">📤</div>
-                  <p class="text-xs text-slate-500 dark:text-slate-400">点击上传尾帧图片</p>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m5b81cfad2635') }}</p>
                   <input ref="seedanceLastFrameInputRef" type="file" accept="image/*" @change="handleSeedanceLastFrame" class="hidden" />
                 </div>
                 <div v-else class="flex items-center space-x-2 bg-slate-50 dark:bg-dark-700 rounded-lg p-2 border border-slate-200 dark:border-dark-600">
                   <div class="relative flex-shrink-0">
                     <img :src="seedanceLastFramePreview" class="w-12 h-12 object-cover rounded" />
-                    <span v-if="imageReviews.get(seedanceLastFrameFile)?.status === 'approved'" class="absolute left-0 top-0 rounded-br bg-emerald-600 px-1 py-0.5 text-[10px] leading-none text-white">已过审</span>
+                    <span v-if="imageReviews.get(seedanceLastFrameFile)?.status === 'approved'" class="absolute left-0 top-0 rounded-br bg-emerald-600 px-1 py-0.5 text-[10px] leading-none text-white">{{ translateUi('uiMessages.m93632ccd0ab5') }}</span>
                   </div>
                   <div class="flex-1 min-w-0">
                     <p class="text-xs text-slate-700 dark:text-slate-300 truncate">{{ seedanceLastFrameFile.name }}</p>
@@ -3132,14 +3134,14 @@ onUnmounted(() => {
               <div v-if="seedanceMode === 'multimodal_ref' || seedanceMode === 'video_edit'">
                 <div class="flex items-center justify-between mb-1.5">
                   <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
-                    <span>🖼️</span><span>参考图片</span>
+                    <span>🖼️</span><span>{{ translateUi('imageGen.referenceImages') }}</span>
                   </label>
                   <span class="text-xs text-slate-500">{{ seedanceRefImages.length + seedanceRefImageUrls.length }} / {{ seedanceMode === 'multimodal_ref' ? seedanceMaxRefImages : 1 }}</span>
                 </div>
                 <!-- URL 输入 -->
                 <div v-if="(seedanceRefImages.length + seedanceRefImageUrls.length) < (seedanceMode === 'multimodal_ref' ? seedanceMaxRefImages : 1)" class="flex gap-1.5 mb-1.5">
-                  <input v-model="seedanceRefImageUrl" type="text" placeholder="粘贴图片 URL" class="flex-1 px-2 py-1.5 text-xs border border-slate-300 dark:border-dark-500 rounded-lg bg-white dark:bg-dark-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-gray-400" @keydown.enter.prevent="addSeedanceRefImageUrl" />
-                  <button @click="addSeedanceRefImageUrl" :disabled="!seedanceRefImageUrl.trim()" class="px-2 py-1.5 text-xs font-medium bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-200 dark:text-gray-900">添加</button>
+                  <input v-model="seedanceRefImageUrl" type="text" :placeholder="translateUi('uiMessages.m8f3a8805e38e')" class="flex-1 px-2 py-1.5 text-xs border border-slate-300 dark:border-dark-500 rounded-lg bg-white dark:bg-dark-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-gray-400" @keydown.enter.prevent="addSeedanceRefImageUrl" />
+                  <button @click="addSeedanceRefImageUrl" :disabled="!seedanceRefImageUrl.trim()" class="px-2 py-1.5 text-xs font-medium bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-200 dark:text-gray-900">{{ translateUi('common.add') }}</button>
                 </div>
                 <!-- 已添加的 URL 列表 -->
                 <div v-if="seedanceRefImageUrls.length > 0" class="space-y-1 mb-1.5">
@@ -3152,19 +3154,19 @@ onUnmounted(() => {
                 <!-- 文件上传分隔 -->
                 <div v-if="(seedanceRefImages.length + seedanceRefImageUrls.length) < (seedanceMode === 'multimodal_ref' ? seedanceMaxRefImages : 1)" class="flex items-center gap-2 mb-1.5">
                   <div class="flex-1 border-t border-slate-200 dark:border-dark-600"></div>
-                  <span class="text-xs text-slate-400">或</span>
+                  <span class="text-xs text-slate-400">{{ translateUi('uiMessages.ma2123d69506f') }}</span>
                   <div class="flex-1 border-t border-slate-200 dark:border-dark-600"></div>
                 </div>
                 <div v-if="(seedanceRefImages.length + seedanceRefImageUrls.length) < (seedanceMode === 'multimodal_ref' ? seedanceMaxRefImages : 1)" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-gray-400 transition-colors" @click="seedanceRefImageInputRef?.click()">
                   <div class="text-2xl mb-1">📤</div>
-                  <p class="text-xs text-slate-500 dark:text-slate-400">点击上传参考图片</p>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.mda6865dbf5de') }}</p>
                   <input ref="seedanceRefImageInputRef" type="file" accept="image/*" multiple @change="handleSeedanceRefImages" class="hidden" />
                 </div>
                 <div v-if="seedanceRefImagePreviews.length > 0" class="space-y-1.5 mt-1.5 max-h-36 overflow-y-auto">
                   <div v-for="(url, idx) in seedanceRefImagePreviews" :key="idx" class="flex items-center space-x-2 bg-slate-50 dark:bg-dark-700 rounded-lg p-1.5 border border-slate-200 dark:border-dark-600">
                     <div class="relative flex-shrink-0">
                       <img :src="url" class="w-10 h-10 object-cover rounded" />
-                      <span v-if="imageReviews.get(seedanceRefImages[idx])?.status === 'approved'" class="absolute left-0 top-0 rounded-br bg-emerald-600 px-1 py-0.5 text-[10px] leading-none text-white">已过审</span>
+                      <span v-if="imageReviews.get(seedanceRefImages[idx])?.status === 'approved'" class="absolute left-0 top-0 rounded-br bg-emerald-600 px-1 py-0.5 text-[10px] leading-none text-white">{{ translateUi('uiMessages.m93632ccd0ab5') }}</span>
                     </div>
                     <span class="flex-1 text-xs text-slate-600 dark:text-slate-300 truncate">{{ seedanceRefImages[idx]?.name }}</span>
                     <button @click="removeSeedanceRefImage(idx)" class="w-5 h-5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded flex items-center justify-center text-xs">✕</button>
@@ -3176,14 +3178,14 @@ onUnmounted(() => {
               <div v-if="seedanceMode === 'multimodal_ref' || seedanceMode === 'video_edit' || seedanceMode === 'video_extend'">
                 <div class="flex items-center justify-between mb-1.5">
                   <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
-                    <span>🎥</span><span>参考视频</span>
+                    <span>🎥</span><span>{{ translateUi('canvas.videoNode.refVideo') }}</span>
                   </label>
                   <span class="text-xs text-slate-500">{{ seedanceRefVideos.length + seedanceRefVideoUrls.length }} / {{ seedanceMaxRefVideos }}</span>
                 </div>
                 <!-- URL 输入 -->
                 <div v-if="(seedanceRefVideos.length + seedanceRefVideoUrls.length) < seedanceMaxRefVideos" class="flex gap-1.5 mb-1.5">
-                  <input v-model="seedanceRefVideoUrl" type="text" placeholder="粘贴视频 URL" class="flex-1 px-2 py-1.5 text-xs border border-slate-300 dark:border-dark-500 rounded-lg bg-white dark:bg-dark-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-gray-400" @keydown.enter.prevent="addSeedanceRefVideoUrl" />
-                  <button @click="addSeedanceRefVideoUrl" :disabled="!seedanceRefVideoUrl.trim()" class="px-2 py-1.5 text-xs font-medium bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-200 dark:text-gray-900">添加</button>
+                  <input v-model="seedanceRefVideoUrl" type="text" :placeholder="translateUi('uiMessages.m5aea0dd864bb')" class="flex-1 px-2 py-1.5 text-xs border border-slate-300 dark:border-dark-500 rounded-lg bg-white dark:bg-dark-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-gray-400" @keydown.enter.prevent="addSeedanceRefVideoUrl" />
+                  <button @click="addSeedanceRefVideoUrl" :disabled="!seedanceRefVideoUrl.trim()" class="px-2 py-1.5 text-xs font-medium bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-200 dark:text-gray-900">{{ translateUi('common.add') }}</button>
                 </div>
                 <!-- 已添加的 URL 列表 -->
                 <div v-if="seedanceRefVideoUrls.length > 0" class="space-y-1 mb-1.5">
@@ -3196,12 +3198,12 @@ onUnmounted(() => {
                 <!-- 文件上传分隔 -->
                 <div v-if="(seedanceRefVideos.length + seedanceRefVideoUrls.length) < seedanceMaxRefVideos" class="flex items-center gap-2 mb-1.5">
                   <div class="flex-1 border-t border-slate-200 dark:border-dark-600"></div>
-                  <span class="text-xs text-slate-400">或</span>
+                  <span class="text-xs text-slate-400">{{ translateUi('uiMessages.ma2123d69506f') }}</span>
                   <div class="flex-1 border-t border-slate-200 dark:border-dark-600"></div>
                 </div>
                 <div v-if="(seedanceRefVideos.length + seedanceRefVideoUrls.length) < seedanceMaxRefVideos" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-gray-400 transition-colors" @click="seedanceRefVideoInputRef?.click()">
                   <div class="text-2xl mb-1">🎥</div>
-                  <p class="text-xs text-slate-500 dark:text-slate-400">点击上传视频 (mp4/mov, 最大50MB)</p>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m96688ce7f1ad') }}</p>
                   <input ref="seedanceRefVideoInputRef" type="file" accept="video/mp4,video/quicktime" multiple @change="handleSeedanceRefVideos" class="hidden" />
                 </div>
                 <div v-if="seedanceRefVideoPreviews.length > 0" class="space-y-1.5 mt-1.5">
@@ -3222,14 +3224,14 @@ onUnmounted(() => {
               <div v-if="seedanceMode === 'multimodal_ref'">
                 <div class="flex items-center justify-between mb-1.5">
                   <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
-                    <span>🔊</span><span>参考音频</span>
+                    <span>🔊</span><span>{{ translateUi('canvas.audioNode.refAudio') }}</span>
                   </label>
                   <span class="text-xs text-slate-500">{{ seedanceRefAudios.length + seedanceRefAudioUrls.length }} / {{ seedanceMaxRefAudios }}</span>
                 </div>
                 <!-- URL 输入 -->
                 <div v-if="(seedanceRefAudios.length + seedanceRefAudioUrls.length) < seedanceMaxRefAudios" class="flex gap-1.5 mb-1.5">
-                  <input v-model="seedanceRefAudioUrl" type="text" placeholder="粘贴音频 URL" class="flex-1 px-2 py-1.5 text-xs border border-slate-300 dark:border-dark-500 rounded-lg bg-white dark:bg-dark-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-gray-400" @keydown.enter.prevent="addSeedanceRefAudioUrl" />
-                  <button @click="addSeedanceRefAudioUrl" :disabled="!seedanceRefAudioUrl.trim()" class="px-2 py-1.5 text-xs font-medium bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-200 dark:text-gray-900">添加</button>
+                  <input v-model="seedanceRefAudioUrl" type="text" :placeholder="translateUi('uiMessages.m90826b08f04e')" class="flex-1 px-2 py-1.5 text-xs border border-slate-300 dark:border-dark-500 rounded-lg bg-white dark:bg-dark-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-gray-400" @keydown.enter.prevent="addSeedanceRefAudioUrl" />
+                  <button @click="addSeedanceRefAudioUrl" :disabled="!seedanceRefAudioUrl.trim()" class="px-2 py-1.5 text-xs font-medium bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-200 dark:text-gray-900">{{ translateUi('common.add') }}</button>
                 </div>
                 <!-- 已添加的 URL 列表 -->
                 <div v-if="seedanceRefAudioUrls.length > 0" class="space-y-1 mb-1.5">
@@ -3242,12 +3244,12 @@ onUnmounted(() => {
                 <!-- 文件上传分隔 -->
                 <div v-if="(seedanceRefAudios.length + seedanceRefAudioUrls.length) < seedanceMaxRefAudios" class="flex items-center gap-2 mb-1.5">
                   <div class="flex-1 border-t border-slate-200 dark:border-dark-600"></div>
-                  <span class="text-xs text-slate-400">或</span>
+                  <span class="text-xs text-slate-400">{{ translateUi('uiMessages.ma2123d69506f') }}</span>
                   <div class="flex-1 border-t border-slate-200 dark:border-dark-600"></div>
                 </div>
                 <div v-if="(seedanceRefAudios.length + seedanceRefAudioUrls.length) < seedanceMaxRefAudios" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-gray-400 transition-colors" @click="seedanceRefAudioInputRef?.click()">
                   <div class="text-2xl mb-1">🎵</div>
-                  <p class="text-xs text-slate-500 dark:text-slate-400">点击上传音频 (wav/mp3, 最大15MB)</p>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.me6cc2bd54d0e') }}</p>
                   <input ref="seedanceRefAudioInputRef" type="file" accept="audio/wav,audio/mpeg,audio/mp3" multiple @change="handleSeedanceRefAudios" class="hidden" />
                 </div>
                 <div v-if="seedanceRefAudioPreviews.length > 0" class="space-y-1.5 mt-1.5">
@@ -3272,7 +3274,7 @@ onUnmounted(() => {
                   class="w-full flex items-center justify-between px-3 py-2.5 bg-slate-50 dark:bg-dark-700 hover:bg-slate-100 dark:hover:bg-dark-600 transition-colors"
                 >
                   <span class="flex items-center space-x-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    <span>⚙️</span><span>高级设置</span>
+                    <span>⚙️</span><span>{{ translateUi('uiMessages.m44455611b910') }}</span>
                   </span>
                   <svg
                     class="w-4 h-4 text-slate-500 transition-transform duration-200"
@@ -3285,7 +3287,7 @@ onUnmounted(() => {
                 <div v-show="seedanceAdvancedOpen" class="px-3 py-3 border-t border-slate-200 dark:border-dark-600 space-y-3">
                   <!-- 分辨率 -->
                   <div v-if="!isAtlasCloudVideoModel && getEnabledVideoResolutionOptions(currentModelConfig?.resolutionPricing).length === 0">
-                    <label class="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 block">分辨率</label>
+                    <label class="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 block">{{ translateUi('directorStudio.inspector.resolution') }}</label>
                     <div class="flex space-x-2">
                       <button type="button" @click="seedanceResolution = '480p'"
                         :class="['flex-1 py-1.5 px-2 text-xs font-medium rounded-lg border transition-all', seedanceResolution === '480p' ? 'bg-gray-700 text-white border-gray-700 dark:bg-gray-200 dark:text-gray-900 dark:border-gray-200' : 'bg-white dark:bg-dark-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-dark-500 hover:border-gray-400']">
@@ -3307,14 +3309,14 @@ onUnmounted(() => {
                   </div>
                   <!-- 宽高比 -->
                   <div>
-                    <label class="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 block">宽高比</label>
+                    <label class="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 block">{{ translateUi('imageGen.aspectRatio') }}</label>
                     <select v-model="seedanceRatio" class="input text-xs">
                       <option v-for="r in (isAtlasCloudVideoModel ? availableAspectRatios : SEEDANCE_RATIOS)" :key="r.value" :value="r.value">{{ r.label }}</option>
                     </select>
                   </div>
                   <!-- 自动时长开关（模型支持 auto 且非 video_edit 时显示；video_edit 强制 auto） -->
                   <label v-if="canAutoDuration && seedanceMode !== 'video_edit'" class="flex items-center justify-between cursor-pointer mb-1">
-                    <span class="text-xs text-slate-600 dark:text-slate-400">⚙️ 自动时长（由模型决定）</span>
+                    <span class="text-xs text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.m7eb3e82b5a06') }}</span>
                     <div class="relative inline-flex items-center">
                       <input type="checkbox" v-model="seedanceAutoDuration" class="sr-only peer" />
                       <div class="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-gray-600"></div>
@@ -3323,8 +3325,8 @@ onUnmounted(() => {
                   <!-- 时长滑块 -->
                   <div>
                     <label class="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
-                      <span>时长</span>
-                      <span class="text-gray-700 dark:text-gray-300 font-semibold">{{ seedanceAutoDuration ? '自动' : seedanceDuration + ' 秒' }}</span>
+                      <span>{{ translateUi('videoGen.duration') }}</span>
+                      <span class="text-gray-700 dark:text-gray-300 font-semibold">{{ seedanceAutoDuration ? translateUi('imageGen.auto') : seedanceDuration + translateUi('uiMessages.m00fe8dda1fd7') }}</span>
                     </label>
                     <input v-if="!seedanceAutoDuration" type="range" v-model.number="seedanceDuration" :min="seedanceMinDuration" :max="seedanceMaxDuration" step="1"
                       class="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full appearance-none cursor-pointer accent-gray-600" />
@@ -3336,7 +3338,7 @@ onUnmounted(() => {
                   <div v-if="!isAtlasCloudVideoModel" class="space-y-2">
                     <!-- 联网搜索增强（仅文生视频） -->
                     <label v-if="seedanceMode === 'text2video'" class="flex items-center justify-between cursor-pointer">
-                      <span class="text-xs text-slate-600 dark:text-slate-400">🌐 联网搜索增强</span>
+                      <span class="text-xs text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.m742c4eae2a82') }}</span>
                       <div class="relative inline-flex items-center">
                         <input type="checkbox" v-model="seedanceWebSearch" class="sr-only peer" />
                         <div class="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-gray-600"></div>
@@ -3344,7 +3346,7 @@ onUnmounted(() => {
                     </label>
                     <!-- 水印 -->
                     <label class="flex items-center justify-between cursor-pointer">
-                      <span class="text-xs text-slate-600 dark:text-slate-400">💧 水印</span>
+                      <span class="text-xs text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.mfa1845901c5f') }}</span>
                       <div class="relative inline-flex items-center">
                         <input type="checkbox" v-model="seedanceWatermark" class="sr-only peer" />
                         <div class="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-gray-600"></div>
@@ -3365,7 +3367,7 @@ onUnmounted(() => {
                 >
                   <span class="flex items-center space-x-1.5 text-xs font-semibold text-amber-800 dark:text-amber-200">
                     <span>🎬</span>
-                    <span>万相 3.0 输入模式</span>
+                    <span>{{ translateUi('uiMessages.m3727f1272753') }}</span>
                     <span class="ml-1 px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 rounded text-xs">
                       {{ WAN3_MODES.find(item => item.value === wan3Mode)?.label }}
                     </span>
@@ -3394,13 +3396,13 @@ onUnmounted(() => {
                 </div>
               </div>
 
-              <p class="text-xs text-amber-700 dark:text-amber-300">参考图片、视频、音频、文件和链接不能混用首尾帧；文件和网页链接也不能同时使用。</p>
+              <p class="text-xs text-amber-700 dark:text-amber-300">{{ translateUi('uiMessages.m360b73896012') }}</p>
 
               <div v-if="wan3Mode === 'image2video_first' || wan3Mode === 'image2video_first_last'" class="space-y-2.5">
                 <div>
-                  <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5"><span>🖼️</span><span>首帧图片</span></label>
+                  <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5"><span>🖼️</span><span>{{ translateUi('uiMessages.m5f960b0d9032') }}</span></label>
                   <div v-if="!seedanceFirstFrameFile" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-amber-400 transition-colors" @click="seedanceFirstFrameInputRef?.click()">
-                    <div class="text-2xl mb-1">📤</div><p class="text-xs text-slate-500 dark:text-slate-400">点击上传 JPEG/JPG/PNG/BMP/WEBP 图片（≤20MB）</p>
+                    <div class="text-2xl mb-1">📤</div><p class="text-xs text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m4d38998fb9c0') }}</p>
                     <input ref="seedanceFirstFrameInputRef" type="file" accept="image/jpeg,image/png,image/bmp,image/webp" @change="handleSeedanceFirstFrame" class="hidden" />
                   </div>
                   <div v-else class="flex items-center space-x-2 bg-slate-50 dark:bg-dark-700 rounded-lg p-2 border border-slate-200 dark:border-dark-600">
@@ -3410,9 +3412,9 @@ onUnmounted(() => {
                   </div>
                 </div>
                 <div v-if="wan3Mode === 'image2video_first_last'">
-                  <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5"><span>🖼️</span><span>尾帧图片</span></label>
+                  <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5"><span>🖼️</span><span>{{ translateUi('uiMessages.m9b31d6cfb16f') }}</span></label>
                   <div v-if="!seedanceLastFrameFile" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-amber-400 transition-colors" @click="seedanceLastFrameInputRef?.click()">
-                    <div class="text-2xl mb-1">📤</div><p class="text-xs text-slate-500 dark:text-slate-400">点击上传 JPEG/JPG/PNG/BMP/WEBP 图片（≤20MB）</p>
+                    <div class="text-2xl mb-1">📤</div><p class="text-xs text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m4d38998fb9c0') }}</p>
                     <input ref="seedanceLastFrameInputRef" type="file" accept="image/jpeg,image/png,image/bmp,image/webp" @change="handleSeedanceLastFrame" class="hidden" />
                   </div>
                   <div v-else class="flex items-center space-x-2 bg-slate-50 dark:bg-dark-700 rounded-lg p-2 border border-slate-200 dark:border-dark-600">
@@ -3425,58 +3427,58 @@ onUnmounted(() => {
 
               <div v-if="wan3Mode === 'multimodal_ref'" class="space-y-3 rounded-lg border border-slate-200 dark:border-dark-600 p-3">
                 <div>
-                  <div class="flex items-center justify-between mb-1.5"><label class="text-xs font-semibold text-slate-600 dark:text-slate-400">🖼️ 参考图片</label><span class="text-xs text-slate-500">{{ seedanceRefImages.length + seedanceRefImageUrls.length }} / {{ wan3MaxRefImages }} 张</span></div>
-                  <div class="flex gap-1.5"><input v-model="seedanceRefImageUrl" type="url" placeholder="粘贴公开图片 URL" class="input text-xs py-1.5" @keydown.enter.prevent="addSeedanceRefImageUrl" /><button type="button" @click="addSeedanceRefImageUrl" class="px-2 py-1.5 text-xs rounded-lg bg-amber-700 text-white hover:bg-amber-600">添加</button></div>
+                  <div class="flex items-center justify-between mb-1.5"><label class="text-xs font-semibold text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.md2cd6ae129ef') }}</label><span class="text-xs text-slate-500">{{ translateUi('uiMessages.m41c98be213fe', { value1: (seedanceRefImages.length + seedanceRefImageUrls.length), value2: (wan3MaxRefImages) }) }}</span></div>
+                  <div class="flex gap-1.5"><input v-model="seedanceRefImageUrl" type="url" :placeholder="translateUi('uiMessages.m646dd01edd49')" class="input text-xs py-1.5" @keydown.enter.prevent="addSeedanceRefImageUrl" /><button type="button" @click="addSeedanceRefImageUrl" class="px-2 py-1.5 text-xs rounded-lg bg-amber-700 text-white hover:bg-amber-600">{{ translateUi('common.add') }}</button></div>
                   <div class="flex flex-wrap gap-1.5 mt-1.5">
                     <div v-for="(preview, index) in seedanceRefImagePreviews" :key="`wan3-image-${index}`" class="relative"><img :src="preview" class="w-12 h-12 object-cover rounded border border-slate-200 dark:border-dark-600" /><button type="button" @click="removeSeedanceRefImage(index)" class="absolute -right-1 -top-1 w-4 h-4 rounded-full bg-red-600 text-white text-[10px]">✕</button></div>
                     <div v-for="(url, index) in seedanceRefImageUrls" :key="`wan3-image-url-${index}`" class="flex items-center gap-1 max-w-32 rounded border border-slate-200 dark:border-dark-600 px-1.5 py-1 text-xs text-slate-500"><span class="truncate">🔗 {{ url }}</span><button type="button" @click="removeSeedanceRefImageUrl(index)" class="text-red-500">✕</button></div>
                   </div>
-                  <button v-if="seedanceRefImages.length + seedanceRefImageUrls.length < wan3MaxRefImages" type="button" @click="seedanceRefImageInputRef?.click()" class="mt-1.5 w-full py-2 border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg text-xs text-slate-500 hover:border-amber-400">+ 上传图片（≤20MB）</button>
+                  <button v-if="seedanceRefImages.length + seedanceRefImageUrls.length < wan3MaxRefImages" type="button" @click="seedanceRefImageInputRef?.click()" class="mt-1.5 w-full py-2 border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg text-xs text-slate-500 hover:border-amber-400">{{ translateUi('uiMessages.m98e683ff244c') }}</button>
                   <input ref="seedanceRefImageInputRef" type="file" accept="image/jpeg,image/png,image/bmp,image/webp" multiple @change="handleSeedanceRefImages" class="hidden" />
                 </div>
 
                 <div v-if="wan3MaxRefVideos > 0">
-                  <div class="flex items-center justify-between mb-1.5"><label class="text-xs font-semibold text-slate-600 dark:text-slate-400">📹 参考视频</label><span class="text-xs text-slate-500">{{ seedanceRefVideos.length + seedanceRefVideoUrls.length }} / {{ wan3MaxRefVideos }} 个</span></div>
-                  <div class="flex gap-1.5"><input v-model="seedanceRefVideoUrl" type="url" placeholder="粘贴公开 MP4/MOV URL" class="input text-xs py-1.5" @keydown.enter.prevent="addSeedanceRefVideoUrl" /><button type="button" @click="addSeedanceRefVideoUrl" class="px-2 py-1.5 text-xs rounded-lg bg-amber-700 text-white hover:bg-amber-600">添加</button></div>
-                  <div v-for="(item, index) in seedanceRefVideoPreviews" :key="`wan3-video-${index}`" class="flex items-center gap-2 mt-1.5 rounded border border-slate-200 dark:border-dark-600 px-2 py-1.5 text-xs"><span class="flex-1 truncate">{{ item.name }} · {{ item.duration.toFixed(1) }}s</span><button type="button" @click="removeSeedanceRefVideo(index)" class="text-red-500">移除</button></div>
-                  <div v-for="(url, index) in seedanceRefVideoUrls" :key="`wan3-video-url-${index}`" class="flex items-center gap-2 mt-1.5 rounded border border-slate-200 dark:border-dark-600 px-2 py-1.5 text-xs"><span class="flex-1 truncate">🔗 {{ url }}</span><button type="button" @click="removeSeedanceRefVideoUrl(index)" class="text-red-500">移除</button></div>
-                  <button v-if="seedanceRefVideos.length + seedanceRefVideoUrls.length < wan3MaxRefVideos" type="button" @click="seedanceRefVideoInputRef?.click()" class="mt-1.5 w-full py-2 border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg text-xs text-slate-500 hover:border-amber-400">+ 上传 MP4/MOV（单个≤100MB，全部≤15 秒；输入+输出≤30秒）</button>
+                  <div class="flex items-center justify-between mb-1.5"><label class="text-xs font-semibold text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.mc4b8adde8e05') }}</label><span class="text-xs text-slate-500">{{ translateUi('uiMessages.m70a1a7943f1d', { value1: (seedanceRefVideos.length + seedanceRefVideoUrls.length), value2: (wan3MaxRefVideos) }) }}</span></div>
+                  <div class="flex gap-1.5"><input v-model="seedanceRefVideoUrl" type="url" :placeholder="translateUi('uiMessages.mb2fcab1db6cc')" class="input text-xs py-1.5" @keydown.enter.prevent="addSeedanceRefVideoUrl" /><button type="button" @click="addSeedanceRefVideoUrl" class="px-2 py-1.5 text-xs rounded-lg bg-amber-700 text-white hover:bg-amber-600">{{ translateUi('common.add') }}</button></div>
+                  <div v-for="(item, index) in seedanceRefVideoPreviews" :key="`wan3-video-${index}`" class="flex items-center gap-2 mt-1.5 rounded border border-slate-200 dark:border-dark-600 px-2 py-1.5 text-xs"><span class="flex-1 truncate">{{ item.name }} · {{ item.duration.toFixed(1) }}s</span><button type="button" @click="removeSeedanceRefVideo(index)" class="text-red-500">{{ translateUi('user.removeCoupon') }}</button></div>
+                  <div v-for="(url, index) in seedanceRefVideoUrls" :key="`wan3-video-url-${index}`" class="flex items-center gap-2 mt-1.5 rounded border border-slate-200 dark:border-dark-600 px-2 py-1.5 text-xs"><span class="flex-1 truncate">🔗 {{ url }}</span><button type="button" @click="removeSeedanceRefVideoUrl(index)" class="text-red-500">{{ translateUi('user.removeCoupon') }}</button></div>
+                  <button v-if="seedanceRefVideos.length + seedanceRefVideoUrls.length < wan3MaxRefVideos" type="button" @click="seedanceRefVideoInputRef?.click()" class="mt-1.5 w-full py-2 border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg text-xs text-slate-500 hover:border-amber-400">{{ translateUi('uiMessages.meb0aa9f49793') }}</button>
                   <input ref="seedanceRefVideoInputRef" type="file" accept="video/mp4,video/quicktime" multiple @change="handleSeedanceRefVideos" class="hidden" />
                 </div>
 
                 <div>
-                  <div class="flex items-center justify-between mb-1.5"><label class="text-xs font-semibold text-slate-600 dark:text-slate-400">🎵 参考音频</label><span class="text-xs text-slate-500">{{ seedanceRefAudios.length + seedanceRefAudioUrls.length }} / {{ wan3MaxRefAudios }} 个</span></div>
-                  <div class="flex gap-1.5"><input v-model="seedanceRefAudioUrl" type="url" placeholder="粘贴公开 MP3/WAV URL" class="input text-xs py-1.5" @keydown.enter.prevent="addSeedanceRefAudioUrl" /><button type="button" @click="addSeedanceRefAudioUrl" class="px-2 py-1.5 text-xs rounded-lg bg-amber-700 text-white hover:bg-amber-600">添加</button></div>
-                  <div v-for="(item, index) in seedanceRefAudioPreviews" :key="`wan3-audio-${index}`" class="flex items-center gap-2 mt-1.5 rounded border border-slate-200 dark:border-dark-600 px-2 py-1.5 text-xs"><span class="flex-1 truncate">{{ item.name }} · {{ item.duration.toFixed(1) }}s</span><button type="button" @click="removeSeedanceRefAudio(index)" class="text-red-500">移除</button></div>
-                  <div v-for="(url, index) in seedanceRefAudioUrls" :key="`wan3-audio-url-${index}`" class="flex items-center gap-2 mt-1.5 rounded border border-slate-200 dark:border-dark-600 px-2 py-1.5 text-xs"><span class="flex-1 truncate">🔗 {{ url }}</span><button type="button" @click="removeSeedanceRefAudioUrl(index)" class="text-red-500">移除</button></div>
-                  <button v-if="seedanceRefAudios.length + seedanceRefAudioUrls.length < wan3MaxRefAudios" type="button" @click="seedanceRefAudioInputRef?.click()" class="mt-1.5 w-full py-2 border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg text-xs text-slate-500 hover:border-amber-400">+ 上传 MP3/WAV（单个≤15MB，全部≤15 秒）</button>
+                  <div class="flex items-center justify-between mb-1.5"><label class="text-xs font-semibold text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.mda3abb882b08') }}</label><span class="text-xs text-slate-500">{{ translateUi('uiMessages.m70a1a7943f1d', { value1: (seedanceRefAudios.length + seedanceRefAudioUrls.length), value2: (wan3MaxRefAudios) }) }}</span></div>
+                  <div class="flex gap-1.5"><input v-model="seedanceRefAudioUrl" type="url" :placeholder="translateUi('uiMessages.md5c32e5c3901')" class="input text-xs py-1.5" @keydown.enter.prevent="addSeedanceRefAudioUrl" /><button type="button" @click="addSeedanceRefAudioUrl" class="px-2 py-1.5 text-xs rounded-lg bg-amber-700 text-white hover:bg-amber-600">{{ translateUi('common.add') }}</button></div>
+                  <div v-for="(item, index) in seedanceRefAudioPreviews" :key="`wan3-audio-${index}`" class="flex items-center gap-2 mt-1.5 rounded border border-slate-200 dark:border-dark-600 px-2 py-1.5 text-xs"><span class="flex-1 truncate">{{ item.name }} · {{ item.duration.toFixed(1) }}s</span><button type="button" @click="removeSeedanceRefAudio(index)" class="text-red-500">{{ translateUi('user.removeCoupon') }}</button></div>
+                  <div v-for="(url, index) in seedanceRefAudioUrls" :key="`wan3-audio-url-${index}`" class="flex items-center gap-2 mt-1.5 rounded border border-slate-200 dark:border-dark-600 px-2 py-1.5 text-xs"><span class="flex-1 truncate">🔗 {{ url }}</span><button type="button" @click="removeSeedanceRefAudioUrl(index)" class="text-red-500">{{ translateUi('user.removeCoupon') }}</button></div>
+                  <button v-if="seedanceRefAudios.length + seedanceRefAudioUrls.length < wan3MaxRefAudios" type="button" @click="seedanceRefAudioInputRef?.click()" class="mt-1.5 w-full py-2 border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg text-xs text-slate-500 hover:border-amber-400">{{ translateUi('uiMessages.m744cda69190e') }}</button>
                   <input ref="seedanceRefAudioInputRef" type="file" accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav" multiple @change="handleSeedanceRefAudios" class="hidden" />
                 </div>
               </div>
 
               <div v-if="wan3Mode === 'file'">
-                <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1.5">📄 参考文件</label>
+                <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1.5">{{ translateUi('uiMessages.m53de98b94655') }}</label>
                 <input ref="wan3FileInputRef" type="file" accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,.txt,.key,.pages,.numbers,.md" class="hidden" @change="handleWan3File" />
-                <div class="flex items-center gap-2"><button type="button" @click="wan3FileInputRef?.click()" class="px-3 py-2 text-xs font-medium rounded-lg bg-slate-200 dark:bg-dark-600 text-slate-700 dark:text-slate-200 hover:bg-slate-300">{{ wan3File ? '重新选择' : '选择文件' }}</button><span v-if="wan3File" class="flex-1 text-xs text-slate-500 truncate">{{ wan3File.name }}</span><button v-if="wan3File" type="button" @click="wan3File = null" class="text-xs text-red-500">移除</button></div>
-                <p class="text-xs text-slate-500 mt-1">支持 Office、PDF、TXT、Keynote、Pages、Numbers、Markdown，≤100MB。</p>
+                <div class="flex items-center gap-2"><button type="button" @click="wan3FileInputRef?.click()" class="px-3 py-2 text-xs font-medium rounded-lg bg-slate-200 dark:bg-dark-600 text-slate-700 dark:text-slate-200 hover:bg-slate-300">{{ wan3File ? translateUi('uiMessages.m9b904c0e2faf') : translateUi('uiMessages.m822fb37dba29') }}</button><span v-if="wan3File" class="flex-1 text-xs text-slate-500 truncate">{{ wan3File.name }}</span><button v-if="wan3File" type="button" @click="wan3File = null" class="text-xs text-red-500">{{ translateUi('user.removeCoupon') }}</button></div>
+                <p class="text-xs text-slate-500 mt-1">{{ translateUi('uiMessages.m36585e5bf721') }}</p>
               </div>
 
               <div v-if="wan3Mode === 'link'">
-                <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1.5">🔗 网页链接</label>
+                <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1.5">{{ translateUi('uiMessages.mbe579e6810a3') }}</label>
                 <input v-model="wan3Link" type="url" class="input text-sm" placeholder="https://example.com/product" />
-                <p class="text-xs text-slate-500 mt-1">仅支持一个可公开访问的 HTTP/HTTPS 网页链接。</p>
+                <p class="text-xs text-slate-500 mt-1">{{ translateUi('uiMessages.mcbb638741e5c') }}</p>
               </div>
 
               <div class="border border-slate-200 dark:border-dark-600 rounded-lg overflow-hidden">
                 <button type="button" @click="wan3AdvancedOpen = !wan3AdvancedOpen" class="w-full flex items-center justify-between px-3 py-2.5 bg-slate-50 dark:bg-dark-700 hover:bg-slate-100 dark:hover:bg-dark-600 transition-colors">
-                  <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">⚙️ 万相 3.0 高级设置</span>
-                  <span class="text-xs text-slate-500">{{ wan3AdvancedOpen ? '收起' : '展开' }}</span>
+                  <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.m220c84b705f0') }}</span>
+                  <span class="text-xs text-slate-500">{{ wan3AdvancedOpen ? translateUi('common.less') : translateUi('common.expand') }}</span>
                 </button>
                 <div v-show="wan3AdvancedOpen" class="px-3 py-3 border-t border-slate-200 dark:border-dark-600 space-y-2.5">
-                  <label v-if="currentModelConfig?.apiType !== 'grsai-wan3'" class="flex items-center justify-between cursor-pointer"><span class="text-xs text-slate-600 dark:text-slate-400">生成音频</span><input v-model="wan3GenerateAudio" type="checkbox" class="rounded accent-amber-600" /></label>
-                  <label v-if="currentModelConfig?.apiType !== 'grsai-wan3'" class="flex items-center justify-between cursor-pointer"><span class="text-xs text-slate-600 dark:text-slate-400">智能扩写提示词</span><input v-model="wan3PromptExtend" type="checkbox" class="rounded accent-amber-600" /></label>
-                  <label v-if="currentModelConfig?.apiType !== 'grsai-wan3'" class="flex items-center justify-between cursor-pointer"><span class="text-xs text-slate-600 dark:text-slate-400">添加水印</span><input v-model="wan3Watermark" type="checkbox" class="rounded accent-amber-600" /></label>
-                  <div><label class="text-xs text-slate-600 dark:text-slate-400 block mb-1">随机种子（可选，0–2147483647）</label><input v-model="wan3Seed" inputmode="numeric" class="input text-xs py-1.5" placeholder="留空则随机" /></div>
+                  <label v-if="currentModelConfig?.apiType !== 'grsai-wan3'" class="flex items-center justify-between cursor-pointer"><span class="text-xs text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.mb311c8ba2968') }}</span><input v-model="wan3GenerateAudio" type="checkbox" class="rounded accent-amber-600" /></label>
+                  <label v-if="currentModelConfig?.apiType !== 'grsai-wan3'" class="flex items-center justify-between cursor-pointer"><span class="text-xs text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.mad47a10ae688') }}</span><input v-model="wan3PromptExtend" type="checkbox" class="rounded accent-amber-600" /></label>
+                  <label v-if="currentModelConfig?.apiType !== 'grsai-wan3'" class="flex items-center justify-between cursor-pointer"><span class="text-xs text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.m6a6a8b31ada2') }}</span><input v-model="wan3Watermark" type="checkbox" class="rounded accent-amber-600" /></label>
+                  <div><label class="text-xs text-slate-600 dark:text-slate-400 block mb-1">{{ translateUi('uiMessages.m82b5a4e61a42') }}</label><input v-model="wan3Seed" inputmode="numeric" class="input text-xs py-1.5" :placeholder="translateUi('uiMessages.m4920f0881182')" /></div>
                 </div>
               </div>
             </div>
@@ -3492,7 +3494,7 @@ onUnmounted(() => {
                 >
                   <span class="flex items-center space-x-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
                     <span>🎬</span>
-                    <span>生成模式</span>
+                    <span>{{ translateUi('uiMessages.m29ccb4125180') }}</span>
                     <span class="ml-1 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-xs">
                       {{ KLING_V3_OMNI_MODES.find(m => m.value === klingV3OmniMode)?.label }}
                     </span>
@@ -3530,11 +3532,11 @@ onUnmounted(() => {
               <!-- 首帧图片上传（图生视频/首尾帧） -->
               <div v-if="['image2video', 'first_last_frame'].includes(klingV3OmniMode)">
                 <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
-                  <span>🖼</span><span>首帧图片</span>
+                  <span>🖼</span><span>{{ translateUi('uiMessages.m5f960b0d9032') }}</span>
                 </label>
                 <div v-if="!klingV3OmniFirstFrameFile" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-gray-400 transition-colors" @click="klingV3OmniFirstFrameInputRef?.click()">
                   <div class="text-2xl mb-1">📤</div>
-                  <p class="text-xs text-slate-500 dark:text-slate-400">点击上传首帧图片</p>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m5030e7b4964b') }}</p>
                   <input ref="klingV3OmniFirstFrameInputRef" type="file" accept="image/*" @change="handleKlingV3OmniFirstFrame" class="hidden" />
                 </div>
                 <div v-else class="flex items-center space-x-2 bg-slate-50 dark:bg-dark-700 rounded-lg p-2 border border-slate-200 dark:border-dark-600">
@@ -3550,11 +3552,11 @@ onUnmounted(() => {
               <!-- 尾帧图片上传（首尾帧） -->
               <div v-if="klingV3OmniMode === 'first_last_frame'">
                 <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
-                  <span>🖼</span><span>尾帧图片</span>
+                  <span>🖼</span><span>{{ translateUi('uiMessages.m9b31d6cfb16f') }}</span>
                 </label>
                 <div v-if="!klingV3OmniLastFrameFile" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-gray-400 transition-colors" @click="klingV3OmniLastFrameInputRef?.click()">
                   <div class="text-2xl mb-1">📤</div>
-                  <p class="text-xs text-slate-500 dark:text-slate-400">点击上传尾帧图片</p>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m5b81cfad2635') }}</p>
                   <input ref="klingV3OmniLastFrameInputRef" type="file" accept="image/*" @change="handleKlingV3OmniLastFrame" class="hidden" />
                 </div>
                 <div v-else class="flex items-center space-x-2 bg-slate-50 dark:bg-dark-700 rounded-lg p-2 border border-slate-200 dark:border-dark-600">
@@ -3571,14 +3573,14 @@ onUnmounted(() => {
               <div v-if="['subject_control', 'multi_shot'].includes(klingV3OmniMode)">
                 <div class="flex items-center justify-between mb-1.5">
                   <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
-                    <span>🖼</span><span>参考图片</span>
+                    <span>🖼</span><span>{{ translateUi('imageGen.referenceImages') }}</span>
                   </label>
                   <span class="text-xs text-slate-500">{{ klingV3OmniRefImages.length + klingV3OmniRefImageUrls.length }} / 7</span>
                 </div>
                 <!-- URL 输入 -->
                 <div v-if="(klingV3OmniRefImages.length + klingV3OmniRefImageUrls.length) < 7" class="flex gap-1.5 mb-1.5">
-                  <input v-model="klingV3OmniRefImageUrl" type="text" placeholder="粘贴图片 URL" class="flex-1 px-2 py-1.5 text-xs border border-slate-300 dark:border-dark-500 rounded-lg bg-white dark:bg-dark-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-gray-400" @keydown.enter.prevent="addKlingV3OmniRefImageUrl" />
-                  <button @click="addKlingV3OmniRefImageUrl" :disabled="!klingV3OmniRefImageUrl.trim()" class="px-2 py-1.5 text-xs font-medium bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-200 dark:text-gray-900">添加</button>
+                  <input v-model="klingV3OmniRefImageUrl" type="text" :placeholder="translateUi('uiMessages.m8f3a8805e38e')" class="flex-1 px-2 py-1.5 text-xs border border-slate-300 dark:border-dark-500 rounded-lg bg-white dark:bg-dark-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-gray-400" @keydown.enter.prevent="addKlingV3OmniRefImageUrl" />
+                  <button @click="addKlingV3OmniRefImageUrl" :disabled="!klingV3OmniRefImageUrl.trim()" class="px-2 py-1.5 text-xs font-medium bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-200 dark:text-gray-900">{{ translateUi('common.add') }}</button>
                 </div>
                 <!-- 已添加的图片列表 -->
                 <div class="space-y-1">
@@ -3595,24 +3597,24 @@ onUnmounted(() => {
                 </div>
                 <!-- 文件上传按钮 -->
                 <button v-if="(klingV3OmniRefImages.length + klingV3OmniRefImageUrls.length) < 7" @click="klingV3OmniRefImageInputRef?.click()" class="mt-1.5 w-full py-2 border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg text-xs text-slate-500 hover:border-gray-400 transition-colors">
-                  + 上传图片
+                  {{ translateUi('uiMessages.m28e67169833c') }}
                 </button>
                 <input ref="klingV3OmniRefImageInputRef" type="file" accept="image/*" multiple @change="handleKlingV3OmniRefImage" class="hidden" />
-                <p v-if="klingV3OmniMode === 'subject_control'" class="text-xs text-slate-500 mt-1">提示词中用 &lt;&lt;&lt;image_1&gt;&gt;&gt; 引用对应图片</p>
+                <p v-if="klingV3OmniMode === 'subject_control'" class="text-xs text-slate-500 mt-1">{{ translateUi('uiMessages.med6b0075347c') }}</p>
               </div>
 
               <!-- 视频参考 -->
               <div v-if="klingV3OmniMode === 'video_reference'">
                 <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
-                  <span>📹</span><span>参考视频 URL</span>
+                  <span>📹</span><span>{{ translateUi('uiMessages.maef0b304e455') }}</span>
                 </label>
-                <input v-model="klingV3OmniRefVideoUrl" type="text" placeholder="粘贴视频 URL（MP4/MOV，3-10s）" class="w-full px-2 py-1.5 text-xs border border-slate-300 dark:border-dark-500 rounded-lg bg-white dark:bg-dark-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-gray-400" />
+                <input v-model="klingV3OmniRefVideoUrl" type="text" :placeholder="translateUi('uiMessages.m6c1168bfe120')" class="w-full px-2 py-1.5 text-xs border border-slate-300 dark:border-dark-500 rounded-lg bg-white dark:bg-dark-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-gray-400" />
                 <div class="flex items-center gap-2 mt-1.5">
-                  <span class="text-xs text-slate-500">保留原声：</span>
-                  <button @click="klingV3OmniKeepSound = 'yes'" :class="['px-2 py-1 text-xs rounded border', klingV3OmniKeepSound === 'yes' ? 'bg-gray-700 text-white border-gray-700 dark:bg-gray-200 dark:text-gray-900' : 'bg-white dark:bg-dark-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-dark-500']">是</button>
-                  <button @click="klingV3OmniKeepSound = 'no'" :class="['px-2 py-1 text-xs rounded border', klingV3OmniKeepSound === 'no' ? 'bg-gray-700 text-white border-gray-700 dark:bg-gray-200 dark:text-gray-900' : 'bg-white dark:bg-dark-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-dark-500']">否</button>
+                  <span class="text-xs text-slate-500">{{ translateUi('uiMessages.m2e5803fb4b2f') }}</span>
+                  <button @click="klingV3OmniKeepSound = 'yes'" :class="['px-2 py-1 text-xs rounded border', klingV3OmniKeepSound === 'yes' ? 'bg-gray-700 text-white border-gray-700 dark:bg-gray-200 dark:text-gray-900' : 'bg-white dark:bg-dark-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-dark-500']">{{ translateUi('common.yes') }}</button>
+                  <button @click="klingV3OmniKeepSound = 'no'" :class="['px-2 py-1 text-xs rounded border', klingV3OmniKeepSound === 'no' ? 'bg-gray-700 text-white border-gray-700 dark:bg-gray-200 dark:text-gray-900' : 'bg-white dark:bg-dark-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-dark-500']">{{ translateUi('common.no') }}</button>
                 </div>
-                <p class="text-xs text-slate-500 mt-1">仅 std/pro 模式支持，时长限制 3-10s</p>
+                <p class="text-xs text-slate-500 mt-1">{{ translateUi('uiMessages.m429e90ecc44a') }}</p>
               </div>
             </div>
 
@@ -3620,7 +3622,7 @@ onUnmounted(() => {
             <div v-if="isRunningHubAiAppVideoV31Model && v31NeedsAudio" class="space-y-2.5 rounded-lg border border-slate-200 dark:border-dark-600 p-3">
               <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
                 <span>🎵</span>
-                <span>上传驱动音频（MP3）</span>
+                <span>{{ translateUi('uiMessages.m11df0c5ebac3') }}</span>
               </label>
               <input ref="v31AudioInputRef" type="file" accept="audio/*,.mp3" class="hidden" @change="handleV31AudioChange" />
               <div class="flex items-center gap-2">
@@ -3629,7 +3631,7 @@ onUnmounted(() => {
                   class="px-3 py-2 text-xs font-medium rounded-lg bg-slate-200 dark:bg-dark-600 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-dark-500 transition-colors"
                   @click="v31AudioInputRef?.click()"
                 >
-                  {{ v31AudioFile ? '重新选择' : '选择音频' }}
+                  {{ v31AudioFile ? translateUi('uiMessages.m9b904c0e2faf') : translateUi('uiMessages.mbe5627dc4357') }}
                 </button>
                 <span v-if="v31AudioFile" class="text-xs text-slate-500 truncate">{{ v31AudioFile.name }}</span>
                 <button
@@ -3638,15 +3640,15 @@ onUnmounted(() => {
                   class="text-xs text-red-400 hover:text-red-300"
                   @click="v31AudioFile = null"
                 >
-                  移除
+                  {{ translateUi('user.removeCoupon') }}
                 </button>
               </div>
-              <p class="text-[11px] text-slate-400">最长 15 秒视频，音频按秒参与计费。</p>
+              <p class="text-[11px] text-slate-400">{{ translateUi('uiMessages.mb54246462f31') }}</p>
             </div>
 
             <div v-if="reviewableImageFiles.length > 0" class="rounded-lg border border-slate-200 dark:border-dark-600 bg-slate-50 dark:bg-dark-700/50 p-2.5 space-y-1.5">
               <div class="flex items-center justify-between gap-2">
-                <span class="text-xs font-medium text-slate-700 dark:text-slate-300">🛡️ 图片审核</span>
+                <span class="text-xs font-medium text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.m94f32023681f') }}</span>
                 <button
                   v-if="reviewChannel"
                   type="button"
@@ -3654,11 +3656,11 @@ onUnmounted(() => {
                   class="px-2.5 py-1 text-xs font-medium rounded-md bg-gray-700 text-white hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-200 dark:text-gray-900"
                   @click="handleQuickImageReview"
                 >
-                  {{ isQuickImageReviewSubmitting ? '提交中...' : quickImageReviewSummary.startsWith('已过审') ? '已过审' : '一键过审' }}
+                  {{ isQuickImageReviewSubmitting ? translateUi('uiMessages.m2fb1db2875cb') : quickImageReviewSummary.startsWith('已过审') ? translateUi('uiMessages.m93632ccd0ab5') : translateUi('uiMessages.m1348c1c5227f') }}
                 </button>
               </div>
               <p v-if="quickImageReviewSummary" class="text-xs text-slate-500 dark:text-slate-400">{{ quickImageReviewSummary }}</p>
-              <p v-else-if="!reviewChannel" class="text-xs text-amber-600 dark:text-amber-400">{{ reviewChannelMessage || '正在检查当前模型的审核渠道...' }}</p>
+              <p v-else-if="!reviewChannel" class="text-xs text-amber-600 dark:text-amber-400">{{ reviewChannelMessage || translateUi('uiMessages.ma4229f71dd53') }}</p>
             </div>
 
             <!-- 图生视频上传区域（非 Seedance 模型时显示） -->
@@ -3666,17 +3668,17 @@ onUnmounted(() => {
               <div class="flex items-center justify-between">
                 <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
                   <span>🖼️</span>
-                  <span>{{ isRunningHubAiAppVideoV31Model ? (v31Mode === 'first_last_frame' ? '上传首帧与尾帧图片（按顺序）' : v31Mode === 'last_frame' ? '上传尾帧图片' : v31Mode === 'multi_image' ? '上传参考图片（最多3张）' : '上传图片') : '上传参考图片' }}</span>
+                  <span>{{ isRunningHubAiAppVideoV31Model ? (v31Mode === 'first_last_frame' ? translateUi('uiMessages.mcec3db74006b') : v31Mode === 'last_frame' ? translateUi('uiMessages.m775b657e8883') : v31Mode === 'multi_image' ? translateUi('uiMessages.m8506aadad100') : translateUi('imageGen.uploadImage')) : translateUi('canvas.nodeConfig.imageInput.desc') }}</span>
                 </label>
                 <div class="text-xs text-slate-500 dark:text-slate-400">
-                  <span class="font-semibold text-gray-700 dark:text-gray-300">{{ imageFiles.length }}</span> / {{ maxImagesForModel }}张
+                  <span class="font-semibold text-gray-700 dark:text-gray-300">{{ imageFiles.length }}</span> {{ translateUi('uiMessages.m23edbeacb3e6', { value1: (maxImagesForModel) }) }}
                 </div>
               </div>
               
               <!-- 图片数量超限提示 -->
               <div v-if="imageFiles.length > maxImagesForModel" class="p-2 bg-gray-100 dark:bg-gray-800/50 border border-gray-300 dark:border-gray-700 rounded-lg">
                 <p class="text-xs text-gray-700 dark:text-gray-300">
-                  ⚠️ 当前模型最多支持 {{ maxImagesForModel }} 张图片，请删除多余图片或切换模型
+                  {{ translateUi('uiMessages.m99876dbef444', { value1: (maxImagesForModel) }) }}
                 </p>
               </div>
               
@@ -3692,10 +3694,10 @@ onUnmounted(() => {
               >
                 <div class="text-3xl mb-1.5">📤</div>
                 <p class="text-xs text-slate-600 dark:text-slate-400 mb-1">
-                  点击或拖拽图片到这里
+                  {{ translateUi('uiMessages.mdb5925830bc3') }}
                 </p>
                 <p class="text-xs text-slate-400 dark:text-slate-500">
-                  单张最大30MB
+                  {{ translateUi('uiMessages.m953f2678842b') }}
                 </p>
                 <input 
                   ref="fileInputRef"
@@ -3714,7 +3716,7 @@ onUnmounted(() => {
               >
                 <div class="text-2xl mb-1">✅</div>
                 <p class="text-xs text-slate-600 dark:text-slate-400">
-                  已上传 {{ imageFiles.length }} 张图片（已达上限）
+                  {{ translateUi('uiMessages.m009b49cc6af0', { value1: (imageFiles.length) }) }}
                 </p>
               </div>
 
@@ -3722,13 +3724,13 @@ onUnmounted(() => {
               <div v-if="previewUrls.length > 0" class="space-y-2">
                 <div class="flex items-center justify-between">
                   <span class="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                    图片列表
+                    {{ translateUi('uiMessages.m5b75727ad998') }}
                   </span>
                   <button 
                     @click="clearImages"
                     class="text-xs text-red-600 dark:text-red-400 hover:underline"
                   >
-                    清空全部
+                    {{ translateUi('imageGen.clearAll') }}
                   </button>
                 </div>
                 
@@ -3749,7 +3751,7 @@ onUnmounted(() => {
                         :src="url"
                         class="w-12 h-12 object-cover rounded"
                       />
-                      <span v-if="imageReviews.get(imageFiles[idx])?.status === 'approved'" class="absolute left-0 top-0 rounded-br bg-emerald-600 px-1 py-0.5 text-[10px] leading-none text-white">已过审</span>
+                      <span v-if="imageReviews.get(imageFiles[idx])?.status === 'approved'" class="absolute left-0 top-0 rounded-br bg-emerald-600 px-1 py-0.5 text-[10px] leading-none text-white">{{ translateUi('uiMessages.m93632ccd0ab5') }}</span>
                     </div>
                     
                     <!-- 文件信息 -->
@@ -3766,7 +3768,7 @@ onUnmounted(() => {
                     <button 
                       @click.stop="removeImage(idx)"
                       class="w-6 h-6 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors flex items-center justify-center"
-                      title="删除"
+                      :title="translateUi('common.delete')"
                     >
                       ✕
                     </button>
@@ -3786,12 +3788,12 @@ onUnmounted(() => {
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                提交中...
+                {{ translateUi('uiMessages.m2fb1db2875cb') }}
               </span>
               <span v-else class="inline-flex items-center justify-center w-full">
                 <span class="mr-2">✨</span>
-                <span>立即生成</span>
-                <span class="ml-2 text-sm opacity-90">(消耗{{ formatPoints(currentPointsCost) }}积分)</span>
+                <span>{{ translateUi('uiMessages.mf75d76706332') }}</span>
+                <span class="ml-2 text-sm opacity-90">{{ translateUi('uiMessages.m181800f750b7', { value1: (formatPoints(currentPointsCost)) }) }}</span>
               </span>
             </button>
 
@@ -3799,13 +3801,13 @@ onUnmounted(() => {
             <div v-if="me" class="text-center">
               <p class="text-xs text-slate-500 dark:text-slate-400">
                 <span v-if="userPackageInfo.hasPackage" class="text-gray-700 dark:text-gray-300">
-                  ⚡ VIP用户
+                  {{ translateUi('uiMessages.m2f37945f2f3a') }}
                 </span>
                 <span v-else class="text-slate-600 dark:text-slate-400">
-                  👤 普通用户
+                  {{ translateUi('uiMessages.m597691eaf852') }}
                 </span>
                 <span class="mx-1">·</span>
-                <span>最多支持 <span class="font-semibold text-gray-700 dark:text-gray-300">{{ me.concurrent_limit || 1 }}</span> 条并发任务</span>
+                <span>{{ translateUi('uiMessages.m44f95b8cfc53') }} <span class="font-semibold text-gray-700 dark:text-gray-300">{{ me.concurrent_limit || 1 }}</span> {{ translateUi('uiMessages.m3d333f0ded37') }}</span>
               </p>
             </div>
 
@@ -3815,16 +3817,16 @@ onUnmounted(() => {
                 <span class="text-lg">🎁</span>
                 <div class="flex-1">
                   <p class="text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1">
-                    注册即送积分！
+                    {{ translateUi('uiMessages.m09ecf857f810') }}
                   </p>
                   <p class="text-xs text-gray-700 dark:text-gray-400">
-                    新用户注册可获得奖励积分，立即开始创作吧～
+                    {{ translateUi('uiMessages.mc87ec99f0100') }}
                   </p>
                   <a 
                     href="/" 
                     class="mt-2 inline-block px-3 py-1.5 bg-gray-700 hover:bg-gray-800 text-white text-xs rounded-md transition-colors font-medium"
                   >
-                    立即注册/登录
+                    {{ translateUi('uiMessages.m17e5403abcd9') }}
                   </a>
                 </div>
               </div>
@@ -3841,7 +3843,7 @@ onUnmounted(() => {
                   href="/" 
                   class="ml-2 px-3 py-1 bg-gray-700 hover:bg-gray-800 text-white text-xs rounded-md transition-colors whitespace-nowrap"
                 >
-                  立即登录
+                  {{ translateUi('auth.loginNow') }}
                 </a>
                 <!-- 如果是并发限制错误且是普通用户，显示升级按钮 -->
                 <a 
@@ -3849,7 +3851,7 @@ onUnmounted(() => {
                   href="/packages" 
                   class="ml-2 px-3 py-1 bg-gray-700 hover:bg-gray-800 text-white text-xs rounded-md transition-colors whitespace-nowrap"
                 >
-                  升级套餐
+                  {{ translateUi('packages.upgradePackage') }}
                 </a>
               </p>
             </div>
@@ -3871,7 +3873,7 @@ onUnmounted(() => {
           <div class="flex items-center justify-between mb-6">
             <h2 class="text-lg font-bold gradient-text flex items-center">
               <span class="mr-2">🎬</span>
-              <span>输出视频库</span>
+              <span>{{ translateUi('uiMessages.m0216ebe37b0c') }}</span>
               <span class="ml-2 px-2 py-0.5 bg-gray-200 dark:bg-gray-700/50 text-gray-700 dark:text-gray-300 rounded-full text-xs font-semibold">
                 {{ gallery.length }}
               </span>
@@ -3880,7 +3882,7 @@ onUnmounted(() => {
               @click="loadHistory" 
               class="text-sm text-gray-600 dark:text-gray-400 hover:underline"
             >
-              刷新
+              {{ translateUi('common.refresh') }}
             </button>
           </div>
 
@@ -3890,10 +3892,10 @@ onUnmounted(() => {
               <span class="text-4xl">🎬</span>
             </div>
             <h3 class="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">
-              开始创作
+              {{ translateUi('landing.startCreating') }}
             </h3>
             <p class="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-              在左侧输入提示词，点击生成按钮创造精彩的视频
+              {{ translateUi('uiMessages.mca9e5698d9c2') }}
             </p>
           </div>
 
@@ -3924,13 +3926,13 @@ onUnmounted(() => {
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                   
-                  <p class="text-slate-700 dark:text-slate-200 text-base font-bold mb-2">正在生成精彩视频...</p>
+                  <p class="text-slate-700 dark:text-slate-200 text-base font-bold mb-2">{{ translateUi('uiMessages.m0a31eca0d17c') }}</p>
                   <p class="text-gray-600 dark:text-gray-400 text-sm font-semibold mb-3 animate-pulse">{{ processingProgressText(item) }}</p>
                   <p
                     v-if="showProcessingTimeoutHint(item)"
                     class="text-amber-600 dark:text-amber-400 text-xs mb-3 font-medium px-6 text-center"
                   >
-                    当前任务可能超时失败，可尝试重新提交任务
+                    {{ translateUi('uiMessages.m8f3563f204fe') }}
                   </p>
                   
                   <!-- 进度条效果 -->
@@ -3939,7 +3941,7 @@ onUnmounted(() => {
                   </div>
                   
                   <p class="text-gray-500 dark:text-gray-400 text-xs mt-4 font-medium px-6 text-center">
-                    ✨ 视频生成需要一定时间，您可以继续创作新视频
+                    {{ translateUi('uiMessages.mb046bdd14bdd') }}
                   </p>
                 </div>
               </div>
@@ -3951,10 +3953,10 @@ onUnmounted(() => {
                   <div class="text-4xl mb-3">{{ isContentSafetyMsg(item.fail_reason) ? '🛡️' : item.status === 'timeout' ? '⏱️' : '❌' }}</div>
                   <p class="text-base font-semibold text-center" :class="isContentSafetyMsg(item.fail_reason) ? 'text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-300'">{{ formatStatus(item.status) }}</p>
                   <p v-if="item.fail_reason" class="text-xs mt-2 text-center opacity-75" :class="isContentSafetyMsg(item.fail_reason) ? 'text-amber-500 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400'">{{ item.fail_reason }}</p>
-                  <p v-if="isContentSafetyMsg(item.fail_reason)" class="text-xs mt-1 text-center text-gray-500 dark:text-gray-400">请修改提示词或更换参考图片后重试</p>
-                  <p v-else-if="item.status === 'timeout'" class="text-xs mt-1 text-center text-gray-500 dark:text-gray-400">生成时间过长，请稍后重试或简化提示词</p>
-                  <p v-else-if="!item.fail_reason" class="text-gray-500 dark:text-gray-400 text-xs mt-2 text-center opacity-75">请稍后重试</p>
-                  <p class="text-sm text-gray-600 dark:text-gray-400 mt-3 font-medium">✓ 未扣除积分</p>
+                  <p v-if="isContentSafetyMsg(item.fail_reason)" class="text-xs mt-1 text-center text-gray-500 dark:text-gray-400">{{ translateUi('uiMessages.mb8705a65f9cb') }}</p>
+                  <p v-else-if="item.status === 'timeout'" class="text-xs mt-1 text-center text-gray-500 dark:text-gray-400">{{ translateUi('uiMessages.m303c84eb838d') }}</p>
+                  <p v-else-if="!item.fail_reason" class="text-gray-500 dark:text-gray-400 text-xs mt-2 text-center opacity-75">{{ translateUi('uiMessages.m9ba4b48c2d18') }}</p>
+                  <p class="text-sm text-gray-600 dark:text-gray-400 mt-3 font-medium">{{ translateUi('uiMessages.m69e035ce772a') }}</p>
                 </div>
               </div>
               
@@ -4007,7 +4009,7 @@ onUnmounted(() => {
                       @click="updateVideoRating(item, item.rating === star ? 0 : star)"
                       class="text-sm transition-all hover:scale-125"
                       :class="star <= (item.rating || 0) ? 'text-yellow-400' : 'text-slate-300 dark:text-slate-600 hover:text-yellow-300'"
-                      :title="`${star}星`"
+                      :title="translateUi('uiMessages.mc76b7d003a01', { value1: (star) })"
                     >
                       ★
                     </button>
@@ -4021,7 +4023,7 @@ onUnmounted(() => {
                     :value="item.note || ''"
                     @blur="(e) => updateVideoNote(item, e.target.value)"
                     @keyup.enter="(e) => { updateVideoNote(item, e.target.value); e.target.blur() }"
-                    placeholder="添加备注..."
+                    :placeholder="translateUi('uiMessages.m5440e675ac57')"
                     class="w-full px-2 py-1 text-xs bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 rounded focus:outline-none focus:ring-1 focus:ring-gray-500 text-slate-600 dark:text-slate-300 placeholder-slate-400"
                   />
                 </div>
@@ -4032,14 +4034,14 @@ onUnmounted(() => {
                     @click="openVideoModal(item)"
                     :disabled="!item.video_url"
                   >
-                    预览
+                    {{ translateUi('uiMessages.m13d61fea9f17') }}
                   </button>
                   <button 
                     class="flex-1 btn-secondary text-xs py-2" 
                     @click="downloadVideo(item)" 
                     :disabled="!item.video_url"
                   >
-                    下载
+                    {{ translateUi('common.download') }}
                   </button>
                 </div>
               </div>
@@ -4062,10 +4064,10 @@ onUnmounted(() => {
             @click="toggleHistoryDrawer"
             class="relative bg-gray-700 hover:bg-gray-800 text-white rounded-l-2xl shadow-lg hover:shadow-xl transition-all duration-300 flex flex-col items-center justify-center"
             style="width: 56px; height: 120px;"
-            title="打开历史记录"
+            :title="translateUi('uiMessages.m7f0215625f0b')"
           >
             <span class="text-2xl mb-1">🎬</span>
-            <span class="text-xs font-semibold">历史记录</span>
+            <span class="text-xs font-semibold">{{ translateUi('imageGen.history') }}</span>
             <span v-if="history.length > 0" class="absolute -top-2 -left-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md">
               {{ history.length > 99 ? '99+' : history.length }}
             </span>
@@ -4086,7 +4088,7 @@ onUnmounted(() => {
               </div>
               <div>
                 <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center">
-                  历史记录
+                  {{ translateUi('imageGen.history') }}
                   <span class="ml-2 px-2 py-0.5 bg-gray-200 dark:bg-gray-700/50 text-gray-700 dark:text-gray-300 rounded-full text-xs font-semibold">
                     {{ history.length }}
                   </span>
@@ -4096,7 +4098,7 @@ onUnmounted(() => {
             <button
               @click="toggleHistoryDrawer"
               class="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-dark-700 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
-              title="关闭"
+              :title="translateUi('common.close')"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
@@ -4109,8 +4111,8 @@ onUnmounted(() => {
             <!-- 空状态 -->
             <div v-if="history.length === 0" class="flex flex-col items-center justify-center h-full text-center py-12">
               <div class="text-6xl mb-4 opacity-50">🎬</div>
-              <p class="text-slate-500 dark:text-slate-400 text-sm font-medium">暂无历史记录</p>
-              <p class="text-slate-400 dark:text-slate-500 text-xs mt-2">生成的视频会显示在这里</p>
+              <p class="text-slate-500 dark:text-slate-400 text-sm font-medium">{{ translateUi('canvas.noHistoryWorkflows') }}</p>
+              <p class="text-slate-400 dark:text-slate-500 text-xs mt-2">{{ translateUi('uiMessages.md36bf3e10ffc') }}</p>
             </div>
 
             <!-- 历史记录列表 -->
@@ -4157,7 +4159,7 @@ onUnmounted(() => {
                       v-if="showProcessingTimeoutHint(item)"
                       class="text-xs text-amber-600 dark:text-amber-400 mt-1 px-3"
                     >
-                      当前任务可能超时失败，可尝试重新提交任务
+                      {{ translateUi('uiMessages.m8f3563f204fe') }}
                     </p>
                   </div>
                 </div>
@@ -4166,7 +4168,7 @@ onUnmounted(() => {
                   <div class="text-3xl mb-2">{{ isContentSafetyMsg(item.fail_reason) ? '🛡️' : item.status === 'timeout' ? '⏱️' : '❌' }}</div>
                   <p class="text-xs font-semibold" :class="isContentSafetyMsg(item.fail_reason) ? 'text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-300'">{{ formatStatus(item.status) }}</p>
                   <p v-if="item.fail_reason" class="text-xs mt-1 text-center px-4 line-clamp-2" :class="isContentSafetyMsg(item.fail_reason) ? 'text-amber-500 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400'">{{ item.fail_reason }}</p>
-                  <p class="text-xs text-gray-600 dark:text-gray-400 mt-1 font-medium">✓ 未扣除积分</p>
+                  <p class="text-xs text-gray-600 dark:text-gray-400 mt-1 font-medium">{{ translateUi('uiMessages.m69e035ce772a') }}</p>
                 </div>
                 <!-- 其他未知状态 - 默认显示为等待中 -->
                 <div v-else class="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800/40 dark:to-gray-900/40">
@@ -4175,7 +4177,7 @@ onUnmounted(() => {
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                   <div class="text-xs text-slate-700 dark:text-slate-300 font-semibold">{{ formatStatus(item.status) }}</div>
-                  <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">请稍候...</div>
+                  <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ translateUi('common.pleaseWait') }}</div>
                 </div>
                 
                 <!-- 悬停播放图标 -->
@@ -4218,7 +4220,7 @@ onUnmounted(() => {
                       @click="updateVideoRating(item, item.rating === star ? 0 : star)"
                       class="text-sm transition-all hover:scale-125"
                       :class="star <= (item.rating || 0) ? 'text-yellow-400' : 'text-slate-300 dark:text-slate-600 hover:text-yellow-300'"
-                      :title="`${star}星`"
+                      :title="translateUi('uiMessages.mc76b7d003a01', { value1: (star) })"
                     >
                       ★
                     </button>
@@ -4232,7 +4234,7 @@ onUnmounted(() => {
                     :value="item.note || ''"
                     @blur="(e) => updateVideoNote(item, e.target.value)"
                     @keyup.enter="(e) => { updateVideoNote(item, e.target.value); e.target.blur() }"
-                    placeholder="添加备注（如分镜信息）..."
+                    :placeholder="translateUi('uiMessages.m83be65a7a328')"
                     class="w-full px-2 py-1 text-xs bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 rounded focus:outline-none focus:ring-1 focus:ring-gray-500 text-slate-600 dark:text-slate-300 placeholder-slate-400"
                   />
                 </div>
@@ -4240,9 +4242,9 @@ onUnmounted(() => {
                 <!-- 失败原因 -->
                 <div v-if="isFailedStatus(item.status)" class="text-xs p-2 rounded space-y-1" :class="isContentSafetyMsg(item.fail_reason) ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-gray-100 dark:bg-gray-800/50'">
                   <p v-if="item.fail_reason" :class="isContentSafetyMsg(item.fail_reason) ? 'text-amber-600 dark:text-amber-400' : 'text-gray-600 dark:text-gray-400'">{{ item.fail_reason }}</p>
-                  <p v-if="isContentSafetyMsg(item.fail_reason)" class="text-gray-500 dark:text-gray-400">请修改提示词或更换参考图片后重试</p>
-                  <p v-else-if="item.status === 'timeout'" class="text-gray-500 dark:text-gray-400">生成时间过长，请稍后重试或简化提示词</p>
-                  <p class="text-gray-600 dark:text-gray-400 font-medium">✓ 未扣除积分</p>
+                  <p v-if="isContentSafetyMsg(item.fail_reason)" class="text-gray-500 dark:text-gray-400">{{ translateUi('uiMessages.mb8705a65f9cb') }}</p>
+                  <p v-else-if="item.status === 'timeout'" class="text-gray-500 dark:text-gray-400">{{ translateUi('uiMessages.m303c84eb838d') }}</p>
+                  <p class="text-gray-600 dark:text-gray-400 font-medium">{{ translateUi('uiMessages.m69e035ce772a') }}</p>
                 </div>
 
                 <!-- 操作按钮 -->
@@ -4251,7 +4253,7 @@ onUnmounted(() => {
                   <button 
                     class="w-10 h-8 rounded-lg bg-gray-200 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors flex items-center justify-center"
                     @click="regenerateFromHistory(item)"
-                    title="再次生成"
+                    :title="translateUi('uiMessages.ma69bd20e41d4')"
                   >
                     🔄
                   </button>
@@ -4260,7 +4262,7 @@ onUnmounted(() => {
                     @click="openVideoModal(item)"
                   >
                     <span class="mr-1">👁️</span>
-                    预览
+                    {{ translateUi('uiMessages.m13d61fea9f17') }}
                   </button>
                   <button 
                     class="flex-1 btn-secondary-small" 
@@ -4269,12 +4271,12 @@ onUnmounted(() => {
                     :class="{ 'opacity-50 cursor-not-allowed': !item.video_url }"
                   >
                     <span class="mr-1">⬇️</span>
-                    下载
+                    {{ translateUi('common.download') }}
                   </button>
                   <button v-if="me && me.can_delete_history !== false"
                     class="w-10 h-8 rounded-lg bg-gray-200 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors flex items-center justify-center"
                     @click="deleteHistory(item)"
-                    title="删除"
+                    :title="translateUi('common.delete')"
                   >
                     🗑️
                   </button>
@@ -4289,14 +4291,14 @@ onUnmounted(() => {
                 @click="loadMoreVideoHistory"
                 class="px-4 py-2 text-xs text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/40 transition-colors"
               >
-                加载更多
+                {{ translateUi('uiMessages.maf90a08fec8e') }}
               </button>
               <div v-else class="flex items-center gap-2 text-xs text-slate-500">
                 <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                加载中...
+                {{ translateUi('common.loading') }}
               </div>
             </div>
           </div>
@@ -4307,7 +4309,7 @@ onUnmounted(() => {
   <div v-if="showVideoModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="closeVideoModal">
     <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
       <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-dark-600">
-        <h4 class="font-semibold text-slate-900 dark:text-white">视频预览</h4>
+        <h4 class="font-semibold text-slate-900 dark:text-white">{{ translateUi('uiMessages.m05608cc41def') }}</h4>
         <button 
           class="text-slate-500 hover:text-slate-900 dark:hover:text-white text-2xl leading-none" 
           @click="closeVideoModal"
@@ -4329,41 +4331,41 @@ onUnmounted(() => {
           <div v-else class="flex items-center justify-center h-full text-slate-400">
             <div class="text-center">
               <div class="text-5xl mb-3">⏳</div>
-              <div class="text-lg">视频尚未生成完成</div>
+              <div class="text-lg">{{ translateUi('uiMessages.m33f0c2544c21') }}</div>
             </div>
           </div>
         </div>
         <div>
-          <p class="text-sm text-slate-500 dark:text-slate-400 mb-1">提示词</p>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mb-1">{{ translateUi('directorStudio.inspector.prompt') }}</p>
           <p class="text-base text-slate-900 dark:text-white whitespace-pre-wrap">{{ currentVideo?.prompt }}</p>
         </div>
         <div class="grid grid-cols-2 gap-4 text-sm">
           <div class="flex items-center space-x-2">
-            <span class="text-slate-500 dark:text-slate-400">模型：</span>
+            <span class="text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m2a845bd8e225') }}</span>
             <span class="text-slate-900 dark:text-white font-medium">{{ currentVideo?.model }}</span>
           </div>
           <div class="flex items-center space-x-2">
-            <span class="text-slate-500 dark:text-slate-400">画幅：</span>
+            <span class="text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m1f8d1c34a451') }}</span>
             <span class="text-slate-900 dark:text-white font-medium">{{ currentVideo?.aspect_ratio }}</span>
           </div>
           <div class="flex items-center space-x-2">
-            <span class="text-slate-500 dark:text-slate-400">时长：</span>
+            <span class="text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.mdbfc1f8d10d3') }}</span>
             <span class="text-slate-900 dark:text-white font-medium">{{ currentVideo?.duration || duration }}s</span>
           </div>
           <div class="flex items-center space-x-2">
-            <span class="text-slate-500 dark:text-slate-400">状态：</span>
+            <span class="text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m86344fd28ab4') }}</span>
             <span :class="statusColor(currentVideo?.status)" class="font-medium">{{ formatStatus(currentVideo?.status) }}</span>
           </div>
         </div>
       </div>
       <div class="p-4 border-t border-slate-200 dark:border-dark-600 flex justify-end gap-3">
-        <button class="btn-secondary px-6 py-2" @click="closeVideoModal">关闭</button>
+        <button class="btn-secondary px-6 py-2" @click="closeVideoModal">{{ translateUi('common.close') }}</button>
         <button 
           class="btn-primary px-6 py-2" 
           :disabled="!currentVideo?.video_url" 
           @click="downloadVideo(currentVideo)"
         >
-          下载视频
+          {{ translateUi('videoGen.downloadVideo') }}
         </button>
       </div>
     </div>

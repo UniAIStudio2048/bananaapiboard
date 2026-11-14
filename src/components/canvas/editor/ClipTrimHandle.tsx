@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../../i18n/index.js'
 import * as React from 'react'
 
 import { useRef, useState } from 'react'
@@ -16,10 +17,10 @@ export function ClipTrimHandle({ clip, duration, side, disabled, onCommit }: {
   const clamp = (seconds: number) => side === 'start'
     ? Math.max(0, Math.min(clip.end - 0.05, seconds))
     : Math.max(clip.start + 0.05, Math.min(duration, seconds))
-  const label = side === 'start' ? '裁剪片段起点' : '裁剪片段终点'
+  const label = side === 'start' ? translateUi('uiMessages.ma09fbd399cef') : translateUi('uiMessages.ma20fc96cbf52')
   // The drag offset depends on the measured timeline width at runtime.
   const dragOffset = value === undefined || !drag.current ? 0 : (value - drag.current.initial) / (clip.end - clip.start) * drag.current.width
-  return <button type="button" draggable={false} aria-label={label} title={value === undefined ? label : `${label} ${value.toFixed(2)} 秒`} disabled={disabled || !Number.isFinite(duration) || duration <= 0}
+  return <button type="button" draggable={false} aria-label={label} title={value === undefined ? label : translateUi('uiMessages.mb9377001469c', { value1: (label), value2: (value.toFixed(2)) })} disabled={disabled || !Number.isFinite(duration) || duration <= 0}
     className={`absolute inset-y-1 z-10 w-3 touch-none rounded bg-[var(--mf-brand)]/70 hover:bg-[var(--mf-brand)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-white ${side === 'start' ? 'left-0' : 'right-0'}`}
     style={dragOffset ? { transform: `translateX(${dragOffset}px)` } : undefined}
     onPointerDown={event => {

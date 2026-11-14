@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -9,8 +10,8 @@ test('Seedance character canvas node shows download and preview top actions and 
   assert.match(source, /function handlePreviewCharacter\(/)
   assert.match(source, /async function handleDownloadCharacter\(/)
   assert.match(source, /class="character-toolbar"/)
-  assert.match(source, /title="下载"/)
-  assert.match(source, /title="放大预览"/)
+  assert.match(source, localizedPattern(/title="下载"/))
+  assert.match(source, localizedPattern(/title="放大预览"/))
   assert.match(source, /class="node-add-btn node-add-btn-right nodrag"/)
 
   const toolbarMatch = source.match(/<div v-if="data\.assetUrl" class="character-toolbar">([\s\S]*?)<\/div>\n\s*<div class="character-preview">/)

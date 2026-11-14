@@ -13,7 +13,7 @@ test('assistant writeback falls back to the currently selected canvas node', () 
 
 test('assistant writeback auto-creates a canvas node when no node is selected', () => {
   assert.match(source, /if \(!targetNodeId\) \{[\s\S]*?canvasStore\.addNode\(\{[\s\S]*?type: mediaType,[\s\S]*?position: getVisibleCanvasFlowPosition\(\)/)
-  assert.match(source, /displayToast\(`已加载到画布`, 'success'\)/)
+  assert.match(source, /displayToast\(translateUi\('uiMessages\.m0c97a75d8352'\), 'success'\)/)
   assert.match(source, /function getVisibleCanvasFlowPosition\(\) \{[\s\S]*?document\.querySelector\('\.canvas-board'\)/)
 })
 

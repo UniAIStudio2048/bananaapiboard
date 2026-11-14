@@ -1,17 +1,18 @@
+import { t as translateUi } from '../i18n/index.js'
 // 注册来源：首次访问时从 URL 捕获（first touch wins），注册时随请求提交 signup_source
 const STORAGE_KEY = 'nb_signup_source'
 const QUERY_KEYS = ['utm_source', 'from', 'src']
 
-export const SIGNUP_SOURCE_LABEL = '你从哪里知道我们？（选填）'
+export const SIGNUP_SOURCE_LABEL = translateUi('uiMessages.maf70f9fc9816')
 
 export const SIGNUP_SOURCE_OPTIONS = [
-  { value: 'douyin', label: '抖音' },
-  { value: 'xianyu', label: '闲鱼' },
-  { value: 'xiaohongshu', label: '小红书' },
-  { value: 'bilibili', label: 'B站' },
-  { value: 'friend', label: '朋友推荐' },
-  { value: 'search', label: '搜索引擎' },
-  { value: 'other', label: '其他' }
+  { value: 'douyin', get label() { return translateUi('uiMessages.md077d0b18e19') } },
+  { value: 'xianyu', get label() { return translateUi('uiMessages.m6586c26399cf') } },
+  { value: 'xiaohongshu', get label() { return translateUi('uiMessages.md26c6a08a591') } },
+  { value: 'bilibili', get label() { return translateUi('uiMessages.macfb839ad1e4') } },
+  { value: 'friend', get label() { return translateUi('uiMessages.m783a119b9763') } },
+  { value: 'search', get label() { return translateUi('uiMessages.m82cbe72ab9d9') } },
+  { value: 'other', get label() { return translateUi('uiMessages.md2909f1647e7') } }
 ]
 
 export function sanitizeSignupSource(value) {

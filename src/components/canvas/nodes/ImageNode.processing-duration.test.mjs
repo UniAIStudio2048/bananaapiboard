@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -23,7 +24,7 @@ test('image processing template renders elapsed duration under the generating la
   assert.ok(processingBlockMatch, 'processing preview block should exist')
   const processingBlock = processingBlockMatch[0]
 
-  assert.match(processingBlock, /<span class="processing-text">\{\{ data\.progress \|\| '生成中' \}\}<\/span>/)
+  assert.match(processingBlock, localizedPattern(/<span class="processing-text">\{\{ data\.progress \|\| '生成中' \}\}<\/span>/))
   assert.match(processingBlock, /<span class="processing-duration-text">\{\{ imageProcessingElapsedText\(data\) \}\}<\/span>/)
 })
 
@@ -34,11 +35,11 @@ test('image generation stores processingStartedAt when entering processing state
 })
 
 test('image processing helper nodes store a start time for elapsed display', () => {
-  assert.match(source, /status: 'processing',\s*processingStartedAt: Date\.now\(\),\s*progress: '高清处理中\.\.\.'/)
-  assert.match(source, /status: 'processing',\s*processingStartedAt: Date\.now\(\),\s*progress: '全景图生成中\.\.\.'/)
-  assert.match(source, /status: 'processing',\s*processingStartedAt: Date\.now\(\),\s*progress: '抠图处理中\.\.\.'/)
+  assert.match(source, localizedPattern(/status: 'processing',\s*processingStartedAt: Date\.now\(\),\s*progress: '高清处理中\.\.\.'/))
+  assert.match(source, localizedPattern(/status: 'processing',\s*processingStartedAt: Date\.now\(\),\s*progress: '全景图生成中\.\.\.'/))
+  assert.match(source, localizedPattern(/status: 'processing',\s*processingStartedAt: Date\.now\(\),\s*progress: '抠图处理中\.\.\.'/))
   assert.match(source, /status: 'processing',\s*processingStartedAt: Date\.now\(\),\s*cameraAngle: data\.angles/)
-  assert.match(source, /status: 'processing', \/\/ 使用 processing 状态显示"生成中"\s*processingStartedAt: Date\.now\(\),\s*progress: '生成中\.\.\.'/)
+  assert.match(source, localizedPattern(/status: 'processing', \/\/ 使用 processing 状态显示"生成中"\s*processingStartedAt: Date\.now\(\),\s*progress: '生成中\.\.\.'/))
 })
 
 test('image elapsed timer is started and cleared with component lifecycle', () => {

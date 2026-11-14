@@ -16,7 +16,7 @@ import { readFile } from 'node:fs/promises'
 
 async function loadSubscribe() {
   const source = await readFile(new URL('./codex-agent.js', import.meta.url), 'utf8')
-  const runnableSource = source.replace(
+  const runnableSource = source.replace("'../i18n/index.js'", JSON.stringify(new URL('../i18n/index.js', import.meta.url).href)).replace(
     "import { getApiUrl, getTenantHeaders } from '@/config/tenant'",
     "const getApiUrl = (path) => path\nconst getTenantHeaders = () => ({})"
   )

@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { 
   drawPinMarker, 
@@ -421,7 +423,7 @@ defineExpose({
       <!-- 空状态提示 -->
       <div v-if="!imageLoaded" class="empty-state">
         <div class="empty-icon">🖼️</div>
-        <p class="empty-text">请先上传参考图片</p>
+        <p class="empty-text">{{ translateUi('uiMessages.m7d8279bdab97') }}</p>
       </div>
     </div>
     
@@ -430,23 +432,23 @@ defineExpose({
       <div class="hint-row">
         <div class="hint-item" v-if="!isTouchDevice">
           <span class="hint-icon">⌨️</span>
-          <span class="hint-text">Ctrl + 点击添加标记</span>
+          <span class="hint-text">{{ translateUi('uiMessages.m23ce359c8fef') }}</span>
         </div>
         <div class="hint-item" v-if="!isTouchDevice">
           <span class="hint-icon">🖱️</span>
-          <span class="hint-text">右键删除标记</span>
+          <span class="hint-text">{{ translateUi('uiMessages.mdd2b79892ce1') }}</span>
         </div>
         <div class="hint-item" v-if="isTouchDevice">
           <span class="hint-icon">👆</span>
-          <span class="hint-text">长按空白添加标记</span>
+          <span class="hint-text">{{ translateUi('uiMessages.m1dec99723460') }}</span>
         </div>
         <div class="hint-item" v-if="isTouchDevice">
           <span class="hint-icon">🔄</span>
-          <span class="hint-text">长按标记删除</span>
+          <span class="hint-text">{{ translateUi('uiMessages.m57ac91c3ddca') }}</span>
         </div>
         <div class="hint-item">
           <span class="hint-badge">{{ markers.length }}/26</span>
-          <span class="hint-text">已标记</span>
+          <span class="hint-text">{{ translateUi('uiMessages.m4330486d0805') }}</span>
         </div>
       </div>
       
@@ -458,14 +460,14 @@ defineExpose({
         :disabled="disabled"
       >
         <span>🗑️</span>
-        <span>清空标记</span>
+        <span>{{ translateUi('uiMessages.m5c8094ade32c') }}</span>
       </button>
     </div>
     
     <!-- 标记列表 -->
     <div v-if="hasMarkers" class="markers-list">
       <div class="markers-header">
-        <span class="markers-title">📍 标记列表</span>
+        <span class="markers-title">{{ translateUi('uiMessages.m2f11766d5f63') }}</span>
       </div>
       <div class="markers-items">
         <div
@@ -474,7 +476,7 @@ defineExpose({
           class="marker-item"
         >
           <div class="marker-pin">{{ marker.label }}</div>
-          <span class="marker-label">{{ marker.label }}位置</span>
+          <span class="marker-label">{{ translateUi('uiMessages.mcd0a441ffc18', { value1: (marker.label) }) }}</span>
           <span class="marker-coords">({{ Math.round(marker.x) }}, {{ Math.round(marker.y) }})</span>
         </div>
       </div>

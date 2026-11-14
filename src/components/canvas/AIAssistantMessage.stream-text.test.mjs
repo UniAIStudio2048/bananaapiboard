@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -16,7 +17,7 @@ test('streaming assistant messages render plain text instead of full markdown', 
 test('media generation shows a visual placeholder grid with image/video label', () => {
   assert.match(source, /v-if="message\.mediaGenerating"[\s\S]*?class="media-generating"/)
   // 生成中与已停止（mediaStopped）两种文案；已停止不显示省略号
-  assert.match(source, /message\.mediaGenerating === 'video' \? \(message\.mediaStopped \? '视频生成已停止' : '视频生成中…'\) : \(message\.mediaStopped \? '图片生成已停止' : '图片生成中…'\)/)
+  assert.match(source, localizedPattern(/message\.mediaGenerating === 'video' \? \(message\.mediaStopped \? '视频生成已停止' : '视频生成中…'\) : \(message\.mediaStopped \? '图片生成已停止' : '图片生成中…'\)/))
   assert.match(source, /class="media-generating__grid"/)
   // CSS 仍以 1:1 作为图片占位格的保底比例（未知比例时退回方格子），
   // 已知请求比例时由内联 style 覆盖（见 image generation aspect-ratio 测试）

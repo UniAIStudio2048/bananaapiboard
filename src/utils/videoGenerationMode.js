@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 const MODE_TO_SD2_MODE = {
   t2v: 'text2video',
   i2v: 'image2video_first',
@@ -14,33 +15,33 @@ const SD2_MODE_TO_GENERATION_MODE = {
 }
 
 export const WAN_MODES = [
-  { value: 't2v', label: '文生视频', desc: '纯文本生成视频', needsImage: false, needsVideo: false },
-  { value: 'i2v', label: '图生视频', desc: '首帧图(+可选驱动音频)', needsImage: true, needsVideo: false, needsAudio: true, maxImages: 1 },
-  { value: 'r2v', label: '多参考', desc: '图片/视频参考(≤5)，可带音色', needsImage: true, needsVideo: true, needsAudio: true, maxImages: 5 },
-  { value: 'videoedit', label: '视频编辑', desc: '需连接上游视频节点', needsImage: false, needsVideo: true }
+  { value: 't2v', get label() { return translateUi('canvas.textNode.textToVideo') }, desc: '纯文本生成视频', needsImage: false, needsVideo: false },
+  { value: 'i2v', get label() { return translateUi('canvas.videoNode.imageToVideo') }, desc: '首帧图(+可选驱动音频)', needsImage: true, needsVideo: false, needsAudio: true, maxImages: 1 },
+  { value: 'r2v', get label() { return translateUi('uiMessages.m282e347cee9d') }, desc: '图片/视频参考(≤5)，可带音色', needsImage: true, needsVideo: true, needsAudio: true, maxImages: 5 },
+  { value: 'videoedit', get label() { return translateUi('canvas.nodeConfig.videoEdit.label') }, desc: '需连接上游视频节点', needsImage: false, needsVideo: true }
 ]
 
 export const WAN3_MODES = [
-  { value: 'text2video', label: '文生视频', desc: '纯文本提示词生成视频' },
-  { value: 'image2video_first', label: '首帧', desc: '1 张图片作为首帧', needsImage: true, maxImages: 1 },
-  { value: 'image2video_first_last', label: '首尾帧', desc: '2 张图片分别作为首帧和尾帧', needsImage: true, maxImages: 2 },
-  { value: 'multimodal_ref', label: '多模态参考', desc: '参考图片、视频或音频生成视频' },
-  { value: 'video_edit', label: '视频编辑', desc: '编辑参考视频，可搭配图片或音频', needsVideo: true, apiType: 'wan3' },
-  { value: 'video_extend', label: '视频延长', desc: '延续参考视频，可在提示词中指定向前或向后延长', needsVideo: true, apiType: 'wan3' },
-  { value: 'file', label: '文件', desc: '参考文件生成视频' },
-  { value: 'link', label: '网页链接', desc: '参考网页链接生成视频' }
+  { value: 'text2video', get label() { return translateUi('canvas.textNode.textToVideo') }, desc: '纯文本提示词生成视频' },
+  { value: 'image2video_first', get label() { return translateUi('uiMessages.m0eee51419641') }, desc: '1 张图片作为首帧', needsImage: true, maxImages: 1 },
+  { value: 'image2video_first_last', get label() { return translateUi('uiMessages.ma44f24ac18b3') }, desc: '2 张图片分别作为首帧和尾帧', needsImage: true, maxImages: 2 },
+  { value: 'multimodal_ref', get label() { return translateUi('uiMessages.mb5ea8197a734') }, desc: '参考图片、视频或音频生成视频' },
+  { value: 'video_edit', get label() { return translateUi('canvas.nodeConfig.videoEdit.label') }, desc: '编辑参考视频，可搭配图片或音频', needsVideo: true, apiType: 'wan3' },
+  { value: 'video_extend', get label() { return translateUi('canvas.videoNode.videoExtend') }, desc: '延续参考视频，可在提示词中指定向前或向后延长', needsVideo: true, apiType: 'wan3' },
+  { value: 'file', get label() { return translateUi('uiMessages.m39932f24fe11') }, desc: '参考文件生成视频' },
+  { value: 'link', get label() { return translateUi('uiMessages.m6ff9e899b83c') }, desc: '参考网页链接生成视频' }
 ]
 
 export const ROUTERBEE_WAN3_MODES = [
-  { value: 'text2video', label: '文生视频', desc: '仅使用提示词生成视频' },
-  { value: 'image2video', label: '图生视频', desc: '1 张图片作为首帧生成视频', needsImage: true, maxImages: 1 },
-  { value: 'first_last_frame', label: '首尾帧', desc: '按顺序使用 2 张图片作为首帧和尾帧', needsImage: true, maxImages: 2 },
-  { value: 'multimodal_ref', label: '多模态参考', desc: '按顺序参考图片、视频或音频的公开链接' }
+  { value: 'text2video', get label() { return translateUi('canvas.textNode.textToVideo') }, desc: '仅使用提示词生成视频' },
+  { value: 'image2video', get label() { return translateUi('canvas.videoNode.imageToVideo') }, desc: '1 张图片作为首帧生成视频', needsImage: true, maxImages: 1 },
+  { value: 'first_last_frame', get label() { return translateUi('uiMessages.ma44f24ac18b3') }, desc: '按顺序使用 2 张图片作为首帧和尾帧', needsImage: true, maxImages: 2 },
+  { value: 'multimodal_ref', get label() { return translateUi('uiMessages.mb5ea8197a734') }, desc: '按顺序参考图片、视频或音频的公开链接' }
 ]
 
 export const WAN_ANIMATE_MIX_MODE = {
   value: 'animate_mix',
-  label: '换人混合',
+  get label() { return translateUi('uiMessages.m5c9ce431cab3') },
   desc: '1张人物图 + 1段参考视频',
   needsImage: true,
   needsVideo: true,

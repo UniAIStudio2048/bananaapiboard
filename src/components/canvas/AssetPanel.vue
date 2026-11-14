@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * AssetPanel.vue - 我的资产面板
  * 用于管理用户生成的文案、图片、视频、音频等资源
@@ -185,7 +187,7 @@ const allFileTypes = [
   { key: 'image', labelKey: 'canvas.nodes.image', icon: '◫' },
   { key: 'video', labelKey: 'canvas.nodes.video', icon: '▷' },
   { key: 'audio', labelKey: 'canvas.nodes.audio', icon: '♪' },
-  { key: 'digital-human', label: '数字人', icon: '🧑' },
+  { key: 'digital-human', get label() { return translateUi('uiMessages.mb901660d9e33') }, icon: '🧑' },
   { key: 'sora-character', labelKey: 'canvas.soraCharacterLib', icon: '👤' },
   { key: 'seedance-character', labelKey: 'canvas.seedanceCharacterLib', icon: '👥' },
   { key: 'bytefor-character', labelKey: 'canvas.byteforCharacterLib', icon: '人' }
@@ -205,7 +207,7 @@ const fileTypeLabels = computed(() =>
   fileTypes.value.map(ft => ({
     ...ft,
     label: ft.key === 'seedance-character'
-      ? `${seedanceCharacterLibraryName.value}角色库`
+      ? translateUi('uiMessages.mda94f693cc14', { value1: (seedanceCharacterLibraryName.value) })
       : (ft.labelKey ? t(ft.labelKey) : ft.label)
   }))
 )
@@ -790,7 +792,7 @@ async function saveEditedName(asset) {
     editingNameAssetId.value = null
   } catch (error) {
     console.error('[AssetPanel] 更新名称失败:', error)
-    alert('更新名称失败: ' + error.message)
+    alert(translateUi('uiMessages.m095646906fb8') + error.message)
   }
 }
 
@@ -815,7 +817,7 @@ function handleAssetClick(e, asset) {
     }
     const username = getCharacterUsername(asset)
     navigator.clipboard.writeText(`@${username}`).then(() => {
-      copyToastMessage.value = `已复制: @${username}`
+      copyToastMessage.value = translateUi('uiMessages.me712296caa66', { value1: (username) })
       copyToastVisible.value = true
       setTimeout(() => {
         copyToastVisible.value = false
@@ -950,7 +952,7 @@ async function handleDownload(assetArg = contextMenuAsset.value) {
     console.log('[AssetPanel] 已开始下载:', filename)
   } catch (error) {
     console.error('[AssetPanel] 下载失败:', error)
-    alert(t('errors.downloadFailed') || '下载失败')
+    alert(t('errors.downloadFailed') || translateUi('errors.downloadFailed'))
   }
 }
 
@@ -1123,7 +1125,7 @@ async function copyCharacterId(e, asset) {
   const username = getCharacterUsername(asset)
   try {
     await navigator.clipboard.writeText(`@${username}`)
-    copyToastMessage.value = `已复制: @${username}`
+    copyToastMessage.value = translateUi('uiMessages.me712296caa66', { value1: (username) })
     copyToastVisible.value = true
     setTimeout(() => {
       copyToastVisible.value = false
@@ -1257,7 +1259,7 @@ function handleDigitalHumanImageInsert(asset) {
     : (asset?.metadata || {})
   const imageUrl = metadata.previewUrl || asset?.thumbnail_url || ''
   if (!imageUrl) {
-    showToast('该数字人暂未返回可引用的形象图', 'error')
+    showToast(translateUi('uiMessages.m4f9471b08032'), 'error')
     return
   }
   emit('insert-asset', {
@@ -1347,7 +1349,7 @@ function handleCharacterFileSelect(e) {
   const isVideo = file.type.startsWith('video/')
   
   if (!isImage && !isVideo) {
-    addCharacterError.value = '请上传图片或视频文件'
+    addCharacterError.value = translateUi('uiMessages.m3ff8f8ca7ba2')
     return
   }
   
@@ -1357,7 +1359,7 @@ function handleCharacterFileSelect(e) {
     video.preload = 'metadata'
     video.onloadedmetadata = () => {
       if (video.duration > 3) {
-        addCharacterError.value = '视频时长不能超过3秒'
+        addCharacterError.value = translateUi('uiMessages.m38b3a6a24c6a')
         addCharacterForm.value.file = null
         addCharacterForm.value.filePreview = null
         addCharacterForm.value.fileType = null
@@ -1385,15 +1387,15 @@ async function submitAddCharacter() {
   
   // 验证表单
   if (!name?.trim()) {
-    addCharacterError.value = '请输入角色名称'
+    addCharacterError.value = translateUi('uiMessages.m089ccdbcd684')
     return
   }
   if (!username?.trim()) {
-    addCharacterError.value = '请输入角色ID（外部平台的用户名）'
+    addCharacterError.value = translateUi('uiMessages.m79f7b4ee3033')
     return
   }
   if (!file) {
-    addCharacterError.value = '请上传角色图片或视频'
+    addCharacterError.value = translateUi('uiMessages.mf9f553e44801')
     return
   }
   
@@ -1404,7 +1406,7 @@ async function submitAddCharacter() {
     // 1. 浏览器直传 COS，服务端 HEAD 验证后才使用 CDN URL
     const uploadResult = await uploadCanvasMedia(file, fileType)
     if (uploadResult.status !== 'completed' || !uploadResult.url) {
-      throw new Error('媒体上传未完成')
+      throw new Error(translateUi('uiMessages.m909a1763f7f8'))
     }
     const fileUrl = uploadResult.url
     
@@ -1434,7 +1436,7 @@ async function submitAddCharacter() {
     closeAddCharacterModal()
     
     // 5. 显示成功提示
-    copyToastMessage.value = `角色 "${name}" 添加成功！`
+    copyToastMessage.value = translateUi('uiMessages.m9b97c1f563bf', { value1: (name) })
     copyToastVisible.value = true
     setTimeout(() => {
       copyToastVisible.value = false
@@ -1442,7 +1444,7 @@ async function submitAddCharacter() {
     
   } catch (error) {
     console.error('[AssetPanel] 添加角色失败:', error)
-    addCharacterError.value = error.message || '添加角色失败'
+    addCharacterError.value = error.message || translateUi('uiMessages.mfc47963de78f')
   } finally {
     addCharacterLoading.value = false
   }
@@ -1535,7 +1537,7 @@ async function addTag() {
     console.log('[AssetPanel] 标签添加成功:', newTag)
   } catch (error) {
     console.error('[AssetPanel] 添加标签失败:', error)
-    alert('添加标签失败: ' + error.message)
+    alert(translateUi('uiMessages.m79f8c5090ea1') + error.message)
   }
 }
 
@@ -1557,7 +1559,7 @@ async function removeTag(tag) {
     console.log('[AssetPanel] 标签移除成功:', tag)
   } catch (error) {
     console.error('[AssetPanel] 移除标签失败:', error)
-    alert('移除标签失败: ' + error.message)
+    alert(translateUi('uiMessages.mcb7943c56af5') + error.message)
   }
 }
 
@@ -1722,7 +1724,7 @@ onUnmounted(() => {
               class="header-btn"
               :class="{ active: isFullscreen }"
               @click="toggleFullscreen"
-              :title="isFullscreen ? '退出全屏' : '全屏显示'"
+              :title="isFullscreen ? translateUi('uiMessages.m0f1505b6ad3f') : translateUi('uiMessages.m2ea6efe45979')"
             >
               <Maximize2 v-if="!isFullscreen" :size="18" aria-hidden="true" />
               <Minimize2 v-else :size="18" aria-hidden="true" />
@@ -1756,7 +1758,7 @@ onUnmounted(() => {
           </button>
         </div>
 
-        <p v-if="referenceTargetNodeId" class="reference-picker-hint">单击画布节点或资产，添加到当前节点的参考区域</p>
+        <p v-if="referenceTargetNodeId" class="reference-picker-hint">{{ translateUi('uiMessages.ma68b03306f4b') }}</p>
 
         <CanvasDirectoryPanel
           v-if="activePanelView === 'canvas'"
@@ -1812,10 +1814,10 @@ onUnmounted(() => {
                 <button 
                   class="add-character-btn"
                   @click.stop="handleAddCharacterClick"
-                  title="手动添加外部角色"
+                  :title="translateUi('uiMessages.m9eb9a4d004c5')"
                 >
                   <span class="btn-icon">+</span>
-                  <span class="btn-text">添加角色</span>
+                  <span class="btn-text">{{ translateUi('uiMessages.m14f349a94f26') }}</span>
                 </button>
               </div>
             </div>
@@ -1829,11 +1831,11 @@ onUnmounted(() => {
               <button 
                 class="type-btn"
                 :class="{ active: selectedType === ft.key }"
-                :title="`${seedanceCharacterLibraryName}角色库`"
+                :title="translateUi('uiMessages.mda94f693cc14', { value1: (seedanceCharacterLibraryName) })"
                 @click="selectedType = ft.key"
               >
                 <component :is="fileTypeIcons[ft.key]" class="type-icon" aria-hidden="true" />
-                <span class="type-label">{{ `${seedanceCharacterLibraryName}角色库` }}</span>
+                <span class="type-label">{{ translateUi('uiMessages.mda94f693cc14', { value1: (seedanceCharacterLibraryName) }) }}</span>
                 <span class="type-count">{{ seedanceAssetCount }}</span>
               </button>
               <div 
@@ -1842,8 +1844,8 @@ onUnmounted(() => {
                 @mouseenter="showSeedanceDropdown"
                 @mouseleave="startHideSeedanceDropdown"
               >
-                <div class="seedance-dropdown-header">角色组</div>
-                <div v-if="seedanceGroups.length === 0" class="seedance-dropdown-empty">暂无角色组</div>
+                <div class="seedance-dropdown-header">{{ translateUi('uiMessages.m886d69ca83f9') }}</div>
+                <div v-if="seedanceGroups.length === 0" class="seedance-dropdown-empty">{{ translateUi('uiMessages.mb624ef3b7b4c') }}</div>
                 <div 
                   v-for="group in seedanceGroups" 
                   :key="group.Id" 
@@ -1855,7 +1857,7 @@ onUnmounted(() => {
                     v-if="group._isOwner" 
                     class="seedance-group-delete-btn"
                     @click="requestDeleteSeedanceGroup(group, $event)"
-                    title="删除此分组"
+                    :title="translateUi('uiMessages.mc0b3e4377edb')"
                   >
                     <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
                       <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -1864,10 +1866,10 @@ onUnmounted(() => {
                 </div>
                 <div class="seedance-dropdown-divider"></div>
                 <button class="seedance-dropdown-action" @click.stop="handleCreateSeedanceGroup">
-                  <span>+</span> 新建角色组
+                  <span>+</span> {{ translateUi('uiMessages.m6872ead50733') }}
                 </button>
                 <button class="seedance-dropdown-action" @click.stop="handleSeedanceUpload">
-                  <span>↑</span> 上传角色
+                  <span>↑</span> {{ translateUi('uiMessages.m4abcca1e112c') }}
                 </button>
               </div>
             </div>
@@ -1995,7 +1997,7 @@ onUnmounted(() => {
               <span v-if="tagCounts[tag.key]" class="tag-count">{{ tagCounts[tag.key] }}</span>
             </button>
           </div>
-          <button class="tag-manage-btn" @click="openBottomTagManager" title="管理标签">
+          <button class="tag-manage-btn" @click="openBottomTagManager" :title="translateUi('canvas.assetPanel.manageTags')">
             + {{ t('canvas.assetPanel.manageTags') }}
           </button>
         </div>
@@ -2018,7 +2020,7 @@ onUnmounted(() => {
                   <rect x="3" y="3" width="18" height="18" rx="2"/>
                   <path d="M12 8v8M8 12h8"/>
                 </svg>
-                <span>{{ t('canvas.assetPanel.addToCanvas') || '添加到画布' }}</span>
+                <span>{{ t('canvas.assetPanel.addToCanvas') || translateUi('canvas.assetPanel.addToCanvas') }}</span>
               </button>
               <button class="context-menu-item" @click="handleDownload">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2026,21 +2028,21 @@ onUnmounted(() => {
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                <span>{{ t('common.download') || '下载' }}</span>
+                <span>{{ t('common.download') || translateUi('common.download') }}</span>
               </button>
               <button class="context-menu-item" @click="handleContextTag">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
                   <line x1="7" y1="7" x2="7.01" y2="7"/>
                 </svg>
-                <span>{{ t('canvas.assetPanel.manageTags') || '管理标签' }}</span>
+                <span>{{ t('canvas.assetPanel.manageTags') || translateUi('canvas.assetPanel.manageTags') }}</span>
               </button>
               <button class="context-menu-item" @click="handleContextCopyToSpace">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                 </svg>
-                <span>复制到空间</span>
+                <span>{{ translateUi('uiMessages.m6a9819d3c84f') }}</span>
               </button>
               <div class="context-menu-divider"></div>
               <button class="context-menu-item danger" @click="handleContextDelete">
@@ -2048,7 +2050,7 @@ onUnmounted(() => {
                   <polyline points="3 6 5 6 21 6"/>
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                 </svg>
-                <span>{{ t('common.delete') || '删除' }}</span>
+                <span>{{ t('common.delete') || translateUi('common.delete') }}</span>
               </button>
             </div>
           </Transition>
@@ -2109,13 +2111,13 @@ onUnmounted(() => {
           <div v-if="showAddCharacterModal" class="add-character-overlay" @click.self="closeAddCharacterModal">
             <div class="add-character-modal">
               <div class="add-character-header">
-                <h3><UserRound :size="16" aria-hidden="true" /> 添加外部角色</h3>
+                <h3><UserRound :size="16" aria-hidden="true" /> {{ translateUi('uiMessages.mf9db15fba178') }}</h3>
                 <button class="close-btn small" @click="closeAddCharacterModal">✕</button>
               </div>
               
               <div class="add-character-content">
                 <p class="add-character-desc">
-                  添加在外部平台（如 Sora 官网）创建的角色到本地角色库，方便在生成时使用 @角色名 引用。
+                  {{ translateUi('uiMessages.m5a63fda68ffb') }}
                 </p>
                 
                 <!-- 错误提示 -->
@@ -2134,14 +2136,14 @@ onUnmounted(() => {
                     />
                     <div v-if="!addCharacterForm.filePreview" class="upload-placeholder">
                       <div class="upload-icon"><FolderUp :size="24" aria-hidden="true" /></div>
-                      <div class="upload-text">点击上传角色图片或视频</div>
-                      <div class="upload-hint">视频不超过3秒</div>
+                      <div class="upload-text">{{ translateUi('uiMessages.m3ac70d50c854') }}</div>
+                      <div class="upload-hint">{{ translateUi('uiMessages.mc108dc35660b') }}</div>
                     </div>
                     <div v-else class="upload-preview">
                       <img 
                         v-if="addCharacterForm.fileType === 'image'"
                         :src="addCharacterForm.filePreview"
-                        alt="角色预览"
+                        :alt="translateUi('uiMessages.m3970f2635e19')"
                       />
                       <video 
                         v-else
@@ -2158,35 +2160,35 @@ onUnmounted(() => {
                 
                 <!-- 表单字段 -->
                 <div class="form-field">
-                  <label>角色名称</label>
+                  <label>{{ translateUi('uiMessages.m519006fe536c') }}</label>
                   <input 
                     v-model="addCharacterForm.name"
                     type="text"
-                    placeholder="例如：小王姐姐"
+                    :placeholder="translateUi('uiMessages.m3ed39840ddce')"
                     :disabled="addCharacterLoading"
                   />
-                  <span class="field-hint">用户在 prompt 中使用 @角色名称 来引用</span>
+                  <span class="field-hint">{{ translateUi('uiMessages.m59c1e30e798b') }}</span>
                 </div>
                 
                 <div class="form-field">
-                  <label>角色 ID（外部用户名）</label>
+                  <label>{{ translateUi('uiMessages.ma9eb9e732fee') }}</label>
                   <input 
                     v-model="addCharacterForm.username"
                     type="text"
-                    placeholder="例如：cncqaktt5.sunnysipst"
+                    :placeholder="translateUi('uiMessages.mf28408eb2376')"
                     :disabled="addCharacterLoading"
                   />
-                  <span class="field-hint">外部平台生成的角色ID，系统会自动将 @角色名称 转换为此ID进行请求</span>
+                  <span class="field-hint">{{ translateUi('uiMessages.md98d886b6d85') }}</span>
                 </div>
               </div>
               
               <div class="add-character-footer">
                 <button class="cancel-btn" @click="closeAddCharacterModal" :disabled="addCharacterLoading">
-                  取消
+                  {{ translateUi('common.cancel') }}
                 </button>
                 <button class="submit-btn" @click="submitAddCharacter" :disabled="addCharacterLoading">
                   <span v-if="addCharacterLoading" class="btn-spinner"></span>
-                  {{ addCharacterLoading ? '添加中...' : '添加角色' }}
+                  {{ addCharacterLoading ? translateUi('uiMessages.m0dae682eddac') : translateUi('uiMessages.m14f349a94f26') }}
                 </button>
               </div>
             </div>
@@ -2230,10 +2232,10 @@ onUnmounted(() => {
               </svg>
             </div>
             <div>
-              <h3 id="delete-asset-title">确认删除资产</h3>
-              <p>删除后无法恢复，请确认是否继续。</p>
+              <h3 id="delete-asset-title">{{ translateUi('uiMessages.mf42f9bdb21af') }}</h3>
+              <p>{{ translateUi('uiMessages.m0e2934ff1aeb') }}</p>
             </div>
-            <button class="delete-asset-close" @click="cancelDeleteAsset" :disabled="deleteAssetLoading" aria-label="关闭">
+            <button class="delete-asset-close" @click="cancelDeleteAsset" :disabled="deleteAssetLoading" :aria-label="translateUi('common.close')">
               <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
                 <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               </svg>
@@ -2242,10 +2244,10 @@ onUnmounted(() => {
 
           <div class="delete-asset-body">
             <div class="delete-asset-name">
-              {{ deleteAssetConfirm.asset?.name || '未命名资产' }}
+              {{ deleteAssetConfirm.asset?.name || translateUi('uiMessages.mb8380ce5fd24') }}
             </div>
             <div class="delete-asset-meta">
-              {{ fileTypeLabels.find(ft => ft.key === deleteAssetConfirm.asset?.type)?.label || deleteAssetConfirm.asset?.type || '资产' }}
+              {{ fileTypeLabels.find(ft => ft.key === deleteAssetConfirm.asset?.type)?.label || deleteAssetConfirm.asset?.type || translateUi('canvas.assetPanel.directory.assetsTab') }}
               <span v-if="deleteAssetConfirm.asset?.size"> · {{ formatFileSize(deleteAssetConfirm.asset.size) }}</span>
             </div>
             <p v-if="deleteAssetError" class="delete-asset-error">{{ deleteAssetError }}</p>
@@ -2253,11 +2255,11 @@ onUnmounted(() => {
 
           <div class="delete-asset-footer">
             <button class="delete-asset-cancel" @click="cancelDeleteAsset" :disabled="deleteAssetLoading">
-              取消
+              {{ translateUi('common.cancel') }}
             </button>
             <button class="delete-asset-confirm" @click="confirmDeleteAsset" :disabled="deleteAssetLoading">
               <span v-if="deleteAssetLoading" class="btn-spinner"></span>
-              {{ deleteAssetLoading ? '删除中...' : '确认删除' }}
+              {{ deleteAssetLoading ? translateUi('uiMessages.m4669785ade95') : translateUi('uiMessages.ma3ea3c17b401') }}
             </button>
           </div>
         </div>
@@ -2280,8 +2282,8 @@ onUnmounted(() => {
       <div v-if="showDeleteSeedanceGroupConfirm" class="add-character-overlay" @click.self="cancelDeleteSeedanceGroup">
         <div class="delete-seedance-group-modal">
           <div class="add-character-header">
-            <h3>删除分组</h3>
-            <button class="add-character-close" @click="cancelDeleteSeedanceGroup" aria-label="关闭">
+            <h3>{{ translateUi('uiMessages.m7605c1d82eed') }}</h3>
+            <button class="add-character-close" @click="cancelDeleteSeedanceGroup" :aria-label="translateUi('common.close')">
               <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
                 <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               </svg>
@@ -2289,18 +2291,18 @@ onUnmounted(() => {
           </div>
           <div class="delete-seedance-group-body">
             <p class="delete-seedance-group-text">
-              确定要删除分组 <strong>{{ deleteSeedanceGroupTarget?.Name || '未命名' }}</strong> 吗？
+              {{ translateUi('uiMessages.mb661cc0f03f2') }} <strong>{{ deleteSeedanceGroupTarget?.Name || translateUi('canvas.unnamed') }}</strong> {{ translateUi('uiMessages.m9d45d8943988') }}
             </p>
-            <p class="delete-seedance-group-hint">此操作将删除该分组及其中所有角色素材，不可恢复。</p>
+            <p class="delete-seedance-group-hint">{{ translateUi('uiMessages.m5cfed231067e') }}</p>
           </div>
           <div class="delete-seedance-group-footer">
-            <button class="add-character-cancel" @click="cancelDeleteSeedanceGroup">取消</button>
+            <button class="add-character-cancel" @click="cancelDeleteSeedanceGroup">{{ translateUi('common.cancel') }}</button>
             <button 
               class="add-character-submit delete-seedance-group-confirm"
               @click="confirmDeleteSeedanceGroup"
               :disabled="deleteSeedanceGroupLoading"
             >
-              {{ deleteSeedanceGroupLoading ? '删除中...' : '确认删除' }}
+              {{ deleteSeedanceGroupLoading ? translateUi('uiMessages.m4669785ade95') : translateUi('uiMessages.ma3ea3c17b401') }}
             </button>
           </div>
         </div>

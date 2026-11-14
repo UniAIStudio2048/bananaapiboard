@@ -1,3 +1,6 @@
+import * as i18nTestRuntime from '../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -33,6 +36,8 @@ function createDialog({ operation = 'copy', projectList = [], overrides = {}, lo
     }
   }
   const runtimeRequire = id => {
+    if (id === '@/i18n') return i18nTestRuntime
+
     if (id === 'vue') return { ...require('vue'), watch() {} }
     if (id === '@/api/canvas/project') return api
     if (id === '@/stores/team') return { useTeamStore: () => ({ getAllSpaces: () => spaces }) }

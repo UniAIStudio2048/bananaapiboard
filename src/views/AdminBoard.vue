@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi, currentLanguage as uiLanguage } from '@/i18n'
+
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { getTenantHeaders, getApiUrl } from '@/config/tenant'
@@ -178,7 +180,7 @@ const showSettingsModal = ref(false)
 const settings = ref({
   voucher_external_link: {
     enabled: false,
-    button_text: '获取兑换券',
+    get button_text() { return translateUi('voucher.getVoucher') },
     url: '',
     open_in_new_tab: true
   }
@@ -246,7 +248,7 @@ async function loadUsers() {
     users.value = j.users || []
     total.value = j.total || 0
   } catch (e) {
-    error.value = '加载用户列表失败'
+    error.value = translateUi('uiMessages.me5a9b0668e66')
   } finally { 
     loadingList.value = false 
   }
@@ -283,7 +285,7 @@ async function createUser() {
   success.value = ''
   
   if (!createForm.value.username || !createForm.value.password) {
-    error.value = '用户名和密码不能为空'
+    error.value = translateUi('uiMessages.m52d9bd5e0286')
     return
   }
   
@@ -297,15 +299,15 @@ async function createUser() {
     if (!r) return
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))
-      throw new Error(err.error || '创建失败')
+      throw new Error(err.error || translateUi('uiMessages.m7e6a71efbf63'))
     }
-    success.value = '用户创建成功'
+    success.value = translateUi('uiMessages.ma0b0939e1256')
     await loadUsers()
     setTimeout(() => {
       showCreateModal.value = false
     }, 1000)
   } catch (e) { 
-    error.value = e.message || '创建用户失败'
+    error.value = e.message || translateUi('uiMessages.mfe2017ccb585')
   } finally { 
     loadingCreate.value = false 
   }
@@ -341,7 +343,7 @@ function openRechargeModal() {
 
 async function submitRecharge() {
   if (!rechargeForm.value.amount || rechargeForm.value.amount === 0) {
-    error.value = '请输入有效的金额（不能为0）'
+    error.value = translateUi('uiMessages.m2e3ae91cb33f')
     return
   }
   
@@ -358,21 +360,21 @@ async function submitRecharge() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         amount: amountInCents,
-        description: rechargeForm.value.description || (isDeduction ? `管理员扣减 ${currencySymbol.value}${Math.abs(rechargeForm.value.amount)}` : `管理员充值 ${currencySymbol.value}${rechargeForm.value.amount}`)
+        description: rechargeForm.value.description || (isDeduction ? translateUi('uiMessages.maf432984490d', { value1: (currencySymbol.value), value2: (Math.abs(rechargeForm.value.amount)) }) : translateUi('uiMessages.m1e9991c0cdce', { value1: (currencySymbol.value), value2: (rechargeForm.value.amount) }))
       })
     })
     
     if (!r) {
-      throw new Error('请求失败，请检查登录状态')
+      throw new Error(translateUi('uiMessages.m92637da31ed9'))
     }
     
     if (!r.ok) {
-      const errData = await r.json().catch(() => ({ message: isDeduction ? '扣减失败' : '充值失败' }))
-      throw new Error(errData.message || (isDeduction ? '扣减失败' : '充值失败'))
+      const errData = await r.json().catch(() => ({ message: isDeduction ? translateUi('uiMessages.me5abd0fd133c') : translateUi('uiMessages.m4d776b8e91ce') }))
+      throw new Error(errData.message || (isDeduction ? translateUi('uiMessages.me5abd0fd133c') : translateUi('uiMessages.m4d776b8e91ce')))
     }
     
     const result = await r.json()
-    success.value = `✅ ${isDeduction ? '扣减' : '充值'}成功！当前余额：${formatMoney(result.balance)}`
+    success.value = translateUi('uiMessages.m513b05779a05', { value1: (isDeduction ? translateUi('uiMessages.m7d4b6e6861bb') : translateUi('packages.rechargeBtn')), value2: (formatMoney(result.balance)) })
     
     // 更新编辑表单中的余额
     editForm.value.balance = result.balance
@@ -385,7 +387,7 @@ async function submitRecharge() {
       showRechargeModal.value = false
     }, 2000)
   } catch (e) {
-    error.value = e.message || '充值失败'
+    error.value = e.message || translateUi('uiMessages.m4d776b8e91ce')
   } finally {
     loadingOps.value = false
   }
@@ -396,7 +398,7 @@ async function saveEdit() {
   success.value = ''
   
   if (!editForm.value.username) {
-    error.value = '用户名不能为空'
+    error.value = translateUi('uiMessages.m390ccdec9f3f')
     return
   }
   
@@ -424,13 +426,13 @@ async function saveEdit() {
     if (!r) return
     if (!r.ok) throw new Error('failed')
     
-    success.value = '用户信息更新成功'
+    success.value = translateUi('uiMessages.mf68bb0bb08c0')
     await loadUsers()
     setTimeout(() => {
       showEditModal.value = false
     }, 1000)
   } catch (e) { 
-    error.value = '更新用户信息失败' 
+    error.value = translateUi('uiMessages.mb39e7d625844')
   } finally { 
     loadingOps.value = false 
   }
@@ -448,24 +450,24 @@ async function toggleUserStatus(u) {
     if (!r.ok) throw new Error('failed')
     await loadUsers()
   } catch (e) { 
-    error.value = '更新状态失败' 
+    error.value = translateUi('uiMessages.m397194a8a759')
   } finally { 
     loadingOps.value = false 
   }
 }
 
 async function deleteUser(u) {
-  if (!confirm(`确定要删除用户 ${u.username} 吗？此操作不可恢复！`)) return
+  if (!confirm(translateUi('uiMessages.md6487b4003d6', { value1: (u.username) }))) return
   
   loadingOps.value = true
   try {
     const r = await fetchWithAdminAuth(`/api/admin/users/${u.id}`, { method: 'DELETE' })
     if (!r) return
     if (!r.ok) throw new Error('failed')
-    success.value = '用户删除成功'
+    success.value = translateUi('uiMessages.me3cf03994a96')
     await loadUsers()
   } catch (e) { 
-    error.value = '删除用户失败' 
+    error.value = translateUi('uiMessages.m7cf04bd0de1d')
   } finally { 
     loadingOps.value = false 
   }
@@ -486,17 +488,17 @@ async function saveSettings() {
         voucher_external_link: settings.value.voucher_external_link
       })
     })
-    if (!r1 || !r1.ok) throw new Error('保存设置失败')
+    if (!r1 || !r1.ok) throw new Error(translateUi('uiMessages.m17b49d72eb57'))
     
     // 注意：外部API配置已迁移到租户管理平台(9000端口)管理，不再从此处保存
     
-    success.value = '设置保存成功'
+    success.value = translateUi('uiMessages.mdd4c439bc798')
     await loadSettings()
     setTimeout(() => {
       showSettingsModal.value = false
     }, 1000)
   } catch (e) { 
-    error.value = e.message || '保存设置失败' 
+    error.value = e.message || translateUi('uiMessages.m17b49d72eb57')
   } finally {
     loadingOps.value = false
   }
@@ -543,7 +545,7 @@ async function loadVouchers() {
     selectedVoucherIds.value = []
   } catch (e) {
     if (seq === vouchersLoadSeq) {
-      error.value = '加载兑换券列表失败'
+      error.value = translateUi('uiMessages.mfbd75397dd7a')
     }
   } finally {
     if (seq === vouchersLoadSeq) {
@@ -610,7 +612,7 @@ async function exportFilteredVouchers() {
     const r = await fetch(url, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
-    if (!r.ok) throw new Error('导出失败')
+    if (!r.ok) throw new Error(translateUi('uiMessages.m6e4445df6957'))
     
     const blob = await r.blob()
     const blobUrl = window.URL.createObjectURL(blob)
@@ -618,10 +620,10 @@ async function exportFilteredVouchers() {
     a.click()
     window.URL.revokeObjectURL(blobUrl)
     
-    success.value = '导出成功'
+    success.value = translateUi('uiMessages.m5603e0105824')
     setTimeout(() => success.value = '', 3000)
   } catch (e) {
-    error.value = '导出失败'
+    error.value = translateUi('uiMessages.m6e4445df6957')
   }
 }
 
@@ -645,7 +647,7 @@ async function createBatchVouchers() {
   success.value = ''
   
   if (batchVoucherForm.value.count < 1 || batchVoucherForm.value.count > 1000) {
-    error.value = '数量必须在1-1000之间'
+    error.value = translateUi('uiMessages.mbf6f6cc02c1e')
     return
   }
   
@@ -653,17 +655,17 @@ async function createBatchVouchers() {
   const points = Number(batchVoucherForm.value.points) || 0
   const balance = Number(batchVoucherForm.value.balance) || 0
   if (points === 0 && balance === 0) {
-    error.value = '积分和余额至少要有一个大于0'
+    error.value = translateUi('uiMessages.m246d1004dc72')
     return
   }
   
   if (batchVoucherForm.value.days < 0) {
-    error.value = '兑换券有效天数不能小于0'
+    error.value = translateUi('uiMessages.m3b30bddab530')
     return
   }
 
   if (batchVoucherForm.value.point_valid_days < 0) {
-    error.value = '积分到账有效天数不能小于0'
+    error.value = translateUi('uiMessages.mce5e2f9f2445')
     return
   }
   
@@ -689,16 +691,16 @@ async function createBatchVouchers() {
     if (!r) return
     if (!r.ok) {
       const err = await r.json()
-      throw new Error(err.message || '创建失败')
+      throw new Error(err.message || translateUi('uiMessages.m7e6a71efbf63'))
     }
     
-    success.value = `成功创建 ${batchVoucherForm.value.count} 张兑换券`
+    success.value = translateUi('uiMessages.m16e58017c1b1', { value1: (batchVoucherForm.value.count) })
     await loadVouchers()
     setTimeout(() => {
       showBatchVoucherModal.value = false
     }, 1500)
   } catch (e) {
-    error.value = e.message || '创建兑换券失败'
+    error.value = e.message || translateUi('uiMessages.m64d02ccbb894')
   } finally {
     loadingCreate.value = false
   }
@@ -718,7 +720,7 @@ async function exportVouchers() {
     const r = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` }
     })
-    if (!r.ok) throw new Error('导出失败')
+    if (!r.ok) throw new Error(translateUi('uiMessages.m6e4445df6957'))
     const blob = await r.blob()
     const blobUrl = URL.createObjectURL(blob)
     a.href = blobUrl
@@ -727,15 +729,15 @@ async function exportVouchers() {
     document.body.removeChild(a)
     URL.revokeObjectURL(blobUrl)
     
-    success.value = '兑换券已导出'
+    success.value = translateUi('uiMessages.m30fbd440cf13')
     setTimeout(() => { success.value = '' }, 3000)
   } catch (e) {
-    error.value = '导出失败'
+    error.value = translateUi('uiMessages.m6e4445df6957')
   }
 }
 
 async function deleteVoucher(voucherId) {
-  if (!confirm('确定要删除此兑换券吗？')) return
+  if (!confirm(translateUi('uiMessages.m9fa2838a7590'))) return
   
   try {
     const r = await fetchWithAdminAuth(`/api/admin/vouchers/${voucherId}`, {
@@ -743,16 +745,16 @@ async function deleteVoucher(voucherId) {
     })
     
     if (!r) return
-    if (!r.ok) throw new Error('删除失败')
+    if (!r.ok) throw new Error(translateUi('errors.deleteFailed'))
     
     vouchers.value = vouchers.value.filter((v) => String(v.id) !== String(voucherId))
     vouchersTotal.value = Math.max(0, vouchersTotal.value - 1)
     selectedVoucherIds.value = selectedVoucherIds.value.filter((id) => String(id) !== String(voucherId))
-    success.value = '兑换券已删除'
+    success.value = translateUi('uiMessages.me799ed06e691')
     await loadVouchers()
     setTimeout(() => { success.value = '' }, 3000)
   } catch (e) {
-    error.value = '删除兑换券失败'
+    error.value = translateUi('uiMessages.m9150a686d93a')
   }
 }
 
@@ -788,7 +790,7 @@ function toggleVoucherSelection(voucherId) {
 
 async function deleteSelectedVouchers() {
   if (selectedVoucherIds.value.length === 0) return
-  if (!confirm(`确定要删除选中的 ${selectedVoucherIds.value.length} 张兑换券吗？`)) return
+  if (!confirm(translateUi('uiMessages.me5bb2f66d096', { value1: (selectedVoucherIds.value.length) }))) return
 
   const idsToDelete = [...selectedVoucherIds.value]
   const deleteIdSet = new Set(idsToDelete.map((id) => String(id)))
@@ -804,12 +806,12 @@ async function deleteSelectedVouchers() {
     if (!r) return
     const j = await r.json().catch(() => ({}))
     if (!r.ok) {
-      throw new Error(j.error || j.message || '批量删除失败')
+      throw new Error(j.error || j.message || translateUi('uiMessages.m27b8c99cf572'))
     }
 
     const deletedCount = Number(j.deleted)
     if (!Number.isFinite(deletedCount) || deletedCount <= 0) {
-      throw new Error('未能删除任何兑换券，请刷新页面后重试')
+      throw new Error(translateUi('uiMessages.mc7138c2f3937'))
     }
 
     vouchers.value = vouchers.value.filter((v) => !deleteIdSet.has(String(v.id)))
@@ -817,15 +819,15 @@ async function deleteSelectedVouchers() {
     selectedVoucherIds.value = []
 
     if (deletedCount < idsToDelete.length) {
-      success.value = `已删除 ${deletedCount} 张兑换券，${idsToDelete.length - deletedCount} 张未找到`
+      success.value = translateUi('uiMessages.m78daa2a0bfbe', { value1: (deletedCount), value2: (idsToDelete.length - deletedCount) })
     } else {
-      success.value = `已删除 ${deletedCount} 张兑换券`
+      success.value = translateUi('uiMessages.mb8e97d3f8fce', { value1: (deletedCount) })
     }
 
     await loadVouchers()
     setTimeout(() => { success.value = '' }, 3000)
   } catch (e) {
-    error.value = e.message || '批量删除兑换券失败'
+    error.value = e.message || translateUi('uiMessages.m614b5ab3f038')
   } finally {
     deletingVouchers.value = false
   }
@@ -842,13 +844,13 @@ async function toggleVoucherStatus(voucherId, currentStatus) {
     })
     
     if (!r) return
-    if (!r.ok) throw new Error('更新失败')
+    if (!r.ok) throw new Error(translateUi('uiMessages.mec99e5c45d64'))
     
-    success.value = `兑换券已${newStatus === 'active' ? '启用' : '禁用'}`
+    success.value = translateUi('uiMessages.m97a164a06d21', { value1: (newStatus === 'active' ? translateUi('directorStudio.inspector.enabled') : translateUi('uiMessages.m7df5c456c765')) })
     await loadVouchers()
     setTimeout(() => { success.value = '' }, 3000)
   } catch (e) {
-    error.value = '更新兑换券状态失败'
+    error.value = translateUi('uiMessages.mc5bab535cef4')
   }
 }
 
@@ -857,13 +859,13 @@ async function viewVoucherRedemptions(voucher) {
     currentVoucher.value = voucher
     const r = await fetchWithAdminAuth(`/api/admin/vouchers/${voucher.id}/redemptions`)
     if (!r) return
-    if (!r.ok) throw new Error('加载失败')
+    if (!r.ok) throw new Error(translateUi('uiMessages.md1d044826a45'))
     
     const j = await r.json()
     currentVoucherRedemptions.value = j.redemptions || []
     showVoucherRedemptionsModal.value = true
   } catch (e) {
-    error.value = '加载兑换记录失败'
+    error.value = translateUi('uiMessages.m0f4498394439')
   }
 }
 
@@ -882,11 +884,11 @@ function prevVouchersPage() {
 }
 
 function formatDate(timestamp) {
-  return new Date(timestamp).toLocaleString('zh-CN')
+  return new Date(timestamp).toLocaleString(uiLanguage.value)
 }
 
 function formatExpiryDate(timestamp) {
-  return Number(timestamp) === 0 ? '永久有效' : formatDate(timestamp)
+  return Number(timestamp) === 0 ? translateUi('uiMessages.m1997cb23f6ee') : formatDate(timestamp)
 }
 
 const vouchersRangeStart = computed(() => vouchersTotal.value === 0 ? 0 : (vouchersPage.value - 1) * vouchersPageSize.value + 1)
@@ -898,11 +900,11 @@ async function loadCoupons() {
   try {
     const r = await fetchWithAdminAuth('/api/admin/coupons')
     if (!r) return
-    if (!r.ok) throw new Error('加载失败')
+    if (!r.ok) throw new Error(translateUi('uiMessages.md1d044826a45'))
     const data = await r.json()
     coupons.value = data.coupons || []
   } catch (e) {
-    error.value = '加载优惠券失败'
+    error.value = translateUi('uiMessages.m37ff3a2f9007')
   } finally {
     loadingCoupons.value = false
   }
@@ -935,14 +937,14 @@ async function createCoupon() {
     if (!r) return
     if (!r.ok) {
       const data = await r.json()
-      throw new Error(data.message || '创建失败')
+      throw new Error(data.message || translateUi('uiMessages.m7e6a71efbf63'))
     }
-    success.value = '优惠券创建成功'
+    success.value = translateUi('uiMessages.m0612c0d4976b')
     showCreateCouponModal.value = false
     await loadCoupons()
     setTimeout(() => { success.value = '' }, 3000)
   } catch (e) {
-    error.value = e.message || '创建优惠券失败'
+    error.value = e.message || translateUi('uiMessages.ma885beeeac5c')
   }
 }
 
@@ -972,29 +974,29 @@ async function updateCoupon() {
       body: JSON.stringify(couponForm.value)
     })
     if (!r) return
-    if (!r.ok) throw new Error('更新失败')
-    success.value = '优惠券更新成功'
+    if (!r.ok) throw new Error(translateUi('uiMessages.mec99e5c45d64'))
+    success.value = translateUi('uiMessages.mcd90e962960f')
     showEditCouponModal.value = false
     await loadCoupons()
     setTimeout(() => { success.value = '' }, 3000)
   } catch (e) {
-    error.value = '更新优惠券失败'
+    error.value = translateUi('uiMessages.mceaef40462ea')
   }
 }
 
 async function deleteCoupon(couponId) {
-  if (!confirm('确定要删除这个优惠券吗？')) return
+  if (!confirm(translateUi('uiMessages.mb2a01ac6b9b4'))) return
   try {
     const r = await fetchWithAdminAuth(`/api/admin/coupons/${couponId}`, {
       method: 'DELETE'
     })
     if (!r) return
-    if (!r.ok) throw new Error('删除失败')
-    success.value = '优惠券删除成功'
+    if (!r.ok) throw new Error(translateUi('errors.deleteFailed'))
+    success.value = translateUi('uiMessages.m7bf93ac318d1')
     await loadCoupons()
     setTimeout(() => { success.value = '' }, 3000)
   } catch (e) {
-    error.value = '删除优惠券失败'
+    error.value = translateUi('uiMessages.m95628dcd50cf')
   }
 }
 
@@ -1007,12 +1009,12 @@ async function toggleCouponStatus(coupon) {
       body: JSON.stringify({ ...coupon, status: newStatus })
     })
     if (!r) return
-    if (!r.ok) throw new Error('更新失败')
-    success.value = `优惠券已${newStatus === 'active' ? '启用' : '禁用'}`
+    if (!r.ok) throw new Error(translateUi('uiMessages.mec99e5c45d64'))
+    success.value = translateUi('uiMessages.medef0c33d580', { value1: (newStatus === 'active' ? translateUi('directorStudio.inspector.enabled') : translateUi('uiMessages.m7df5c456c765')) })
     await loadCoupons()
     setTimeout(() => { success.value = '' }, 3000)
   } catch (e) {
-    error.value = '更新优惠券状态失败'
+    error.value = translateUi('uiMessages.m30d40f458189')
   }
 }
 
@@ -1032,15 +1034,15 @@ async function generateCoupons() {
     if (!r) return
     if (!r.ok) {
       const data = await r.json()
-      throw new Error(data.message || '生成失败')
+      throw new Error(data.message || translateUi('imageGen.failed'))
     }
     const data = await r.json()
-    success.value = `成功生成 ${data.count} 张优惠券`
+    success.value = translateUi('uiMessages.mac0c45a034c7', { value1: (data.count) })
     showGenerateCouponModal.value = false
     await loadCoupons()
     setTimeout(() => { success.value = '' }, 3000)
   } catch (e) {
-    error.value = e.message || '生成优惠券失败'
+    error.value = e.message || translateUi('uiMessages.mf838cd39ab8c')
   }
 }
 
@@ -1049,12 +1051,12 @@ async function viewCouponCodes(coupon) {
     currentCoupon.value = coupon
     const r = await fetchWithAdminAuth(`/api/admin/coupons/${coupon.id}/codes?limit=100`)
     if (!r) return
-    if (!r.ok) throw new Error('加载失败')
+    if (!r.ok) throw new Error(translateUi('uiMessages.md1d044826a45'))
     const data = await r.json()
     couponCodes.value = data.codes || []
     showCouponCodesModal.value = true
   } catch (e) {
-    error.value = '加载优惠券码失败'
+    error.value = translateUi('uiMessages.m7a4ff10c832d')
   }
 }
 
@@ -1068,7 +1070,7 @@ async function loadEmailConfig() {
     const data = await r.json()
     emailConfig.value = { ...emailConfig.value, ...data }
   } catch (e) {
-    error.value = '加载邮件配置失败'
+    error.value = translateUi('uiMessages.m9d8612175b97')
   } finally {
     loadingEmailConfig.value = false
   }
@@ -1094,25 +1096,25 @@ async function saveEmailConfig() {
     console.log('[saveEmailConfig] 响应状态:', r?.status)
     
     if (!r) {
-      error.value = '请求失败，请检查网络连接或登录状态'
+      error.value = translateUi('uiMessages.m2c140d171558')
       return
     }
     
     if (!r.ok) {
-      const errData = await r.json().catch(() => ({ message: '保存失败' }))
+      const errData = await r.json().catch(() => ({ get message() { return translateUi('errors.saveFailed') } }))
       console.error('[saveEmailConfig] 错误响应:', errData)
-      throw new Error(errData.message || '保存失败')
+      throw new Error(errData.message || translateUi('errors.saveFailed'))
     }
     
     const result = await r.json()
     console.log('[saveEmailConfig] 保存成功:', result)
     
-    success.value = '✅ 邮件配置保存成功！现在可以发送测试邮件了'
+    success.value = translateUi('uiMessages.m1cbb02831d36')
     await loadEmailConfig()
     setTimeout(() => { success.value = '' }, 5000)
   } catch (e) {
     console.error('[saveEmailConfig] 保存失败:', e)
-    error.value = e.message || '保存邮件配置失败，请重试'
+    error.value = e.message || translateUi('uiMessages.m2cc634ce3d13')
   } finally {
     loadingOps.value = false
   }
@@ -1125,14 +1127,14 @@ async function sendTestEmail() {
   
   // 验证邮箱地址
   if (!testEmail.value) {
-    error.value = '请输入测试邮箱地址'
+    error.value = translateUi('uiMessages.m4cbbfa1bb4e1')
     return
   }
   
   // 验证邮箱格式
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (!emailRegex.test(testEmail.value)) {
-    error.value = '请输入有效的邮箱地址'
+    error.value = translateUi('auth.invalidEmail')
     return
   }
   
@@ -1150,24 +1152,24 @@ async function sendTestEmail() {
     console.log('[sendTestEmail] 响应状态:', r?.status)
     
     if (!r) {
-      error.value = '请求失败，请检查网络连接'
+      error.value = translateUi('uiMessages.m719b23a4e095')
       return
     }
     
     if (!r.ok) {
-      const err = await r.json().catch(() => ({ message: '发送失败' }))
+      const err = await r.json().catch(() => ({ get message() { return translateUi('uiMessages.mac77953a1e06') } }))
       console.error('[sendTestEmail] 错误响应:', err)
-      throw new Error(err.message || '发送失败')
+      throw new Error(err.message || translateUi('uiMessages.mac77953a1e06'))
     }
     
     const result = await r.json()
     console.log('[sendTestEmail] 发送成功:', result)
     
-    success.value = '✅ 测试邮件已发送成功！请检查收件箱（可能在垃圾邮件中）'
+    success.value = translateUi('uiMessages.m28928b9708a2')
     setTimeout(() => { success.value = '' }, 8000)
   } catch (e) {
     console.error('[sendTestEmail] 捕获错误:', e)
-    error.value = e.message || '发送测试邮件失败，请检查SMTP配置'
+    error.value = e.message || translateUi('uiMessages.m9d676c51c05d')
   } finally {
     loadingOps.value = false
   }
@@ -1195,7 +1197,7 @@ async function loadPackages() {
     
     if (!r) {
       console.error('[loadPackages] 请求返回null，可能未授权')
-      error.value = '未授权，请重新登录'
+      error.value = translateUi('uiMessages.ma925efd4eca1')
       loadingPackages.value = false
       return
     }
@@ -1203,7 +1205,7 @@ async function loadPackages() {
     if (!r.ok) {
       const errorText = await r.text()
       console.error('[loadPackages] API返回错误:', r.status, errorText)
-      throw new Error(`加载失败: ${r.status}`)
+      throw new Error(translateUi('uiMessages.mf58eb3fbf9ab', { value1: (r.status) }))
     }
     
     const data = await r.json()
@@ -1212,7 +1214,7 @@ async function loadPackages() {
     console.log('[loadPackages] 成功加载', packages.value.length, '个套餐')
   } catch (e) {
     console.error('[loadPackages] 加载套餐列表失败:', e)
-    error.value = `加载套餐列表失败: ${e.message}`
+    error.value = translateUi('uiMessages.m30e44861f41f', { value1: (e.message) })
   } finally {
     loadingPackages.value = false
   }
@@ -1268,16 +1270,16 @@ async function savePackage() {
     })
     
     if (!r) {
-      error.value = '请求失败'
+      error.value = translateUi('uiMessages.m126fbf59cf04')
       return
     }
     
     if (!r.ok) {
-      const errData = await r.json().catch(() => ({ message: '保存失败' }))
-      throw new Error(errData.message || '保存失败')
+      const errData = await r.json().catch(() => ({ get message() { return translateUi('errors.saveFailed') } }))
+      throw new Error(errData.message || translateUi('errors.saveFailed'))
     }
     
-    success.value = '✅ 套餐保存成功！'
+    success.value = translateUi('uiMessages.mbafaea707907')
     await loadPackages()
     
     // 延迟1.5秒后关闭模态框，让用户看到成功提示
@@ -1285,7 +1287,7 @@ async function savePackage() {
       closeEditPackage()
     }, 1500)
   } catch (e) {
-    error.value = e.message || '保存失败'
+    error.value = e.message || translateUi('errors.saveFailed')
     console.error('[savePackage] error:', e)
   } finally {
     loadingOps.value = false
@@ -1293,7 +1295,7 @@ async function savePackage() {
 }
 
 async function togglePackageEnabled(pkg) {
-  if (!confirm(`确定要${pkg.enabled ? '禁用' : '启用'}套餐【${pkg.name}】吗？`)) return
+  if (!confirm(translateUi('uiMessages.mac67d12e97bc', { value1: (pkg.enabled ? translateUi('uiMessages.m7df5c456c765') : translateUi('directorStudio.inspector.enabled')), value2: (pkg.name) }))) return
   
   loadingOps.value = true
   try {
@@ -1303,12 +1305,12 @@ async function togglePackageEnabled(pkg) {
       body: JSON.stringify({ enabled: !pkg.enabled })
     })
     
-    if (!r || !r.ok) throw new Error('操作失败')
+    if (!r || !r.ok) throw new Error(translateUi('auth.operationFailed'))
     
-    success.value = `✅ 套餐已${pkg.enabled ? '禁用' : '启用'}`
+    success.value = translateUi('uiMessages.m192b64ed8985', { value1: (pkg.enabled ? translateUi('uiMessages.m7df5c456c765') : translateUi('directorStudio.inspector.enabled')) })
     await loadPackages()
   } catch (e) {
-    error.value = e.message || '操作失败'
+    error.value = e.message || translateUi('auth.operationFailed')
   } finally {
     loadingOps.value = false
   }
@@ -1346,7 +1348,7 @@ async function loadPaymentMethods() {
     }
   } catch (e) {
     console.error('[loadPaymentMethods] error:', e)
-    error.value = `加载支付配置失败: ${e.message}`
+    error.value = translateUi('uiMessages.ma877af5ffcc7', { value1: (e.message) })
   } finally {
     loadingPayment.value = false
   }
@@ -1365,7 +1367,7 @@ function getPaymentNotifyUrl(methodId, notifyDomain = null) {
     return `${baseUrl}/api/v1/guest/payment/notify/${methodId}`
   }
   // 回退到默认的 public_url
-  if (!paymentNotifyUrl.value) return '请先配置 public_url'
+  if (!paymentNotifyUrl.value) return translateUi('uiMessages.m8e940c9d65c5')
   return `${paymentNotifyUrl.value}/api/v1/guest/payment/notify/${methodId}`
 }
 
@@ -1431,7 +1433,7 @@ function onModuleChange() {
 
 async function savePaymentMethod() {
   if (!paymentForm.value.name || !paymentForm.value.module) {
-    error.value = '请填写显示名称和选择支付接口'
+    error.value = translateUi('uiMessages.m8f1140cdde44')
     return
   }
   
@@ -1468,23 +1470,23 @@ async function savePaymentMethod() {
     }
     
     if (!r) {
-      error.value = '请求失败'
+      error.value = translateUi('uiMessages.m126fbf59cf04')
       return
     }
     
     if (!r.ok) {
-      const errData = await r.json().catch(() => ({ message: '保存失败' }))
-      throw new Error(errData.message || '保存失败')
+      const errData = await r.json().catch(() => ({ get message() { return translateUi('errors.saveFailed') } }))
+      throw new Error(errData.message || translateUi('errors.saveFailed'))
     }
     
-    success.value = editingPaymentMethod.value ? '✅ 支付方式保存成功！' : '✅ 支付方式添加成功！'
+    success.value = editingPaymentMethod.value ? translateUi('uiMessages.m8c0f8e3a6481') : translateUi('uiMessages.m917f0aabd450')
     await loadPaymentMethods()
     
     setTimeout(() => {
       closePaymentModal()
     }, 1000)
   } catch (e) {
-    error.value = e.message || '保存失败'
+    error.value = e.message || translateUi('errors.saveFailed')
     console.error('[savePaymentMethod] error:', e)
   } finally {
     loadingPayment.value = false
@@ -1504,16 +1506,16 @@ async function loadLicenseConfig() {
     
     if (!r) {
       console.error('[loadLicenseConfig] 请求返回空响应')
-      error.value = '无法连接到服务器，请检查网络连接或后端服务是否正常运行'
+      error.value = translateUi('uiMessages.m261c6c70e03c')
       return
     }
     
     console.log('[loadLicenseConfig] 响应状态:', r.status)
     
     if (!r.ok) {
-      const errData = await r.json().catch(() => ({ message: '加载失败' }))
+      const errData = await r.json().catch(() => ({ get message() { return translateUi('uiMessages.md1d044826a45') } }))
       console.error('[loadLicenseConfig] 请求失败:', errData)
-      throw new Error(errData.message || `加载授权配置失败 (状态码: ${r.status})`)
+      throw new Error(errData.message || translateUi('uiMessages.m0eafd68067de', { value1: (r.status) }))
     }
     
     const data = await r.json()
@@ -1535,13 +1537,13 @@ async function loadLicenseConfig() {
     
     console.log('[loadLicenseConfig] 配置已更新')
   } catch (e) {
-    const errorMsg = e.message || '加载授权配置失败'
+    const errorMsg = e.message || translateUi('uiMessages.m162964a43b86')
     error.value = errorMsg
     console.error('[loadLicenseConfig] 异常:', errorMsg, e)
     
     // 如果是网络错误，提供更友好的提示
     if (e.message && e.message.includes('Failed to fetch')) {
-      error.value = '网络连接失败，请检查：1) 后端服务是否运行 2) 网络连接是否正常 3) CORS配置是否正确'
+      error.value = translateUi('uiMessages.mc516ae21a627')
     }
   } finally {
     loadingLicense.value = false
@@ -1554,12 +1556,12 @@ async function saveLicenseConfig() {
   success.value = ''
   
   if (!licenseConfig.value.tenant_id) {
-    error.value = '租户标识不能为空'
+    error.value = translateUi('uiMessages.ma8b9c14a49a7')
     return
   }
   
   if (!licenseConfig.value.brand_name) {
-    error.value = '品牌名称不能为空'
+    error.value = translateUi('uiMessages.m57a093f0857b')
     return
   }
   
@@ -1573,25 +1575,25 @@ async function saveLicenseConfig() {
     })
     
     if (!r) {
-      error.value = '请求失败'
+      error.value = translateUi('uiMessages.m126fbf59cf04')
       return
     }
     
     if (!r.ok) {
-      const errData = await r.json().catch(() => ({ message: '保存失败' }))
-      throw new Error(errData.message || '保存授权配置失败')
+      const errData = await r.json().catch(() => ({ get message() { return translateUi('errors.saveFailed') } }))
+      throw new Error(errData.message || translateUi('uiMessages.m6d7fd5f9dcb8'))
     }
     
-    success.value = '✅ 授权配置保存成功！刷新页面后生效'
+    success.value = translateUi('uiMessages.m1bcd1bd11850')
     
     // 3秒后提示刷新页面
     setTimeout(() => {
-      if (confirm('配置已保存，是否立即刷新页面使配置生效？')) {
+      if (confirm(translateUi('uiMessages.mc86bb28394e9'))) {
         window.location.reload()
       }
     }, 1500)
   } catch (e) {
-    error.value = e.message || '保存授权配置失败'
+    error.value = e.message || translateUi('uiMessages.m6d7fd5f9dcb8')
     console.error('[saveLicenseConfig] error:', e)
   } finally {
     savingLicense.value = false
@@ -1607,19 +1609,19 @@ async function togglePaymentEnabled(method) {
       body: JSON.stringify({ enabled: !method.enabled })
     })
     
-    if (!r || !r.ok) throw new Error('操作失败')
+    if (!r || !r.ok) throw new Error(translateUi('auth.operationFailed'))
     
-    success.value = `✅ 支付方式已${method.enabled ? '禁用' : '启用'}`
+    success.value = translateUi('uiMessages.m0c541251af83', { value1: (method.enabled ? translateUi('uiMessages.m7df5c456c765') : translateUi('directorStudio.inspector.enabled')) })
     await loadPaymentMethods()
   } catch (e) {
-    error.value = e.message || '操作失败'
+    error.value = e.message || translateUi('auth.operationFailed')
   } finally {
     loadingPayment.value = false
   }
 }
 
 async function deletePaymentMethod(method) {
-  if (!confirm(`确定要删除支付方式【${method.name}】吗？此操作不可恢复。`)) return
+  if (!confirm(translateUi('uiMessages.md5c4d3de9351', { value1: (method.name) }))) return
   
   loadingPayment.value = true
   try {
@@ -1627,12 +1629,12 @@ async function deletePaymentMethod(method) {
       method: 'DELETE'
     })
     
-    if (!r || !r.ok) throw new Error('删除失败')
+    if (!r || !r.ok) throw new Error(translateUi('errors.deleteFailed'))
     
-    success.value = '✅ 支付方式已删除'
+    success.value = translateUi('uiMessages.m736f131bd26e')
     await loadPaymentMethods()
   } catch (e) {
-    error.value = e.message || '删除失败'
+    error.value = e.message || translateUi('errors.deleteFailed')
   } finally {
     loadingPayment.value = false
   }
@@ -1677,10 +1679,10 @@ async function copyNotifyUrl(methodId, notifyDomain = null) {
   const url = getPaymentNotifyUrl(methodId, notifyDomain)
   try {
     await navigator.clipboard.writeText(url)
-    success.value = '✅ 通知地址已复制到剪贴板'
+    success.value = translateUi('uiMessages.m94f367d51ca6')
     setTimeout(() => { success.value = '' }, 2000)
   } catch (e) {
-    error.value = '复制失败，请手动复制'
+    error.value = translateUi('uiMessages.m97f4308501ff')
   }
 }
 
@@ -1711,9 +1713,9 @@ onUnmounted(() => {
               <span class="text-white font-bold text-xl">👑</span>
             </div>
             <div>
-              <h1 class="text-2xl font-bold gradient-text">管理员控制台</h1>
+              <h1 class="text-2xl font-bold gradient-text">{{ translateUi('uiMessages.mf4855d2b33ae') }}</h1>
               <p class="text-slate-600 dark:text-slate-400 text-sm">
-                欢迎，{{ me.username }}（{{ me.email }}）
+                {{ translateUi('uiMessages.m6ab10b12c475', { value1: (me.username), value2: (me.email) }) }}
               </p>
             </div>
           </div>
@@ -1722,7 +1724,7 @@ onUnmounted(() => {
             class="btn-secondary flex items-center space-x-2"
           >
             <span>⚙️</span>
-            <span>系统设置</span>
+            <span>{{ translateUi('admin.settings') }}</span>
           </button>
         </div>
         
@@ -1735,7 +1737,7 @@ onUnmounted(() => {
               ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' 
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-600'"
           >
-            👥 用户管理
+            {{ translateUi('uiMessages.m44afb64478ee') }}
           </button>
           <button
             @click="activeTab = 'vouchers'; loadVouchers()"
@@ -1744,7 +1746,7 @@ onUnmounted(() => {
               ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' 
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-600'"
           >
-            🎫 兑换券管理
+            {{ translateUi('uiMessages.m5be29ba0be52') }}
           </button>
           <button
             @click="activeTab = 'coupons'; loadCoupons()"
@@ -1753,7 +1755,7 @@ onUnmounted(() => {
               ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' 
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-600'"
           >
-            🎟️ 优惠券管理
+            {{ translateUi('uiMessages.md2c52b073272') }}
           </button>
           <button
             @click="activeTab = 'email'; loadEmailConfig()"
@@ -1762,7 +1764,7 @@ onUnmounted(() => {
               ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' 
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-600'"
           >
-            📧 邮局管理
+            {{ translateUi('uiMessages.m021495660c6b') }}
           </button>
           <button
             @click="activeTab = 'packages'; loadPackages()"
@@ -1771,7 +1773,7 @@ onUnmounted(() => {
               ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' 
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-600'"
           >
-            💎 套餐管理
+            {{ translateUi('uiMessages.m09b81a62a4af') }}
           </button>
           <button
             @click="activeTab = 'payment'; loadPaymentMethods()"
@@ -1780,7 +1782,7 @@ onUnmounted(() => {
               ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' 
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-600'"
           >
-            💳 支付配置
+            {{ translateUi('uiMessages.md0fd22201106') }}
           </button>
           
         </div>
@@ -1794,7 +1796,7 @@ onUnmounted(() => {
           <span class="text-white text-xl">👥</span>
         </div>
         <p class="text-2xl font-bold text-slate-900 dark:text-slate-100">{{ total }}</p>
-        <p class="text-sm text-slate-500 dark:text-slate-400">总用户数</p>
+        <p class="text-sm text-slate-500 dark:text-slate-400">{{ translateUi('admin.totalUsers') }}</p>
       </div>
       
       <div class="card p-6 text-center hover:scale-105 transition-transform duration-300">
@@ -1804,7 +1806,7 @@ onUnmounted(() => {
         <p class="text-2xl font-bold text-slate-900 dark:text-slate-100">
           {{ users.filter(u => !u.disabled).length }}
         </p>
-        <p class="text-sm text-slate-500 dark:text-slate-400">正常用户</p>
+        <p class="text-sm text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.mea571a56168a') }}</p>
       </div>
       
       <div class="card p-6 text-center hover:scale-105 transition-transform duration-300">
@@ -1814,7 +1816,7 @@ onUnmounted(() => {
         <p class="text-2xl font-bold text-slate-900 dark:text-slate-100">
           {{ users.filter(u => u.disabled).length }}
         </p>
-        <p class="text-sm text-slate-500 dark:text-slate-400">已禁用</p>
+        <p class="text-sm text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.mbc5a87a757a5') }}</p>
       </div>
       
       <div class="card p-6 text-center hover:scale-105 transition-transform duration-300">
@@ -1824,7 +1826,7 @@ onUnmounted(() => {
         <p class="text-2xl font-bold text-slate-900 dark:text-slate-100">
           {{ users.filter(u => u.role === 'admin').length }}
         </p>
-        <p class="text-sm text-slate-500 dark:text-slate-400">管理员</p>
+        <p class="text-sm text-slate-500 dark:text-slate-400">{{ translateUi('user.roleAdmin') }}</p>
       </div>
     </div>
 
@@ -1837,27 +1839,27 @@ onUnmounted(() => {
           <input 
             v-model="q" 
             class="input flex-1" 
-            placeholder="🔍 搜索用户名、邮箱或ID..." 
+            :placeholder="translateUi('uiMessages.m9d2f856cd38d')"
             @keyup.enter="applyFilter" 
           />
           
           <select v-model="role" class="input w-full md:w-40" @change="applyFilter">
-            <option value="">全部角色</option>
-            <option value="user">普通用户</option>
-            <option value="admin">管理员</option>
+            <option value="">{{ translateUi('uiMessages.m2878fe586472') }}</option>
+            <option value="user">{{ translateUi('user.roleUser') }}</option>
+            <option value="admin">{{ translateUi('user.roleAdmin') }}</option>
           </select>
           
           <select v-model="onlyDisabled" class="input w-full md:w-40" @change="applyFilter">
-            <option value="">全部状态</option>
-            <option value="false">正常</option>
-            <option value="true">已禁用</option>
+            <option value="">{{ translateUi('uiMessages.m0a379c1e7398') }}</option>
+            <option value="false">{{ translateUi('uiMessages.m296de0e31f8c') }}</option>
+            <option value="true">{{ translateUi('uiMessages.mbc5a87a757a5') }}</option>
           </select>
           
           <input 
             v-model.number="balanceMin" 
             type="number" 
             class="input w-full md:w-40" 
-            placeholder="最小余额(分)" 
+            :placeholder="translateUi('uiMessages.m9fd9314958cf')"
             @keyup.enter="applyFilter"
           />
           
@@ -1865,12 +1867,12 @@ onUnmounted(() => {
             v-model.number="balanceMax" 
             type="number" 
             class="input w-full md:w-40" 
-            placeholder="最大余额(分)" 
+            :placeholder="translateUi('uiMessages.m33c698bc1957')"
             @keyup.enter="applyFilter"
           />
           
           <button @click="applyFilter" class="btn-primary whitespace-nowrap">
-            应用筛选
+            {{ translateUi('uiMessages.mdd0a97ab3653') }}
           </button>
         </div>
         
@@ -1879,7 +1881,7 @@ onUnmounted(() => {
           class="btn-primary flex items-center justify-center space-x-2"
         >
           <span>➕</span>
-          <span>创建用户</span>
+          <span>{{ translateUi('admin.createUser') }}</span>
         </button>
       </div>
     </div>
@@ -1906,11 +1908,11 @@ onUnmounted(() => {
       <div class="flex items-center justify-between mb-6">
         <h3 class="text-lg font-bold gradient-text flex items-center">
           <span class="mr-2">📋</span>
-          用户列表
+          {{ translateUi('uiMessages.ma4660b1813b3') }}
         </h3>
         <div v-if="loadingList" class="flex items-center text-slate-500 dark:text-slate-400">
           <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600 mr-2"></div>
-          加载中...
+          {{ translateUi('common.loading') }}
         </div>
       </div>
       
@@ -1918,14 +1920,14 @@ onUnmounted(() => {
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b-2 border-slate-200 dark:border-dark-600">
-              <th class="text-left py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">用户信息</th>
-              <th class="text-left py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">角色</th>
-              <th class="text-left py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">积分资产</th>
-              <th class="text-left py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">账户余额</th>
-              <th class="text-left py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">并发限制</th>
-              <th class="text-left py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">状态</th>
-              <th class="text-left py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">创建时间</th>
-              <th class="text-left py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">操作</th>
+              <th class="text-left py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.m426c4548f68a') }}</th>
+              <th class="text-left py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">{{ translateUi('user.role') }}</th>
+              <th class="text-left py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.mee5ad5b61949') }}</th>
+              <th class="text-left py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">{{ translateUi('packages.accountBalance') }}</th>
+              <th class="text-left py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.m44c5959863d8') }}</th>
+              <th class="text-left py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.m6320b4a8722a') }}</th>
+              <th class="text-left py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">{{ translateUi('canvas.assetPanel.createdAt') }}</th>
+              <th class="text-left py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.med31fbb483ee') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -1956,7 +1958,7 @@ onUnmounted(() => {
                   :class="u.role === 'admin' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'"
                   class="px-2 py-1 text-xs rounded-full"
                 >
-                  {{ u.role === 'admin' ? '管理员' : '用户' }}
+                  {{ u.role === 'admin' ? translateUi('user.roleAdmin') : translateUi('common.user') }}
                 </span>
               </td>
               
@@ -1965,21 +1967,21 @@ onUnmounted(() => {
                 <div class="space-y-1">
                   <!-- 套餐积分 -->
                   <div class="flex items-center justify-between gap-2">
-                    <span class="text-xs text-slate-500 dark:text-slate-400">⏰ 套餐</span>
+                    <span class="text-xs text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m231413e5c402') }}</span>
                     <span class="font-semibold text-purple-600 dark:text-purple-400">
                       {{ u.package_points || 0 }}
                     </span>
                   </div>
                   <!-- 永久积分 -->
                   <div class="flex items-center justify-between gap-2">
-                    <span class="text-xs text-slate-500 dark:text-slate-400">💎 永久</span>
+                    <span class="text-xs text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m91d7f62aad04') }}</span>
                     <span class="font-semibold text-amber-600 dark:text-amber-400">
                       {{ u.points || 0 }}
                     </span>
                   </div>
                   <!-- 总计 -->
                   <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-200 dark:border-dark-600">
-                    <span class="text-xs text-slate-600 dark:text-slate-300">总计</span>
+                    <span class="text-xs text-slate-600 dark:text-slate-300">{{ translateUi('uiMessages.me8dc871a7fde') }}</span>
                     <span class="font-bold text-slate-900 dark:text-slate-100">
                       {{ (u.package_points || 0) + (u.points || 0) }}
                     </span>
@@ -2013,7 +2015,7 @@ onUnmounted(() => {
                   :class="u.disabled ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'"
                   class="px-2 py-1 text-xs rounded-full"
                 >
-                  {{ u.disabled ? '已禁用' : '正常' }}
+                  {{ u.disabled ? translateUi('uiMessages.mbc5a87a757a5') : translateUi('uiMessages.m296de0e31f8c') }}
                 </span>
               </td>
               
@@ -2028,7 +2030,7 @@ onUnmounted(() => {
                   <button 
                     @click="openEditModal(u)" 
                     class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                    title="编辑用户"
+                    :title="translateUi('admin.editUser')"
                   >
                     ✏️
                   </button>
@@ -2036,7 +2038,7 @@ onUnmounted(() => {
                     @click="toggleUserStatus(u)" 
                     :disabled="loadingOps"
                     :class="u.disabled ? 'text-green-600 hover:text-green-700' : 'text-yellow-600 hover:text-yellow-700'"
-                    :title="u.disabled ? '启用' : '禁用'"
+                    :title="u.disabled ? translateUi('directorStudio.inspector.enabled') : translateUi('uiMessages.m7df5c456c765')"
                   >
                     {{ u.disabled ? '✅' : '❌' }}
                   </button>
@@ -2044,7 +2046,7 @@ onUnmounted(() => {
                     @click="deleteUser(u)" 
                     :disabled="loadingOps"
                     class="text-red-600 hover:text-red-700"
-                    title="删除"
+                    :title="translateUi('common.delete')"
                   >
                     🗑️
                   </button>
@@ -2056,14 +2058,14 @@ onUnmounted(() => {
         
         <div v-if="users.length === 0 && !loadingList" class="text-center py-12">
           <div class="text-4xl mb-4">📭</div>
-          <p class="text-slate-500 dark:text-slate-400">暂无用户数据</p>
+          <p class="text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m53d758976705') }}</p>
         </div>
       </div>
       
       <!-- 分页 -->
       <div class="flex items-center justify-between mt-6 pt-6 border-t border-slate-200 dark:border-dark-600">
         <div class="text-sm text-slate-500 dark:text-slate-400">
-          显示 {{ listRangeStart }} - {{ listRangeEnd }} / 共 {{ total }} 条
+          {{ translateUi('uiMessages.mb6352cd74ec6', { value1: (listRangeStart), value2: (listRangeEnd), value3: (total) }) }}
         </div>
         <div class="flex items-center space-x-2">
           <button 
@@ -2071,15 +2073,15 @@ onUnmounted(() => {
             :disabled="page <= 1"
             class="px-4 py-2 rounded-lg border border-slate-300 dark:border-dark-600 text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-dark-700 transition-colors"
           >
-            ← 上一页
+            {{ translateUi('uiMessages.m00c03b055395') }}
           </button>
-          <span class="px-4 py-2 text-sm font-medium">第 {{ page }} 页</span>
+          <span class="px-4 py-2 text-sm font-medium">{{ translateUi('uiMessages.mbee11b0726bf', { value1: (page) }) }}</span>
           <button 
             @click="nextPage" 
             :disabled="page * pageSize >= total"
             class="px-4 py-2 rounded-lg border border-slate-300 dark:border-dark-600 text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-dark-700 transition-colors"
           >
-            下一页 →
+            {{ translateUi('uiMessages.m64ae71dc137e') }}
           </button>
         </div>
       </div>
@@ -2094,9 +2096,9 @@ onUnmounted(() => {
         <div class="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
           <div class="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4">
             <select v-model="voucherStatus" class="input w-full md:w-40" @change="vouchersPage = 1; loadVouchers()">
-              <option value="">全部状态</option>
-              <option value="active">活跃</option>
-              <option value="disabled">已禁用</option>
+              <option value="">{{ translateUi('uiMessages.m0a379c1e7398') }}</option>
+              <option value="active">{{ translateUi('uiMessages.me85e590b63fe') }}</option>
+              <option value="disabled">{{ translateUi('uiMessages.mbc5a87a757a5') }}</option>
             </select>
             
             <button 
@@ -2104,7 +2106,7 @@ onUnmounted(() => {
               class="btn-secondary flex items-center space-x-2"
             >
               <span>🔍</span>
-              <span>{{ showVoucherFilters ? '隐藏查询' : '高级查询' }}</span>
+              <span>{{ showVoucherFilters ? translateUi('uiMessages.m1d72cfbb5baf') : translateUi('uiMessages.m58ddd890c052') }}</span>
             </button>
           </div>
           
@@ -2113,99 +2115,99 @@ onUnmounted(() => {
               @click="deleteSelectedVouchers"
               :disabled="deletingVouchers || selectedVoucherIds.length === 0"
               class="flex items-center space-x-2 px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              :title="selectedVoucherIds.length === 0 ? '请先在列表中勾选要删除的兑换券' : ''"
+              :title="selectedVoucherIds.length === 0 ? translateUi('uiMessages.m80cb5e36fcdb') : ''"
             >
               <span>🗑️</span>
-              <span>{{ deletingVouchers ? '删除中...' : selectedVoucherIds.length > 0 ? `批量删除 (${selectedVoucherIds.length})` : '批量删除' }}</span>
+              <span>{{ deletingVouchers ? translateUi('uiMessages.m4669785ade95') : selectedVoucherIds.length > 0 ? translateUi('uiMessages.m0bdd94b9bb8d', { value1: (selectedVoucherIds.length) }) : translateUi('uiMessages.mddae7a0fc554') }}</span>
             </button>
             <button 
               @click="exportFilteredVouchers"
               class="btn-secondary flex items-center space-x-2"
             >
               <span>📥</span>
-              <span>导出CSV</span>
+              <span>{{ translateUi('uiMessages.me602ce0f488b') }}</span>
             </button>
             <button 
               @click="openBatchVoucherModal"
               class="btn-primary flex items-center space-x-2"
             >
               <span>➕</span>
-              <span>批量生成</span>
+              <span>{{ translateUi('uiMessages.mebc56f2228ef') }}</span>
             </button>
           </div>
         </div>
         
         <!-- 高级查询表单 -->
         <div v-if="showVoucherFilters" class="mt-6 pt-6 border-t border-slate-200 dark:border-dark-600">
-          <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">🔍 高级查询</h4>
+          <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">{{ translateUi('uiMessages.ma4649151e5e5') }}</h4>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <!-- 兑换码搜索 -->
             <div>
-              <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">兑换码</label>
+              <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ translateUi('uiMessages.mabbb6156a43e') }}</label>
               <input 
                 v-model="voucherFilters.code" 
                 type="text" 
                 class="input text-sm" 
-                placeholder="模糊搜索兑换码"
+                :placeholder="translateUi('uiMessages.m9186338718fc')"
               />
             </div>
             
             <!-- 积分区间 -->
             <div>
-              <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">最小积分</label>
+              <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ translateUi('uiMessages.m1120bb4c6a18') }}</label>
               <input 
                 v-model.number="voucherFilters.pointsMin" 
                 type="number" 
                 class="input text-sm" 
-                placeholder="最小积分"
+                :placeholder="translateUi('uiMessages.m1120bb4c6a18')"
               />
             </div>
             
             <div>
-              <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">最大积分</label>
+              <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ translateUi('uiMessages.m311ae2d08d72') }}</label>
               <input 
                 v-model.number="voucherFilters.pointsMax" 
                 type="number" 
                 class="input text-sm" 
-                placeholder="最大积分"
+                :placeholder="translateUi('uiMessages.m311ae2d08d72')"
               />
             </div>
             
             <!-- 余额区间 -->
             <div>
-              <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">最小余额</label>
+              <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ translateUi('uiMessages.m3660b213c2eb') }}</label>
               <input 
                 v-model.number="voucherFilters.balanceMin" 
                 type="number" 
                 class="input text-sm" 
-                placeholder="最小余额(分)"
+                :placeholder="translateUi('uiMessages.m9fd9314958cf')"
               />
             </div>
             
             <div>
-              <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">最大余额</label>
+              <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ translateUi('uiMessages.mcfe80be3f74b') }}</label>
               <input 
                 v-model.number="voucherFilters.balanceMax" 
                 type="number" 
                 class="input text-sm" 
-                placeholder="最大余额(分)"
+                :placeholder="translateUi('uiMessages.m33c698bc1957')"
               />
             </div>
             
             <!-- 使用情况 -->
             <div>
-              <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">使用情况</label>
+              <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ translateUi('uiMessages.me7370f809726') }}</label>
               <select v-model="voucherFilters.usageStatus" class="input text-sm">
-                <option value="">全部</option>
-                <option value="unused">未使用</option>
-                <option value="partial">部分使用</option>
-                <option value="full">已用完</option>
+                <option value="">{{ translateUi('common.all') }}</option>
+                <option value="unused">{{ translateUi('uiMessages.mfa73ed85e86a') }}</option>
+                <option value="partial">{{ translateUi('uiMessages.m6e019c39f8cc') }}</option>
+                <option value="full">{{ translateUi('uiMessages.m4db0a6fd5841') }}</option>
               </select>
             </div>
             
             <!-- 有效期开始 -->
             <div>
-              <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">有效期开始</label>
+              <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ translateUi('uiMessages.m821e70555286') }}</label>
               <input 
                 v-model="voucherFilters.expiresStart" 
                 type="date" 
@@ -2215,7 +2217,7 @@ onUnmounted(() => {
             
             <!-- 有效期结束 -->
             <div>
-              <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">有效期结束</label>
+              <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ translateUi('uiMessages.m04ac524ca788') }}</label>
               <input 
                 v-model="voucherFilters.expiresEnd" 
                 type="date" 
@@ -2225,12 +2227,12 @@ onUnmounted(() => {
             
             <!-- 备注搜索 -->
             <div class="md:col-span-2 lg:col-span-3">
-              <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">备注</label>
+              <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ translateUi('directorStudio.inspector.note') }}</label>
               <input 
                 v-model="voucherFilters.note" 
                 type="text" 
                 class="input text-sm" 
-                placeholder="模糊搜索备注内容"
+                :placeholder="translateUi('uiMessages.m555a7e3a7402')"
               />
             </div>
           </div>
@@ -2241,13 +2243,13 @@ onUnmounted(() => {
               @click="resetVoucherFilters"
               class="px-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-dark-600 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-dark-700 transition-colors"
             >
-              重置
+              {{ translateUi('common.reset') }}
             </button>
             <button 
               @click="searchVouchers"
               class="px-4 py-2 text-sm rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors"
             >
-              查询
+              {{ translateUi('uiMessages.mbcd6771e08ec') }}
             </button>
           </div>
         </div>
@@ -2258,28 +2260,28 @@ onUnmounted(() => {
         <div class="flex items-center justify-between mb-6">
           <h3 class="text-lg font-bold gradient-text flex items-center">
             <span class="mr-2">🎫</span>
-            兑换券列表
+            {{ translateUi('uiMessages.mb2cd12f0283f') }}
           </h3>
           <div v-if="loadingVouchers" class="flex items-center text-slate-500 dark:text-slate-400">
             <svg class="animate-spin h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            <span>加载中...</span>
+            <span>{{ translateUi('common.loading') }}</span>
           </div>
           <div v-else class="text-sm text-slate-500 dark:text-slate-400">
-            共 {{ vouchersTotal }} 张兑换券
+            {{ translateUi('uiMessages.mcb62a538ef4a', { value1: (vouchersTotal) }) }}
             <span v-if="selectedVoucherIds.length > 0" class="ml-2 text-red-600 dark:text-red-400">
-              已选 {{ selectedVoucherIds.length }} 张
+              {{ translateUi('uiMessages.m74cf72d8c752', { value1: (selectedVoucherIds.length) }) }}
             </span>
           </div>
         </div>
 
         <div v-if="vouchers.length === 0 && !loadingVouchers" class="text-center py-12">
           <div class="text-6xl mb-4">🎫</div>
-          <p class="text-slate-500 dark:text-slate-400 mb-4">暂无兑换券</p>
+          <p class="text-slate-500 dark:text-slate-400 mb-4">{{ translateUi('uiMessages.m6dd6fd655938') }}</p>
           <button @click="openBatchVoucherModal" class="btn-primary">
-            批量生成兑换券
+            {{ translateUi('uiMessages.m70133d6b7adb') }}
           </button>
         </div>
 
@@ -2295,14 +2297,14 @@ onUnmounted(() => {
                     class="rounded border-slate-300 dark:border-dark-500"
                   />
                 </th>
-                <th class="px-4 py-3 text-left text-slate-700 dark:text-slate-300 font-semibold">兑换码</th>
-                <th class="px-4 py-3 text-left text-slate-700 dark:text-slate-300 font-semibold">积分</th>
-                <th class="px-4 py-3 text-left text-slate-700 dark:text-slate-300 font-semibold">余额</th>
-                <th class="px-4 py-3 text-left text-slate-700 dark:text-slate-300 font-semibold">使用情况</th>
-                <th class="px-4 py-3 text-left text-slate-700 dark:text-slate-300 font-semibold">过期时间</th>
-                <th class="px-4 py-3 text-left text-slate-700 dark:text-slate-300 font-semibold">状态</th>
-                <th class="px-4 py-3 text-left text-slate-700 dark:text-slate-300 font-semibold">备注</th>
-                <th class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 font-semibold">操作</th>
+                <th class="px-4 py-3 text-left text-slate-700 dark:text-slate-300 font-semibold">{{ translateUi('uiMessages.mabbb6156a43e') }}</th>
+                <th class="px-4 py-3 text-left text-slate-700 dark:text-slate-300 font-semibold">{{ translateUi('imageGen.points') }}</th>
+                <th class="px-4 py-3 text-left text-slate-700 dark:text-slate-300 font-semibold">{{ translateUi('imageGen.balance') }}</th>
+                <th class="px-4 py-3 text-left text-slate-700 dark:text-slate-300 font-semibold">{{ translateUi('uiMessages.me7370f809726') }}</th>
+                <th class="px-4 py-3 text-left text-slate-700 dark:text-slate-300 font-semibold">{{ translateUi('uiMessages.ma8e5f1716600') }}</th>
+                <th class="px-4 py-3 text-left text-slate-700 dark:text-slate-300 font-semibold">{{ translateUi('uiMessages.m6320b4a8722a') }}</th>
+                <th class="px-4 py-3 text-left text-slate-700 dark:text-slate-300 font-semibold">{{ translateUi('directorStudio.inspector.note') }}</th>
+                <th class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 font-semibold">{{ translateUi('uiMessages.med31fbb483ee') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -2330,7 +2332,7 @@ onUnmounted(() => {
                       {{ voucher.points || 0 }}
                     </span>
                     <div v-if="Number(voucher.points || 0) > 0" class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      {{ Number(voucher.point_valid_days) === 0 ? '永久积分' : `到账后${voucher.point_valid_days || 365}天有效` }}
+                      {{ Number(voucher.point_valid_days) === 0 ? translateUi('imageGen.permanentPoints') : translateUi('uiMessages.m84724b82f921', { value1: (voucher.point_valid_days || 365) }) }}
                     </div>
                   </div>
                 </td>
@@ -2347,7 +2349,7 @@ onUnmounted(() => {
                       @click="viewVoucherRedemptions(voucher)"
                       class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
                     >
-                      查看
+                      {{ translateUi('uiMessages.mdb8db0530432') }}
                     </button>
                   </div>
                 </td>
@@ -2365,7 +2367,7 @@ onUnmounted(() => {
                       ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
                       : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'"
                   >
-                    {{ voucher.status === 'active' ? '活跃' : '已禁用' }}
+                    {{ voucher.status === 'active' ? translateUi('uiMessages.me85e590b63fe') : translateUi('uiMessages.mbc5a87a757a5') }}
                   </span>
                 </td>
                 <td class="px-4 py-3 text-slate-600 dark:text-slate-400 max-w-xs truncate">
@@ -2380,13 +2382,13 @@ onUnmounted(() => {
                         ? 'bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-400'
                         : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400'"
                     >
-                      {{ voucher.status === 'active' ? '禁用' : '启用' }}
+                      {{ voucher.status === 'active' ? translateUi('uiMessages.m7df5c456c765') : translateUi('directorStudio.inspector.enabled') }}
                     </button>
                     <button
                       @click="deleteVoucher(voucher.id)"
                       class="text-xs px-3 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors dark:bg-red-900/30 dark:text-red-400"
                     >
-                      删除
+                      {{ translateUi('common.delete') }}
                     </button>
                   </div>
                 </td>
@@ -2398,7 +2400,7 @@ onUnmounted(() => {
         <!-- 分页 -->
         <div v-if="vouchersTotal > vouchersPageSize" class="flex items-center justify-between mt-6 pt-4 border-t border-slate-200 dark:border-dark-600">
           <div class="text-sm text-slate-600 dark:text-slate-400">
-            显示 {{ vouchersRangeStart }} - {{ vouchersRangeEnd }} / 共 {{ vouchersTotal }}
+            {{ translateUi('uiMessages.maf08577f58c4', { value1: (vouchersRangeStart), value2: (vouchersRangeEnd), value3: (vouchersTotal) }) }}
           </div>
           <div class="flex space-x-2">
             <button
@@ -2409,7 +2411,7 @@ onUnmounted(() => {
                 ? 'border-slate-300 dark:border-dark-600 text-slate-400 dark:text-slate-500' 
                 : 'border-primary-300 dark:border-primary-700 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20'"
             >
-              上一页
+              {{ translateUi('uiMessages.mc9b9ae7a6144') }}
             </button>
             <button
               @click="nextVouchersPage"
@@ -2419,7 +2421,7 @@ onUnmounted(() => {
                 ? 'border-slate-300 dark:border-dark-600 text-slate-400 dark:text-slate-500' 
                 : 'border-primary-300 dark:border-primary-700 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20'"
             >
-              下一页
+              {{ translateUi('uiMessages.m8a8542f69648') }}
             </button>
           </div>
         </div>
@@ -2430,9 +2432,9 @@ onUnmounted(() => {
     <div v-if="activeTab === 'coupons'">
       <div class="card p-6 mb-6">
         <div class="flex justify-between items-center">
-          <h3 class="text-lg font-bold text-slate-900 dark:text-white">优惠券模板列表</h3>
+          <h3 class="text-lg font-bold text-slate-900 dark:text-white">{{ translateUi('uiMessages.m0ca17c7b6daa') }}</h3>
           <button @click="openCreateCouponModal" class="btn-primary">
-            ➕ 创建优惠券模板
+            {{ translateUi('uiMessages.m97412bddcfe5') }}
           </button>
         </div>
       </div>
@@ -2447,75 +2449,75 @@ onUnmounted(() => {
           <div class="flex justify-between items-start mb-4">
             <div>
               <h4 class="text-lg font-bold text-slate-900 dark:text-white">{{ coupon.name }}</h4>
-              <span v-if="coupon.code_prefix" class="text-xs text-slate-500">前缀: {{ coupon.code_prefix }}</span>
+              <span v-if="coupon.code_prefix" class="text-xs text-slate-500">{{ translateUi('uiMessages.m01db72232df7', { value1: (coupon.code_prefix) }) }}</span>
             </div>
             <button 
               @click="toggleCouponStatus(coupon)" 
               class="px-2 py-1 text-xs rounded-full transition-all hover:shadow-md cursor-pointer" 
               :class="coupon.status === 'active' ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
             >
-              {{ coupon.status === 'active' ? '启用' : '禁用' }}
+              {{ coupon.status === 'active' ? translateUi('directorStudio.inspector.enabled') : translateUi('uiMessages.m7df5c456c765') }}
             </button>
           </div>
 
           <div class="space-y-2 mb-4">
             <div class="flex justify-between text-sm">
-              <span class="text-slate-600 dark:text-slate-400">类型:</span>
-              <span class="font-medium">{{ coupon.type === 'discount' ? '折扣券' : '余额抵扣券' }}</span>
+              <span class="text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.mf9082aad585f') }}</span>
+              <span class="font-medium">{{ coupon.type === 'discount' ? translateUi('uiMessages.mea564f823969') : translateUi('uiMessages.mabc902d94dde') }}</span>
             </div>
             <div class="flex justify-between text-sm">
-              <span class="text-slate-600 dark:text-slate-400">优惠:</span>
+              <span class="text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.m4579fe1ed5eb') }}</span>
               <span class="font-medium text-primary-600">
-                {{ coupon.type === 'discount' ? `${(coupon.discount_value * 10).toFixed(1)}折` : `${currencySymbol.value}${(coupon.balance_value / 100).toFixed(2)}` }}
+                {{ coupon.type === 'discount' ? translateUi('uiMessages.m0930a54b2ee5', { value1: ((coupon.discount_value * 10).toFixed(1)) }) : `${currencySymbol.value}${(coupon.balance_value / 100).toFixed(2)}` }}
               </span>
             </div>
             <div class="flex justify-between text-sm">
-              <span class="text-slate-600 dark:text-slate-400">最低消费:</span>
+              <span class="text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.m8aec6d9683a6') }}</span>
               <span>{{ formatMoney(coupon.min_amount) }}</span>
             </div>
             <div class="flex justify-between text-sm">
-              <span class="text-slate-600 dark:text-slate-400">使用次数:</span>
-              <span>{{ coupon.usage_limit || '无限制' }}</span>
+              <span class="text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.m46cc9629c302') }}</span>
+              <span>{{ coupon.usage_limit || translateUi('uiMessages.m9ee3c076a148') }}</span>
             </div>
             <div class="flex justify-between text-sm">
-              <span class="text-slate-600 dark:text-slate-400">有效期:</span>
-              <span>{{ coupon.valid_days }}天</span>
+              <span class="text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.mf85003776e3e') }}</span>
+              <span>{{ translateUi('uiMessages.mb4baa30d48ff', { value1: (coupon.valid_days) }) }}</span>
             </div>
           </div>
 
           <div v-if="coupon.stats" class="bg-slate-50 dark:bg-dark-700 rounded p-3 mb-4 space-y-1">
             <div class="flex justify-between text-xs">
-              <span class="text-slate-600 dark:text-slate-400">已生成:</span>
+              <span class="text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.md56cb581b9fe') }}</span>
               <span class="font-medium">{{ coupon.stats.total_generated || 0 }}</span>
             </div>
             <div class="flex justify-between text-xs">
-              <span class="text-slate-600 dark:text-slate-400">已领取:</span>
+              <span class="text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.md706ca80adbc') }}</span>
               <span class="font-medium">{{ coupon.stats.claimed_count || 0 }}</span>
             </div>
             <div class="flex justify-between text-xs">
-              <span class="text-slate-600 dark:text-slate-400">已使用:</span>
+              <span class="text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.m033166ce7385') }}</span>
               <span class="font-medium text-green-600">{{ coupon.stats.used_count || 0 }}</span>
             </div>
             <div class="flex justify-between text-xs">
-              <span class="text-slate-600 dark:text-slate-400">可用:</span>
+              <span class="text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.m41f4a669a727') }}</span>
               <span class="font-medium text-primary-600">{{ coupon.stats.available_count || 0 }}</span>
             </div>
           </div>
 
           <div class="flex gap-2">
             <button @click="openGenerateCouponModal(coupon)" class="btn-secondary text-xs flex-1">
-              🎫 生成券码
+              {{ translateUi('uiMessages.m9b9ea8adfe53') }}
             </button>
             <button @click="viewCouponCodes(coupon)" class="btn-secondary text-xs flex-1">
-              📋 查看券码
+              {{ translateUi('uiMessages.mb3c434fdb7b6') }}
             </button>
           </div>
           <div class="flex gap-2 mt-2">
             <button @click="openEditCouponModal(coupon)" class="btn-secondary text-xs flex-1">
-              ✏️ 编辑
+              {{ translateUi('uiMessages.m0ed9861c7c8e') }}
             </button>
             <button @click="deleteCoupon(coupon.id)" class="btn-danger text-xs flex-1">
-              🗑️ 删除
+              {{ translateUi('uiMessages.ma6c5bde81d0f') }}
             </button>
           </div>
         </div>
@@ -2526,60 +2528,60 @@ onUnmounted(() => {
     <div v-if="showCreateCouponModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" @click.self="showCreateCouponModal = false">
       <div class="bg-white dark:bg-dark-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div class="p-6 border-b border-slate-200 dark:border-dark-600">
-          <h3 class="text-xl font-bold text-slate-900 dark:text-white">创建优惠券模板</h3>
+          <h3 class="text-xl font-bold text-slate-900 dark:text-white">{{ translateUi('uiMessages.mccfca67b00a5') }}</h3>
         </div>
         <div class="p-6 space-y-4">
           <div>
-            <label class="block text-sm font-medium mb-2">优惠券名称 *</label>
-            <input v-model="couponForm.name" type="text" class="input" placeholder="例如：新用户9折优惠" />
+            <label class="block text-sm font-medium mb-2">{{ translateUi('uiMessages.mad5d6bbfd493') }}</label>
+            <input v-model="couponForm.name" type="text" class="input" :placeholder="translateUi('uiMessages.m6c52515a1703')" />
           </div>
           <div>
-            <label class="block text-sm font-medium mb-2">券码前缀</label>
-            <input v-model="couponForm.code_prefix" type="text" class="input" placeholder="例如：NEW（可选）" />
+            <label class="block text-sm font-medium mb-2">{{ translateUi('uiMessages.mb84f5c48567b') }}</label>
+            <input v-model="couponForm.code_prefix" type="text" class="input" :placeholder="translateUi('uiMessages.m3822d8f5d8c1')" />
           </div>
           <div>
-            <label class="block text-sm font-medium mb-2">优惠券类型 *</label>
+            <label class="block text-sm font-medium mb-2">{{ translateUi('uiMessages.m7174b8fc4c61') }}</label>
             <select v-model="couponForm.type" class="input">
-              <option value="discount">折扣券</option>
-              <option value="balance">余额抵扣券</option>
+              <option value="discount">{{ translateUi('uiMessages.mea564f823969') }}</option>
+              <option value="balance">{{ translateUi('uiMessages.mabc902d94dde') }}</option>
             </select>
           </div>
           <div v-if="couponForm.type === 'discount'">
-            <label class="block text-sm font-medium mb-2">折扣值 * (0.1-0.99)</label>
-            <input v-model.number="couponForm.discount_value" type="number" step="0.01" min="0.01" max="0.99" class="input" placeholder="0.9表示9折" />
+            <label class="block text-sm font-medium mb-2">{{ translateUi('uiMessages.m729cc8ebd883') }}</label>
+            <input v-model.number="couponForm.discount_value" type="number" step="0.01" min="0.01" max="0.99" class="input" :placeholder="translateUi('uiMessages.mca7e6bb0abdc')" />
           </div>
           <div v-if="couponForm.type === 'balance'">
-            <label class="block text-sm font-medium mb-2">抵扣金额 * (分)</label>
-            <input v-model.number="couponForm.balance_value" type="number" class="input" :placeholder="`1000表示10${currencyUnitLabel}`" />
+            <label class="block text-sm font-medium mb-2">{{ translateUi('uiMessages.m2b757ba7ddb6') }}</label>
+            <input v-model.number="couponForm.balance_value" type="number" class="input" :placeholder="translateUi('uiMessages.m6a47678e489c', { value1: (currencyUnitLabel) })" />
           </div>
           <div>
-            <label class="block text-sm font-medium mb-2">最低消费金额 (分)</label>
-            <input v-model.number="couponForm.min_amount" type="number" class="input" placeholder="0表示无限制" />
+            <label class="block text-sm font-medium mb-2">{{ translateUi('uiMessages.ma7692ff15b7b') }}</label>
+            <input v-model.number="couponForm.min_amount" type="number" class="input" :placeholder="translateUi('uiMessages.m5a6ade652b90')" />
           </div>
           <div v-if="couponForm.type === 'discount'">
-            <label class="block text-sm font-medium mb-2">最大折扣金额 (分，可选)</label>
-            <input v-model.number="couponForm.max_discount" type="number" class="input" placeholder="留空表示无限制" />
+            <label class="block text-sm font-medium mb-2">{{ translateUi('uiMessages.mb7154feb5ff9') }}</label>
+            <input v-model.number="couponForm.max_discount" type="number" class="input" :placeholder="translateUi('uiMessages.m0287d1f45b91')" />
           </div>
           <div>
-            <label class="block text-sm font-medium mb-2">使用次数限制</label>
-            <input v-model.number="couponForm.usage_limit" type="number" class="input" placeholder="1表示一次性，0表示无限制" />
+            <label class="block text-sm font-medium mb-2">{{ translateUi('uiMessages.m0edca6dd9930') }}</label>
+            <input v-model.number="couponForm.usage_limit" type="number" class="input" :placeholder="translateUi('uiMessages.me3884640f874')" />
           </div>
           <div>
-            <label class="block text-sm font-medium mb-2">有效天数</label>
+            <label class="block text-sm font-medium mb-2">{{ translateUi('uiMessages.m3481a74eaca1') }}</label>
             <input v-model.number="couponForm.valid_days" type="number" class="input" placeholder="30" />
           </div>
           <div>
-            <label class="block text-sm font-medium mb-2">描述</label>
-            <textarea v-model="couponForm.description" class="input" rows="2" placeholder="优惠券描述"></textarea>
+            <label class="block text-sm font-medium mb-2">{{ translateUi('uiMessages.mdc2ba467fc7a') }}</label>
+            <textarea v-model="couponForm.description" class="input" rows="2" :placeholder="translateUi('uiMessages.m7b7efc053b09')"></textarea>
           </div>
           <div>
-            <label class="block text-sm font-medium mb-2">备注</label>
-            <textarea v-model="couponForm.notes" class="input" rows="2" placeholder="内部备注"></textarea>
+            <label class="block text-sm font-medium mb-2">{{ translateUi('directorStudio.inspector.note') }}</label>
+            <textarea v-model="couponForm.notes" class="input" rows="2" :placeholder="translateUi('uiMessages.m1f1ba55e7a98')"></textarea>
           </div>
         </div>
         <div class="p-6 border-t border-slate-200 dark:border-dark-600 flex gap-3">
-          <button @click="showCreateCouponModal = false" class="btn-secondary flex-1">取消</button>
-          <button @click="createCoupon" class="btn-primary flex-1">创建</button>
+          <button @click="showCreateCouponModal = false" class="btn-secondary flex-1">{{ translateUi('common.cancel') }}</button>
+          <button @click="createCoupon" class="btn-primary flex-1">{{ translateUi('uiMessages.mcde2cd071d25') }}</button>
         </div>
       </div>
     </div>
@@ -2588,60 +2590,60 @@ onUnmounted(() => {
     <div v-if="showEditCouponModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" @click.self="showEditCouponModal = false">
       <div class="bg-white dark:bg-dark-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div class="p-6 border-b border-slate-200 dark:border-dark-600">
-          <h3 class="text-xl font-bold text-slate-900 dark:text-white">编辑优惠券模板</h3>
+          <h3 class="text-xl font-bold text-slate-900 dark:text-white">{{ translateUi('uiMessages.mad480d763b69') }}</h3>
         </div>
         <div class="p-6 space-y-4">
           <div>
-            <label class="block text-sm font-medium mb-2">优惠券名称 *</label>
-            <input v-model="couponForm.name" type="text" class="input" placeholder="例如：新用户9折优惠" />
+            <label class="block text-sm font-medium mb-2">{{ translateUi('uiMessages.mad5d6bbfd493') }}</label>
+            <input v-model="couponForm.name" type="text" class="input" :placeholder="translateUi('uiMessages.m6c52515a1703')" />
           </div>
           <div>
-            <label class="block text-sm font-medium mb-2">券码前缀</label>
-            <input v-model="couponForm.code_prefix" type="text" class="input" placeholder="例如：NEW（可选）" />
+            <label class="block text-sm font-medium mb-2">{{ translateUi('uiMessages.mb84f5c48567b') }}</label>
+            <input v-model="couponForm.code_prefix" type="text" class="input" :placeholder="translateUi('uiMessages.m3822d8f5d8c1')" />
           </div>
           <div>
-            <label class="block text-sm font-medium mb-2">优惠券类型 *</label>
+            <label class="block text-sm font-medium mb-2">{{ translateUi('uiMessages.m7174b8fc4c61') }}</label>
             <select v-model="couponForm.type" class="input">
-              <option value="discount">折扣券</option>
-              <option value="balance">余额抵扣券</option>
+              <option value="discount">{{ translateUi('uiMessages.mea564f823969') }}</option>
+              <option value="balance">{{ translateUi('uiMessages.mabc902d94dde') }}</option>
             </select>
           </div>
           <div v-if="couponForm.type === 'discount'">
-            <label class="block text-sm font-medium mb-2">折扣值 * (0.1-0.99)</label>
-            <input v-model.number="couponForm.discount_value" type="number" step="0.01" min="0.01" max="0.99" class="input" placeholder="0.9表示9折" />
+            <label class="block text-sm font-medium mb-2">{{ translateUi('uiMessages.m729cc8ebd883') }}</label>
+            <input v-model.number="couponForm.discount_value" type="number" step="0.01" min="0.01" max="0.99" class="input" :placeholder="translateUi('uiMessages.mca7e6bb0abdc')" />
           </div>
           <div v-if="couponForm.type === 'balance'">
-            <label class="block text-sm font-medium mb-2">抵扣金额 * (分)</label>
-            <input v-model.number="couponForm.balance_value" type="number" class="input" :placeholder="`1000表示10${currencyUnitLabel}`" />
+            <label class="block text-sm font-medium mb-2">{{ translateUi('uiMessages.m2b757ba7ddb6') }}</label>
+            <input v-model.number="couponForm.balance_value" type="number" class="input" :placeholder="translateUi('uiMessages.m6a47678e489c', { value1: (currencyUnitLabel) })" />
           </div>
           <div>
-            <label class="block text-sm font-medium mb-2">最低消费金额 (分)</label>
-            <input v-model.number="couponForm.min_amount" type="number" class="input" placeholder="0表示无限制" />
+            <label class="block text-sm font-medium mb-2">{{ translateUi('uiMessages.ma7692ff15b7b') }}</label>
+            <input v-model.number="couponForm.min_amount" type="number" class="input" :placeholder="translateUi('uiMessages.m5a6ade652b90')" />
           </div>
           <div v-if="couponForm.type === 'discount'">
-            <label class="block text-sm font-medium mb-2">最大折扣金额 (分，可选)</label>
-            <input v-model.number="couponForm.max_discount" type="number" class="input" placeholder="留空表示无限制" />
+            <label class="block text-sm font-medium mb-2">{{ translateUi('uiMessages.mb7154feb5ff9') }}</label>
+            <input v-model.number="couponForm.max_discount" type="number" class="input" :placeholder="translateUi('uiMessages.m0287d1f45b91')" />
           </div>
           <div>
-            <label class="block text-sm font-medium mb-2">使用次数限制</label>
-            <input v-model.number="couponForm.usage_limit" type="number" class="input" placeholder="1表示一次性，0表示无限制" />
+            <label class="block text-sm font-medium mb-2">{{ translateUi('uiMessages.m0edca6dd9930') }}</label>
+            <input v-model.number="couponForm.usage_limit" type="number" class="input" :placeholder="translateUi('uiMessages.me3884640f874')" />
           </div>
           <div>
-            <label class="block text-sm font-medium mb-2">有效天数</label>
+            <label class="block text-sm font-medium mb-2">{{ translateUi('uiMessages.m3481a74eaca1') }}</label>
             <input v-model.number="couponForm.valid_days" type="number" class="input" placeholder="30" />
           </div>
           <div>
-            <label class="block text-sm font-medium mb-2">描述</label>
-            <textarea v-model="couponForm.description" class="input" rows="2" placeholder="优惠券描述"></textarea>
+            <label class="block text-sm font-medium mb-2">{{ translateUi('uiMessages.mdc2ba467fc7a') }}</label>
+            <textarea v-model="couponForm.description" class="input" rows="2" :placeholder="translateUi('uiMessages.m7b7efc053b09')"></textarea>
           </div>
           <div>
-            <label class="block text-sm font-medium mb-2">备注</label>
-            <textarea v-model="couponForm.notes" class="input" rows="2" placeholder="内部备注"></textarea>
+            <label class="block text-sm font-medium mb-2">{{ translateUi('directorStudio.inspector.note') }}</label>
+            <textarea v-model="couponForm.notes" class="input" rows="2" :placeholder="translateUi('uiMessages.m1f1ba55e7a98')"></textarea>
           </div>
         </div>
         <div class="p-6 border-t border-slate-200 dark:border-dark-600 flex gap-3">
-          <button @click="showEditCouponModal = false" class="btn-secondary flex-1">取消</button>
-          <button @click="updateCoupon" class="btn-primary flex-1">保存</button>
+          <button @click="showEditCouponModal = false" class="btn-secondary flex-1">{{ translateUi('common.cancel') }}</button>
+          <button @click="updateCoupon" class="btn-primary flex-1">{{ translateUi('common.save') }}</button>
         </div>
       </div>
     </div>
@@ -2650,16 +2652,16 @@ onUnmounted(() => {
     <div v-if="showGenerateCouponModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" @click.self="showGenerateCouponModal = false">
       <div class="bg-white dark:bg-dark-800 rounded-xl shadow-2xl max-w-md w-full">
         <div class="p-6 border-b border-slate-200 dark:border-dark-600">
-          <h3 class="text-xl font-bold text-slate-900 dark:text-white">批量生成优惠券码</h3>
+          <h3 class="text-xl font-bold text-slate-900 dark:text-white">{{ translateUi('uiMessages.mf7e455d26460') }}</h3>
           <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">{{ currentCoupon?.name }}</p>
         </div>
         <div class="p-6">
-          <label class="block text-sm font-medium mb-2">生成数量 (1-1000)</label>
+          <label class="block text-sm font-medium mb-2">{{ translateUi('uiMessages.m4bdec538dc13') }}</label>
           <input v-model.number="generateCouponForm.count" type="number" min="1" max="1000" class="input" />
         </div>
         <div class="p-6 border-t border-slate-200 dark:border-dark-600 flex gap-3">
-          <button @click="showGenerateCouponModal = false" class="btn-secondary flex-1">取消</button>
-          <button @click="generateCoupons" class="btn-primary flex-1">生成</button>
+          <button @click="showGenerateCouponModal = false" class="btn-secondary flex-1">{{ translateUi('common.cancel') }}</button>
+          <button @click="generateCoupons" class="btn-primary flex-1">{{ translateUi('nav.generate') }}</button>
         </div>
       </div>
     </div>
@@ -2668,19 +2670,19 @@ onUnmounted(() => {
     <div v-if="showCouponCodesModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" @click.self="showCouponCodesModal = false">
       <div class="bg-white dark:bg-dark-800 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <div class="p-6 border-b border-slate-200 dark:border-dark-600">
-          <h3 class="text-xl font-bold text-slate-900 dark:text-white">优惠券码列表</h3>
-          <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">{{ currentCoupon?.name }} - 共 {{ couponCodes.length }} 张</p>
+          <h3 class="text-xl font-bold text-slate-900 dark:text-white">{{ translateUi('uiMessages.m2b7837422d36') }}</h3>
+          <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">{{ translateUi('uiMessages.m5e0b033edc7e', { value1: (currentCoupon?.name), value2: (couponCodes.length) }) }}</p>
         </div>
         <div class="p-6">
           <div class="overflow-x-auto">
             <table class="w-full">
               <thead>
                 <tr class="border-b border-slate-200 dark:border-dark-600">
-                  <th class="text-left py-2 px-4 text-sm font-medium">券码</th>
-                  <th class="text-left py-2 px-4 text-sm font-medium">状态</th>
-                  <th class="text-left py-2 px-4 text-sm font-medium">使用次数</th>
-                  <th class="text-left py-2 px-4 text-sm font-medium">领取用户</th>
-                  <th class="text-left py-2 px-4 text-sm font-medium">过期时间</th>
+                  <th class="text-left py-2 px-4 text-sm font-medium">{{ translateUi('uiMessages.mf4fefaaa6e9e') }}</th>
+                  <th class="text-left py-2 px-4 text-sm font-medium">{{ translateUi('uiMessages.m6320b4a8722a') }}</th>
+                  <th class="text-left py-2 px-4 text-sm font-medium">{{ translateUi('uiMessages.mc5018eca4465') }}</th>
+                  <th class="text-left py-2 px-4 text-sm font-medium">{{ translateUi('uiMessages.m76639714fa76') }}</th>
+                  <th class="text-left py-2 px-4 text-sm font-medium">{{ translateUi('uiMessages.ma8e5f1716600') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -2692,7 +2694,7 @@ onUnmounted(() => {
                       'bg-gray-100 text-gray-700': code.status === 'used',
                       'bg-red-100 text-red-700': code.status === 'expired'
                     }">
-                      {{ code.status === 'unused' ? '未使用' : code.status === 'used' ? '已使用' : '已过期' }}
+                      {{ code.status === 'unused' ? translateUi('uiMessages.mfa73ed85e86a') : code.status === 'used' ? translateUi('uiMessages.m9845c165151d') : translateUi('user.expired') }}
                     </span>
                   </td>
                   <td class="py-2 px-4 text-sm">{{ code.used_count }} / {{ code.usage_limit || '∞' }}</td>
@@ -2704,7 +2706,7 @@ onUnmounted(() => {
           </div>
         </div>
         <div class="p-6 border-t border-slate-200 dark:border-dark-600">
-          <button @click="showCouponCodesModal = false" class="btn-secondary w-full">关闭</button>
+          <button @click="showCouponCodesModal = false" class="btn-secondary w-full">{{ translateUi('common.close') }}</button>
         </div>
       </div>
     </div>
@@ -2732,97 +2734,97 @@ onUnmounted(() => {
       </div>
 
       <div class="card p-6">
-        <h2 class="text-xl font-bold text-slate-800 dark:text-white mb-6">📧 邮局配置</h2>
+        <h2 class="text-xl font-bold text-slate-800 dark:text-white mb-6">{{ translateUi('uiMessages.m9afcce31a7e0') }}</h2>
         
         <!-- SMTP配置 -->
         <div class="space-y-6">
           <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-            <h3 class="text-lg font-semibold text-blue-900 dark:text-blue-300 mb-2">📮 SMTP服务器配置</h3>
+            <h3 class="text-lg font-semibold text-blue-900 dark:text-blue-300 mb-2">{{ translateUi('uiMessages.m7c66fde4d9e7') }}</h3>
             <p class="text-sm text-blue-700 dark:text-blue-400 mb-4">
-              配置SMTP服务器后，系统可以发送注册验证码和密码重置邮件
+              {{ translateUi('uiMessages.m5039505e0bf9') }}
             </p>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  SMTP服务器地址 <span class="text-red-500">*</span>
+                  {{ translateUi('uiMessages.m5713d00adc99') }} <span class="text-red-500">*</span>
                 </label>
                 <input
                   v-model="emailConfig.smtp_host"
                   type="text"
-                  placeholder="例如: smtp.gmail.com"
+                  :placeholder="translateUi('uiMessages.md21ba6ac74b2')"
                   class="input"
                 />
                 <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                  ⚠️ 新租户需自行填写SMTP服务器地址
+                  {{ translateUi('uiMessages.m21fb121b8190') }}
                 </p>
               </div>
               
               <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  SMTP端口 *
+                  {{ translateUi('uiMessages.mc10f8ad454e6') }}
                 </label>
                 <input
                   v-model.number="emailConfig.smtp_port"
                   type="number"
-                  placeholder="通常为 25, 465, 587"
+                  :placeholder="translateUi('uiMessages.m70bf49df9fa8')"
                   class="input"
                 />
               </div>
               
               <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  SMTP用户名 <span class="text-red-500">*</span>
+                  {{ translateUi('uiMessages.mcb1c80e2fa49') }} <span class="text-red-500">*</span>
                 </label>
                 <input
                   v-model="emailConfig.smtp_user"
                   type="text"
-                  placeholder="例如: your-email@example.com"
+                  :placeholder="translateUi('uiMessages.m2c4bf4206881')"
                   class="input"
                 />
                 <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                  ⚠️ 新租户需自行填写SMTP用户名
+                  {{ translateUi('uiMessages.m297f73507de7') }}
                 </p>
               </div>
               
               <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  SMTP密码 <span class="text-red-500">*</span>
+                  {{ translateUi('uiMessages.m43e8e74262f5') }} <span class="text-red-500">*</span>
                 </label>
                 <input
                   v-model="emailConfig.smtp_password"
                   type="password"
-                  placeholder="输入SMTP密码"
+                  :placeholder="translateUi('uiMessages.m67d2300e0bd3')"
                   class="input"
                 />
                 <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                  ⚠️ 新租户需自行填写SMTP密码
+                  {{ translateUi('uiMessages.m6c6679ac831a') }}
                 </p>
               </div>
               
               <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  发件人邮箱 <span class="text-red-500">*</span>
+                  {{ translateUi('uiMessages.m3e40a49606f7') }} <span class="text-red-500">*</span>
                 </label>
                 <input
                   v-model="emailConfig.from_email"
                   type="email"
-                  placeholder="例如: noreply@yourdomain.com"
+                  :placeholder="translateUi('uiMessages.m3fded64dfdb8')"
                   class="input"
                 />
                 <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                  ⚠️ 新租户需自行填写发件人邮箱
+                  {{ translateUi('uiMessages.ma24e400bd9ad') }}
                 </p>
               </div>
               
               <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  发件人名称
+                  {{ translateUi('uiMessages.m544ab76df11c') }}
                 </label>
                 <input
                   v-model="emailConfig.from_name"
                   type="text"
-                  placeholder="例如: 您的应用名称"
+                  :placeholder="translateUi('uiMessages.mfbab33b75f46')"
                   class="input"
                 />
               </div>
@@ -2835,7 +2837,7 @@ onUnmounted(() => {
                   class="w-5 h-5 text-primary-600 focus:ring-primary-500 rounded"
                 />
                 <label for="smtp_secure" class="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  使用SSL/TLS (465端口时通常需要开启)
+                  {{ translateUi('uiMessages.m3a9acdce30df') }}
                 </label>
               </div>
             </div>
@@ -2843,7 +2845,7 @@ onUnmounted(() => {
 
           <!-- 注册验证配置 -->
           <div class="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
-            <h3 class="text-lg font-semibold text-purple-900 dark:text-purple-300 mb-2">🔐 注册验证设置</h3>
+            <h3 class="text-lg font-semibold text-purple-900 dark:text-purple-300 mb-2">{{ translateUi('uiMessages.mbf07715f639f') }}</h3>
             
             <div class="space-y-4">
               <div class="flex items-start space-x-3">
@@ -2855,10 +2857,10 @@ onUnmounted(() => {
                 />
                 <div>
                   <label for="require_verification" class="text-sm font-medium text-slate-700 dark:text-slate-300 block">
-                    强制邮箱验证
+                    {{ translateUi('uiMessages.mdd3efe7c1bf4') }}
                   </label>
                   <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    开启后，用户注册时必须提供邮箱并完成验证才能注册成功
+                    {{ translateUi('uiMessages.mca2cd2b84d4d') }}
                   </p>
                 </div>
               </div>
@@ -2867,9 +2869,9 @@ onUnmounted(() => {
 
           <!-- 邮箱白名单配置 -->
           <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-            <h3 class="text-lg font-semibold text-green-900 dark:text-green-300 mb-2">📋 邮箱白名单</h3>
+            <h3 class="text-lg font-semibold text-green-900 dark:text-green-300 mb-2">{{ translateUi('uiMessages.m86a2f8b766ef') }}</h3>
             <p class="text-sm text-green-700 dark:text-green-400 mb-4">
-              只限制邮箱后缀（域名），用逗号分隔。留空表示不限制。
+              {{ translateUi('uiMessages.mab94f82715c7') }}
             </p>
             
             <div class="space-y-3">
@@ -2877,7 +2879,7 @@ onUnmounted(() => {
                 <input
                   v-model="whitelistInput"
                   type="text"
-                  placeholder="输入域名后缀，多个用逗号分隔。例如: gmail.com,qq.com,163.com"
+                  :placeholder="translateUi('uiMessages.ma5023f3f0eac')"
                   class="input flex-1"
                   @keyup.enter="addToWhitelist"
                 />
@@ -2885,7 +2887,7 @@ onUnmounted(() => {
                   @click="addToWhitelist"
                   class="btn-primary"
                 >
-                  添加
+                  {{ translateUi('common.add') }}
                 </button>
               </div>
               
@@ -2906,23 +2908,23 @@ onUnmounted(() => {
               </div>
               
               <p v-else class="text-sm text-slate-500 dark:text-slate-400 italic">
-                当前未设置白名单，所有邮箱都可以注册
+                {{ translateUi('uiMessages.m5bf4af9795cd') }}
               </p>
             </div>
           </div>
 
           <!-- 测试邮件 -->
           <div class="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
-            <h3 class="text-lg font-semibold text-orange-900 dark:text-orange-300 mb-2">🧪 测试邮件发送</h3>
+            <h3 class="text-lg font-semibold text-orange-900 dark:text-orange-300 mb-2">{{ translateUi('uiMessages.m8f9cad03084b') }}</h3>
             <p class="text-sm text-orange-700 dark:text-orange-400 mb-4">
-              <strong>⚠️ 注意：</strong>请先点击下方"💾 保存配置"按钮保存SMTP配置，然后再测试邮件发送
+              <strong>{{ translateUi('uiMessages.m48bdecd9858f') }}</strong>{{ translateUi('uiMessages.m11a4d004b0dd') }}
             </p>
             
             <div class="flex space-x-2">
               <input
                 v-model="testEmail"
                 type="email"
-                placeholder="输入测试邮箱地址"
+                :placeholder="translateUi('uiMessages.m3a8b0ed2f2cf')"
                 class="input flex-1"
               />
               <button
@@ -2930,7 +2932,7 @@ onUnmounted(() => {
                 :disabled="loadingOps"
                 class="btn-secondary"
               >
-                {{ loadingOps ? '发送中...' : '发送测试邮件' }}
+                {{ loadingOps ? translateUi('auth.sending') : translateUi('uiMessages.mf9ae1a31638d') }}
               </button>
             </div>
           </div>
@@ -2942,7 +2944,7 @@ onUnmounted(() => {
               :disabled="loadingOps"
               class="btn-primary"
             >
-              {{ loadingOps ? '保存中...' : '💾 保存配置' }}
+              {{ loadingOps ? translateUi('common.saving') : translateUi('uiMessages.m43e03303b3ea') }}
             </button>
           </div>
         </div>
@@ -2973,17 +2975,17 @@ onUnmounted(() => {
       <!-- 套餐列表 -->
       <div class="card">
         <div class="p-6 border-b border-slate-200 dark:border-dark-600">
-          <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100">套餐管理</h3>
-          <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">管理系统套餐，设置价格和权限</p>
+          <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100">{{ translateUi('admin.packages') }}</h3>
+          <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">{{ translateUi('uiMessages.m308ee0908563') }}</p>
         </div>
 
         <div v-if="loadingPackages" class="p-12 text-center">
           <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-          <p class="mt-2 text-slate-600 dark:text-slate-400">加载中...</p>
+          <p class="mt-2 text-slate-600 dark:text-slate-400">{{ translateUi('common.loading') }}</p>
         </div>
 
         <div v-else-if="packages.length === 0" class="p-12 text-center">
-          <p class="text-slate-500 dark:text-slate-400">暂无套餐</p>
+          <p class="text-slate-500 dark:text-slate-400">{{ translateUi('packages.noPlan') }}</p>
         </div>
 
         <div v-else class="p-6">
@@ -3007,26 +3009,26 @@ onUnmounted(() => {
                     ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
                     : 'bg-slate-200 dark:bg-dark-600 text-slate-600 dark:text-slate-400'"
                 >
-                  {{ pkg.enabled ? '启用' : '禁用' }}
+                  {{ pkg.enabled ? translateUi('directorStudio.inspector.enabled') : translateUi('uiMessages.m7df5c456c765') }}
                 </span>
               </div>
 
               <div class="space-y-2 mb-4 text-sm">
                 <div class="flex justify-between">
-                  <span class="text-slate-600 dark:text-slate-400">价格</span>
+                  <span class="text-slate-600 dark:text-slate-400">{{ translateUi('packages.price') }}</span>
                   <span class="font-semibold text-slate-900 dark:text-slate-100">{{ formatMoney(pkg.price) }}</span>
                 </div>
                 <div class="flex justify-between">
-                  <span class="text-slate-600 dark:text-slate-400">积分</span>
+                  <span class="text-slate-600 dark:text-slate-400">{{ translateUi('imageGen.points') }}</span>
                   <span class="font-semibold text-slate-900 dark:text-slate-100">{{ pkg.points }}</span>
                 </div>
                 <div class="flex justify-between">
-                  <span class="text-slate-600 dark:text-slate-400">并发</span>
+                  <span class="text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.m2b66a2b53a76') }}</span>
                   <span class="font-semibold text-slate-900 dark:text-slate-100">{{ pkg.concurrent_limit }}</span>
                 </div>
                 <div class="flex justify-between">
-                  <span class="text-slate-600 dark:text-slate-400">时长</span>
-                  <span class="font-semibold text-slate-900 dark:text-slate-100">{{ pkg.duration_days }}天</span>
+                  <span class="text-slate-600 dark:text-slate-400">{{ translateUi('videoGen.duration') }}</span>
+                  <span class="font-semibold text-slate-900 dark:text-slate-100">{{ translateUi('uiMessages.mb4baa30d48ff', { value1: (pkg.duration_days) }) }}</span>
                 </div>
               </div>
 
@@ -3035,7 +3037,7 @@ onUnmounted(() => {
                   @click="openEditPackage(pkg)" 
                   class="flex-1 px-3 py-2 text-sm bg-primary-600 text-white rounded hover:bg-primary-700 transition-colors"
                 >
-                  编辑
+                  {{ translateUi('common.edit') }}
                 </button>
                 <button 
                   @click="togglePackageEnabled(pkg)" 
@@ -3044,7 +3046,7 @@ onUnmounted(() => {
                     ? 'bg-slate-200 dark:bg-dark-600 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-dark-500' 
                     : 'bg-green-600 text-white hover:bg-green-700'"
                 >
-                  {{ pkg.enabled ? '禁用' : '启用' }}
+                  {{ pkg.enabled ? translateUi('uiMessages.m7df5c456c765') : translateUi('directorStudio.inspector.enabled') }}
                 </button>
               </div>
             </div>
@@ -3080,24 +3082,24 @@ onUnmounted(() => {
           <svg class="w-5 h-5 text-amber-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
             <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
           </svg>
-          <p class="text-sm text-amber-700 dark:text-amber-400">支付方式的添加、编辑、删除请前往 <span class="font-semibold">租户控制台（9000端口）→ 支付管理</span> 操作，此处仅供查看。</p>
+          <p class="text-sm text-amber-700 dark:text-amber-400">{{ translateUi('uiMessages.m188e85cffcb6') }} <span class="font-semibold">{{ translateUi('uiMessages.m4fdf852b97d1') }}</span> {{ translateUi('uiMessages.m6305987066af') }}</p>
         </div>
       </div>
 
       <!-- 支付方式列表（只读） -->
       <div class="card">
         <div class="p-6 border-b border-slate-200 dark:border-dark-600">
-          <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100">支付配置</h3>
-          <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">当前已配置的支付方式（只读）</p>
+          <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100">{{ translateUi('uiMessages.m726450e432fa') }}</h3>
+          <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">{{ translateUi('uiMessages.m80287eb22e05') }}</p>
         </div>
 
         <div v-if="loadingPayment" class="p-12 text-center">
           <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-          <p class="mt-2 text-slate-600 dark:text-slate-400">加载中...</p>
+          <p class="mt-2 text-slate-600 dark:text-slate-400">{{ translateUi('common.loading') }}</p>
         </div>
 
         <div v-else-if="paymentMethods.length === 0" class="p-12 text-center">
-          <p class="text-slate-500 dark:text-slate-400">暂无支付方式，请前往租户控制台（9000端口）添加</p>
+          <p class="text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.md343df58afb8') }}</p>
         </div>
 
         <div v-else class="overflow-x-auto">
@@ -3105,10 +3107,10 @@ onUnmounted(() => {
             <thead class="bg-slate-50 dark:bg-dark-700">
               <tr>
                 <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">ID</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">状态</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">显示名称</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">支付接口</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">通知地址</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">{{ translateUi('uiMessages.m6320b4a8722a') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">{{ translateUi('uiMessages.ma98585871c53') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">{{ translateUi('uiMessages.mc1e15394c450') }}</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">{{ translateUi('uiMessages.m581a31636a0d') }}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-200 dark:divide-dark-600">
@@ -3125,7 +3127,7 @@ onUnmounted(() => {
                     class="px-2 py-1 text-xs rounded-full"
                     :class="method.enabled ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-slate-100 dark:bg-dark-600 text-slate-500 dark:text-slate-400'"
                   >
-                    {{ method.enabled ? '已启用' : '已禁用' }}
+                    {{ method.enabled ? translateUi('directorStudio.panorama.active') : translateUi('uiMessages.mbc5a87a757a5') }}
                   </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
@@ -3153,7 +3155,7 @@ onUnmounted(() => {
       <div class="bg-white dark:bg-dark-700 rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div class="p-6 border-b border-slate-200 dark:border-dark-600">
           <div class="flex items-center justify-between">
-            <h3 class="text-xl font-bold text-slate-900 dark:text-slate-100">编辑套餐</h3>
+            <h3 class="text-xl font-bold text-slate-900 dark:text-slate-100">{{ translateUi('uiMessages.m1fa3cf0b99e0') }}</h3>
             <button @click="closeEditPackage" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -3174,42 +3176,42 @@ onUnmounted(() => {
           </div>
           
           <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">套餐名称</label>
-            <input v-model="packageForm.name" class="input w-full" type="text" placeholder="例如：月套餐" />
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{{ translateUi('uiMessages.m5636b6cd712f') }}</label>
+            <input v-model="packageForm.name" class="input w-full" type="text" :placeholder="translateUi('uiMessages.m959de862e023')" />
           </div>
 
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">积分数量</label>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{{ translateUi('uiMessages.m5da54b27a36f') }}</label>
               <input v-model.number="packageForm.points" class="input w-full" type="number" min="0" />
             </div>
             <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">并发限制</label>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{{ translateUi('uiMessages.m44c5959863d8') }}</label>
               <input v-model.number="packageForm.concurrent_limit" class="input w-full" type="number" min="1" />
             </div>
           </div>
 
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">有效期（天）</label>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{{ translateUi('uiMessages.m834dab8a179f') }}</label>
               <input v-model.number="packageForm.duration_days" class="input w-full" type="number" min="1" />
             </div>
             <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">价格（{{ currencyUnitLabel }}）</label>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{{ translateUi('uiMessages.m208ddce30623', { value1: (currencyUnitLabel) }) }}</label>
               <input v-model.number="packageForm.price" class="input w-full" type="number" min="0" step="0.01" />
             </div>
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">描述</label>
-            <textarea v-model="packageForm.description" class="input w-full" rows="3" placeholder="套餐描述"></textarea>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{{ translateUi('uiMessages.mdc2ba467fc7a') }}</label>
+            <textarea v-model="packageForm.description" class="input w-full" rows="3" :placeholder="translateUi('uiMessages.ma496603c7f84')"></textarea>
           </div>
         </div>
 
         <div class="p-6 border-t border-slate-200 dark:border-dark-600 flex justify-end space-x-3">
-          <button @click="closeEditPackage" class="btn-secondary">取消</button>
+          <button @click="closeEditPackage" class="btn-secondary">{{ translateUi('common.cancel') }}</button>
           <button @click="savePackage" :disabled="loadingOps" class="btn-primary">
-            {{ loadingOps ? '保存中...' : '保存' }}
+            {{ loadingOps ? translateUi('common.saving') : translateUi('common.save') }}
           </button>
         </div>
       </div>
@@ -3220,7 +3222,7 @@ onUnmounted(() => {
       <div class="bg-white dark:bg-dark-700 rounded-xl shadow-2xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div class="p-6 border-b border-slate-200 dark:border-dark-600">
           <div class="flex items-center justify-between">
-            <h3 class="text-xl font-bold gradient-text">创建新用户</h3>
+            <h3 class="text-xl font-bold gradient-text">{{ translateUi('uiMessages.m91885892aded') }}</h3>
             <button @click="showCreateModal = false" class="text-slate-400 hover:text-slate-600">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -3232,38 +3234,38 @@ onUnmounted(() => {
         <div class="p-6 space-y-4">
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              用户名 <span class="text-red-500">*</span>
+              {{ translateUi('auth.username') }} <span class="text-red-500">*</span>
             </label>
-            <input v-model="createForm.username" class="input" placeholder="输入用户名" />
+            <input v-model="createForm.username" class="input" :placeholder="translateUi('uiMessages.m98c0045afac1')" />
           </div>
           
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              邮箱
+              {{ translateUi('auth.email') }}
             </label>
-            <input v-model="createForm.email" class="input" placeholder="输入邮箱（可选）" type="email" />
+            <input v-model="createForm.email" class="input" :placeholder="translateUi('uiMessages.m7ff14080d304')" type="email" />
           </div>
           
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              密码 <span class="text-red-500">*</span>
+              {{ translateUi('auth.password') }} <span class="text-red-500">*</span>
             </label>
-            <input v-model="createForm.password" class="input" placeholder="输入密码" type="password" />
+            <input v-model="createForm.password" class="input" :placeholder="translateUi('uiMessages.m7673702e6ff6')" type="password" />
           </div>
           
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              角色
+              {{ translateUi('user.role') }}
             </label>
             <select v-model="createForm.role" class="input">
-              <option value="user">普通用户</option>
-              <option value="admin">管理员</option>
+              <option value="user">{{ translateUi('user.roleUser') }}</option>
+              <option value="admin">{{ translateUi('user.roleAdmin') }}</option>
             </select>
           </div>
           
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              初始积分
+              {{ translateUi('uiMessages.m93aa5ac9b93b') }}
             </label>
             <input v-model.number="createForm.points" class="input" placeholder="0" type="number" min="0" />
           </div>
@@ -3282,14 +3284,14 @@ onUnmounted(() => {
             @click="showCreateModal = false" 
             class="flex-1 btn-secondary"
           >
-            取消
+            {{ translateUi('common.cancel') }}
           </button>
           <button 
             @click="createUser" 
             :disabled="loadingCreate"
             class="flex-1 btn-primary disabled:opacity-60"
           >
-            {{ loadingCreate ? '创建中...' : '创建用户' }}
+            {{ loadingCreate ? translateUi('uiMessages.m687d8f3ba99e') : translateUi('admin.createUser') }}
           </button>
         </div>
       </div>
@@ -3300,7 +3302,7 @@ onUnmounted(() => {
       <div class="bg-white dark:bg-dark-700 rounded-xl shadow-2xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div class="p-6 border-b border-slate-200 dark:border-dark-600">
           <div class="flex items-center justify-between">
-            <h3 class="text-xl font-bold gradient-text">编辑用户信息</h3>
+            <h3 class="text-xl font-bold gradient-text">{{ translateUi('uiMessages.m85431d3d2790') }}</h3>
             <button @click="showEditModal = false" class="text-slate-400 hover:text-slate-600">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -3312,33 +3314,33 @@ onUnmounted(() => {
         <div class="p-6 space-y-4">
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              用户名 <span class="text-red-500">*</span>
+              {{ translateUi('auth.username') }} <span class="text-red-500">*</span>
             </label>
-            <input v-model="editForm.username" class="input" placeholder="输入用户名" />
+            <input v-model="editForm.username" class="input" :placeholder="translateUi('uiMessages.m98c0045afac1')" />
           </div>
           
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              邮箱
+              {{ translateUi('auth.email') }}
             </label>
-            <input v-model="editForm.email" class="input" placeholder="输入邮箱" type="email" />
+            <input v-model="editForm.email" class="input" :placeholder="translateUi('uiMessages.m106814c8c2aa')" type="email" />
           </div>
           
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              新密码（留空不修改）
+              {{ translateUi('uiMessages.m3fb2d5e4d20c') }}
             </label>
-            <input v-model="editForm.password" class="input" placeholder="输入新密码以重置" type="password" />
-            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">如果不需要修改密码，请留空此字段</p>
+            <input v-model="editForm.password" class="input" :placeholder="translateUi('uiMessages.m31f06817c0dc')" type="password" />
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m97ef6679265a') }}</p>
           </div>
           
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              角色
+              {{ translateUi('user.role') }}
             </label>
             <select v-model="editForm.role" class="input">
-              <option value="user">普通用户</option>
-              <option value="admin">管理员</option>
+              <option value="user">{{ translateUi('user.roleUser') }}</option>
+              <option value="admin">{{ translateUi('user.roleAdmin') }}</option>
             </select>
           </div>
           
@@ -3346,49 +3348,49 @@ onUnmounted(() => {
           <div class="p-4 bg-gradient-to-r from-purple-50 to-amber-50 dark:from-purple-900/20 dark:to-amber-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
             <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3 flex items-center">
               <span class="mr-2">💎</span>
-              积分资产
+              {{ translateUi('uiMessages.mee5ad5b61949') }}
             </h4>
             
             <div class="space-y-3">
               <!-- 套餐积分 -->
               <div class="bg-white dark:bg-dark-600 rounded-lg p-3">
                 <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
-                  ⏰ 套餐积分（会过期）
+                  {{ translateUi('uiMessages.m6f0e92dc1792') }}
                 </label>
                 <input 
                   v-model.number="editForm.package_points" 
                   class="input text-sm" 
-                  placeholder="套餐积分" 
+                  :placeholder="translateUi('imageGen.packagePoints')"
                   type="number" 
                   min="0" 
                   readonly
                   disabled
                 />
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  套餐积分由购买套餐获得，不能手动修改
+                  {{ translateUi('uiMessages.mad12aef9cd78') }}
                 </p>
               </div>
               
               <!-- 永久积分 -->
               <div class="bg-white dark:bg-dark-600 rounded-lg p-3">
                 <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
-                  💎 永久积分（永不过期）
+                  {{ translateUi('uiMessages.m917dc38a8447') }}
                 </label>
                 <input 
                   v-model.number="editForm.points" 
                   class="input text-sm" 
-                  placeholder="永久积分" 
+                  :placeholder="translateUi('imageGen.permanentPoints')"
                   type="number" 
                   min="0" 
                 />
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  可以手动调整永久积分
+                  {{ translateUi('uiMessages.md0a30b6801c5') }}
                 </p>
               </div>
               
               <!-- 总计 -->
               <div class="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-dark-600">
-                <span class="text-sm font-medium text-slate-600 dark:text-slate-400">总积分</span>
+                <span class="text-sm font-medium text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.m26849e6fee0c') }}</span>
                 <span class="text-lg font-bold text-slate-900 dark:text-slate-100">
                   {{ (editForm.package_points || 0) + (editForm.points || 0) }}
                 </span>
@@ -3400,13 +3402,13 @@ onUnmounted(() => {
           <div class="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg border border-green-200 dark:border-green-800">
             <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3 flex items-center">
               <span class="mr-2">💰</span>
-              账户余额
+              {{ translateUi('packages.accountBalance') }}
             </h4>
             
             <div class="space-y-3">
               <div>
                 <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
-                  当前余额（{{ currencyUnitLabel }}）
+                  {{ translateUi('uiMessages.me23ef2ab9984', { value1: (currencyUnitLabel) }) }}
                 </label>
                 <div class="flex items-center space-x-2">
                   <input 
@@ -3419,11 +3421,11 @@ onUnmounted(() => {
                     @click="openRechargeModal"
                     class="px-3 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors"
                   >
-                    充值
+                    {{ translateUi('user.recharge') }}
                   </button>
                 </div>
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  点击"充值"按钮为用户增加余额
+                  {{ translateUi('uiMessages.m89c7c04194b4') }}
                 </p>
               </div>
             </div>
@@ -3433,13 +3435,13 @@ onUnmounted(() => {
           <div>
             <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center space-x-2">
               <span>⚡</span>
-              <span>并发限制</span>
+              <span>{{ translateUi('uiMessages.m44c5959863d8') }}</span>
             </h4>
             
             <div class="space-y-3">
               <div>
                 <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
-                  最大并发任务数
+                  {{ translateUi('uiMessages.m16242143b74a') }}
                 </label>
                 <input 
                   v-model.number="editForm.concurrent_limit" 
@@ -3449,7 +3451,7 @@ onUnmounted(() => {
                   class="input text-sm w-full" 
                 />
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  设置用户可同时执行的最大任务数（套餐用户优先使用套餐的并发限制）
+                  {{ translateUi('uiMessages.m1d6ada367a48') }}
                 </p>
               </div>
             </div>
@@ -3459,7 +3461,7 @@ onUnmounted(() => {
           <div>
             <label class="flex items-center space-x-2 cursor-pointer">
               <input v-model="editForm.disabled" type="checkbox" class="rounded border-slate-300 dark:border-dark-600" />
-              <span class="text-sm font-medium text-slate-700 dark:text-slate-300">禁用此用户</span>
+              <span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.mc17e36e04467') }}</span>
             </label>
           </div>
           
@@ -3477,14 +3479,14 @@ onUnmounted(() => {
             @click="showEditModal = false" 
             class="flex-1 btn-secondary"
           >
-            取消
+            {{ translateUi('common.cancel') }}
           </button>
           <button 
             @click="saveEdit" 
             :disabled="loadingOps"
             class="flex-1 btn-primary disabled:opacity-60"
           >
-            {{ loadingOps ? '保存中...' : '保存更改' }}
+            {{ loadingOps ? translateUi('common.saving') : translateUi('uiMessages.mecf0ea01192d') }}
           </button>
         </div>
       </div>
@@ -3495,7 +3497,7 @@ onUnmounted(() => {
       <div class="bg-white dark:bg-dark-700 rounded-xl shadow-2xl max-w-md w-full mx-4">
         <div class="p-6 border-b border-slate-200 dark:border-dark-600">
           <div class="flex items-center justify-between">
-            <h3 class="text-xl font-bold gradient-text">💰 余额充值</h3>
+            <h3 class="text-xl font-bold gradient-text">{{ translateUi('uiMessages.m6dc7848bc9ea') }}</h3>
             <button @click="showRechargeModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -3507,43 +3509,43 @@ onUnmounted(() => {
         <div class="p-6 space-y-4">
           <div class="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
             <p class="text-sm text-blue-700 dark:text-blue-400">
-              为用户 <span class="font-bold">{{ rechargeForm.username }}</span> 充值余额
+              {{ translateUi('uiMessages.m16f98321796a') }} <span class="font-bold">{{ rechargeForm.username }}</span> {{ translateUi('uiMessages.m19dd57394b91') }}
             </p>
           </div>
           
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              充值金额（{{ currencyUnitLabel }}） <span class="text-red-500">*</span>
+              {{ translateUi('uiMessages.mdaaa1096ba1b', { value1: (currencyUnitLabel) }) }} <span class="text-red-500">*</span>
             </label>
             <input 
               v-model.number="rechargeForm.amount" 
               class="input w-full" 
-              placeholder="例如：100" 
+              :placeholder="translateUi('uiMessages.m7d79e4e79841')"
               type="number" 
               step="0.01"
               @keyup.enter="submitRecharge"
             />
             <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              输入充值金额，单位为当前计价货币
+              {{ translateUi('uiMessages.m55222c31ccb3') }}
             </p>
             <div class="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
               <p class="text-xs text-amber-700 dark:text-amber-300 flex items-start gap-1.5">
                 <svg class="w-3.5 h-3.5 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span><strong>支持负数：</strong>输入负数（如 -50）可扣减用户余额</span>
+                <span><strong>{{ translateUi('uiMessages.m308d6b0e2c43') }}</strong>{{ translateUi('uiMessages.m974578107ff0') }}</span>
               </p>
             </div>
           </div>
           
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              充值说明（可选）
+              {{ translateUi('uiMessages.mc6ed0a907a2d') }}
             </label>
             <textarea 
               v-model="rechargeForm.description" 
               class="input w-full" 
-              placeholder="例如：活动赠送、补偿等"
+              :placeholder="translateUi('uiMessages.m82924de54634')"
               rows="3"
             ></textarea>
           </div>
@@ -3562,14 +3564,14 @@ onUnmounted(() => {
             @click="showRechargeModal = false" 
             class="flex-1 btn-secondary"
           >
-            取消
+            {{ translateUi('common.cancel') }}
           </button>
           <button 
             @click="submitRecharge" 
             :disabled="loadingOps || !rechargeForm.amount || rechargeForm.amount <= 0"
             class="flex-1 btn-primary disabled:opacity-60"
           >
-            {{ loadingOps ? '充值中...' : '确认充值' }}
+            {{ loadingOps ? translateUi('uiMessages.mcbcf88a05fa4') : translateUi('user.confirmRecharge') }}
           </button>
         </div>
       </div>
@@ -3580,7 +3582,7 @@ onUnmounted(() => {
       <div class="bg-white dark:bg-dark-700 rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div class="p-6 border-b border-slate-200 dark:border-dark-600">
           <div class="flex items-center justify-between">
-            <h3 class="text-xl font-bold gradient-text">系统设置</h3>
+            <h3 class="text-xl font-bold gradient-text">{{ translateUi('admin.settings') }}</h3>
             <button @click="showSettingsModal = false" class="text-slate-400 hover:text-slate-600">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -3597,8 +3599,8 @@ onUnmounted(() => {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div class="text-sm text-blue-700 dark:text-blue-200">
-                <p class="font-medium mb-1">系统参数已迁移</p>
-                <p>积分奖励、默认并发限制、余额兑换率等系统参数已迁移到租户管理平台(9000端口)进行统一管理。请前往租户管理平台的"租户配置"页面进行设置。</p>
+                <p class="font-medium mb-1">{{ translateUi('uiMessages.me1732e48ceb8') }}</p>
+                <p>{{ translateUi('uiMessages.m0e23c0e4f3b5') }}</p>
               </div>
             </div>
           </div>
@@ -3607,7 +3609,7 @@ onUnmounted(() => {
           <div class="pt-6 border-t border-slate-200 dark:border-dark-600">
             <h4 class="font-semibold text-slate-900 dark:text-slate-100 mb-4 flex items-center">
               <span class="mr-2">🎫</span>
-              兑换券外部链接设置
+              {{ translateUi('uiMessages.m22fdd2644fe6') }}
             </h4>
             <div class="space-y-4">
               <div class="flex items-center">
@@ -3618,35 +3620,35 @@ onUnmounted(() => {
                     class="w-4 h-4 text-primary-600 bg-slate-100 border-slate-300 rounded focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-slate-800 focus:ring-2 dark:bg-slate-700 dark:border-slate-600"
                   />
                   <span class="ml-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                    启用外部链接按钮
+                    {{ translateUi('uiMessages.m13a47e671fa7') }}
                   </span>
                 </label>
               </div>
               
               <div v-if="settings.voucher_external_link.enabled">
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  按钮文字
+                  {{ translateUi('uiMessages.m2b79301b1f55') }}
                 </label>
                 <input 
                   v-model="settings.voucher_external_link.button_text" 
                   class="input" 
                   type="text" 
-                  placeholder="例如：获取兑换券"
+                  :placeholder="translateUi('uiMessages.md47a6701b858')"
                 />
               </div>
               
               <div v-if="settings.voucher_external_link.enabled">
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  跳转链接 <span class="text-red-500">*</span>
+                  {{ translateUi('uiMessages.m6a13001be1fc') }} <span class="text-red-500">*</span>
                 </label>
                 <input 
                   v-model="settings.voucher_external_link.url" 
                   class="input" 
                   type="url" 
-                  placeholder="例如：https://example.com 或 app://open"
+                  :placeholder="translateUi('uiMessages.mf020457aa989')"
                 />
                 <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                  ⚠️ 新租户需自行填写跳转链接。支持 http/https 网址或 app:// 协议链接
+                  {{ translateUi('uiMessages.m7a3f7c7d9433') }}
                 </p>
               </div>
               
@@ -3658,7 +3660,7 @@ onUnmounted(() => {
                     class="w-4 h-4 text-primary-600 bg-slate-100 border-slate-300 rounded focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-slate-800 focus:ring-2 dark:bg-slate-700 dark:border-slate-600"
                   />
                   <span class="ml-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                    在新标签页打开
+                    {{ translateUi('uiMessages.m79c5e0bab4eb') }}
                   </span>
                 </label>
               </div>
@@ -3679,14 +3681,14 @@ onUnmounted(() => {
             @click="showSettingsModal = false" 
             class="flex-1 btn-secondary"
           >
-            取消
+            {{ translateUi('common.cancel') }}
           </button>
           <button 
             @click="saveSettings" 
             :disabled="loadingOps"
             class="flex-1 btn-primary disabled:opacity-60"
           >
-            {{ loadingOps ? '保存中...' : '保存设置' }}
+            {{ loadingOps ? translateUi('common.saving') : translateUi('uiMessages.mc8550237ba70') }}
           </button>
         </div>
       </div>
@@ -3700,10 +3702,10 @@ onUnmounted(() => {
         <span class="text-4xl">🔐</span>
       </div>
       <h3 class="text-2xl font-semibold text-slate-700 dark:text-slate-300 mb-4">
-        正在验证权限...
+        {{ translateUi('uiMessages.ma6af84ddd434') }}
       </h3>
       <p class="text-slate-500 dark:text-slate-400">
-        请稍候，正在检查管理员权限
+        {{ translateUi('uiMessages.m95621f4bb629') }}
       </p>
     </div>
   </div>
@@ -3713,7 +3715,7 @@ onUnmounted(() => {
     <div class="bg-white dark:bg-dark-700 rounded-xl shadow-2xl max-w-md w-full mx-4">
       <div class="p-6 border-b border-slate-200 dark:border-dark-600">
         <div class="flex items-center justify-between">
-          <h3 class="text-xl font-bold gradient-text">批量生成兑换券</h3>
+          <h3 class="text-xl font-bold gradient-text">{{ translateUi('uiMessages.m70133d6b7adb') }}</h3>
           <button @click="showBatchVoucherModal = false" class="text-slate-400 hover:text-slate-600">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -3733,7 +3735,7 @@ onUnmounted(() => {
         
         <div>
           <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            生成数量 <span class="text-red-500">*</span>
+            {{ translateUi('uiMessages.m1e3c56a9a4ca') }} <span class="text-red-500">*</span>
           </label>
           <input 
             v-model.number="batchVoucherForm.count" 
@@ -3747,22 +3749,22 @@ onUnmounted(() => {
         
         <div>
           <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            兑换积分
-            <span class="text-xs text-slate-500 ml-1">(积分和余额至少填一个)</span>
+            {{ translateUi('uiMessages.m42a6bb595ff0') }}
+            <span class="text-xs text-slate-500 ml-1">{{ translateUi('uiMessages.m72dd3bbc6780') }}</span>
           </label>
           <input 
             v-model.number="batchVoucherForm.points" 
             type="number"
             min="0"
             class="input"
-            placeholder="每张兑换券可兑换的积分（0表示不兑换积分）"
+            :placeholder="translateUi('uiMessages.m5c5ac4aa6c49')"
           />
         </div>
         
         <div>
           <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            兑换余额（{{ currencyUnitLabel }}）
-            <span class="text-xs text-slate-500 ml-1">(积分和余额至少填一个)</span>
+            {{ translateUi('uiMessages.m1e4bb35ba802', { value1: (currencyUnitLabel) }) }}
+            <span class="text-xs text-slate-500 ml-1">{{ translateUi('uiMessages.m72dd3bbc6780') }}</span>
           </label>
           <input 
             v-model.number="batchVoucherForm.balance" 
@@ -3770,59 +3772,59 @@ onUnmounted(() => {
             min="0"
             step="0.01"
             class="input"
-            placeholder="每张兑换券可兑换的余额（0表示不兑换余额）"
+            :placeholder="translateUi('uiMessages.m096fa8c7516d')"
           />
         </div>
         
         <div>
           <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            可使用次数 <span class="text-red-500">*</span>
+            {{ translateUi('uiMessages.m4bb8746e936b') }} <span class="text-red-500">*</span>
           </label>
           <input 
             v-model.number="batchVoucherForm.max_uses" 
             type="number"
             min="1"
             class="input"
-            placeholder="每张兑换券可以使用的次数"
+            :placeholder="translateUi('uiMessages.meaee5f831e83')"
           />
         </div>
         
         <div>
           <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            兑换券有效天数 <span class="text-red-500">*</span>
+            {{ translateUi('uiMessages.m2b68f9f71560') }} <span class="text-red-500">*</span>
           </label>
           <input 
             v-model.number="batchVoucherForm.days" 
             type="number"
             min="0"
             class="input"
-            placeholder="从现在起多少天后过期（0表示永久有效）"
+            :placeholder="translateUi('uiMessages.mf6ed616ba67a')"
           />
         </div>
 
         <div>
           <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            积分到账有效天数
-            <span class="text-xs text-slate-500 ml-1">(仅影响兑换积分，0表示永久积分)</span>
+            {{ translateUi('uiMessages.m94ad566bb141') }}
+            <span class="text-xs text-slate-500 ml-1">{{ translateUi('uiMessages.m1aeb350a7813') }}</span>
           </label>
           <input
             v-model.number="batchVoucherForm.point_valid_days"
             type="number"
             min="0"
             class="input"
-            placeholder="兑换后积分多少天内有效，默认365天"
+            :placeholder="translateUi('uiMessages.m2ff47f240edc')"
           />
         </div>
         
         <div>
           <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            备注（可选）
+            {{ translateUi('uiMessages.mb405227c7e3f') }}
           </label>
           <textarea 
             v-model="batchVoucherForm.note" 
             rows="3"
             class="input"
-            placeholder="添加备注信息，如：新年活动兑换券"
+            :placeholder="translateUi('uiMessages.m292787c69a9d')"
           ></textarea>
         </div>
       </div>
@@ -3833,15 +3835,15 @@ onUnmounted(() => {
           class="btn-secondary"
           :disabled="loadingCreate"
         >
-          取消
+          {{ translateUi('common.cancel') }}
         </button>
         <button 
           @click="createBatchVouchers"
           class="btn-primary"
           :disabled="loadingCreate"
         >
-          <span v-if="loadingCreate">生成中...</span>
-          <span v-else>生成</span>
+          <span v-if="loadingCreate">{{ translateUi('imageGen.generating') }}</span>
+          <span v-else>{{ translateUi('nav.generate') }}</span>
         </button>
       </div>
     </div>
@@ -3853,9 +3855,9 @@ onUnmounted(() => {
       <div class="p-6 border-b border-slate-200 dark:border-dark-600 sticky top-0 bg-white dark:bg-dark-700">
         <div class="flex items-center justify-between">
           <div>
-            <h3 class="text-xl font-bold gradient-text">兑换记录</h3>
+            <h3 class="text-xl font-bold gradient-text">{{ translateUi('uiMessages.m28dd843bce76') }}</h3>
             <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">
-              兑换码: <code class="px-2 py-1 bg-slate-100 dark:bg-dark-600 rounded font-mono">{{ currentVoucher?.code }}</code>
+              {{ translateUi('uiMessages.m4c0ada9838a3') }} <code class="px-2 py-1 bg-slate-100 dark:bg-dark-600 rounded font-mono">{{ currentVoucher?.code }}</code>
             </p>
           </div>
           <button @click="showVoucherRedemptionsModal = false" class="text-slate-400 hover:text-slate-600">
@@ -3869,7 +3871,7 @@ onUnmounted(() => {
       <div class="p-6">
         <div v-if="currentVoucherRedemptions.length === 0" class="text-center py-8">
           <div class="text-4xl mb-3">📝</div>
-          <p class="text-slate-500 dark:text-slate-400">暂无兑换记录</p>
+          <p class="text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m0e46428f8758') }}</p>
         </div>
         
         <div v-else class="space-y-3">
@@ -3881,10 +3883,10 @@ onUnmounted(() => {
             <div class="flex items-center justify-between">
               <div>
                 <p class="font-medium text-slate-900 dark:text-slate-100">
-                  {{ redemption.username || '未知用户' }}
+                  {{ redemption.username || translateUi('uiMessages.m1ac13841ba2e') }}
                 </p>
                 <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                  兑换了 <span class="font-semibold text-amber-600 dark:text-amber-400">{{ redemption.points }}</span> 积分
+                  {{ translateUi('uiMessages.m568d9d30a76e') }} <span class="font-semibold text-amber-600 dark:text-amber-400">{{ redemption.points }}</span> {{ translateUi('imageGen.points') }}
                 </p>
               </div>
               <div class="text-right text-sm text-slate-500 dark:text-slate-400">

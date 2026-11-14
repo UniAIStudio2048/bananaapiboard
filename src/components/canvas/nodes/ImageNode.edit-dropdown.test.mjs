@@ -24,11 +24,11 @@ assert.ok(dropdownStart > -1 && gridCropStart > dropdownStart, 'ImageNode edit d
 
 const dropdown = source.slice(dropdownStart, gridCropStart)
 const orderedMarkers = [
-  '<span>编辑</span>',
-  '<span>重绘</span>',
-  '<span>擦除</span>',
-  "'抠图'",
-  '<span>扩图</span>'
+  "translateUi('common.edit')",
+  "translateUi('uiMessages.mf56d491d6572')",
+  "translateUi('uiMessages.m96960e526529')",
+  "translateUi('uiMessages.mb84dd748d185')",
+  "translateUi('uiMessages.mdc76bd45af6f')"
 ]
 
 let lastIndex = -1

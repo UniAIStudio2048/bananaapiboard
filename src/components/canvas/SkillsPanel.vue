@@ -4,40 +4,40 @@
       <header class="skills-panel-header">
         <div>
           <p class="skills-panel-kicker">{{ skillName }}</p>
-          <h2 id="skills-panel-title">安装到 AI Agent</h2>
+          <h2 id="skills-panel-title">{{ translateUi('uiMessages.m39c6db66bcac') }}</h2>
         </div>
-        <button class="skills-close-btn" type="button" title="关闭" @click="emit('close')">
+        <button class="skills-close-btn" type="button" :title="translateUi('common.close')" @click="emit('close')">
           <X :size="18" aria-hidden="true" />
         </button>
       </header>
 
       <div v-if="error" class="skills-alert">{{ error }}</div>
 
-      <div class="skills-install-tabs" role="tablist" aria-label="安装方式">
+      <div class="skills-install-tabs" role="tablist" :aria-label="translateUi('uiMessages.m9c320cc7909f')">
         <button
           type="button"
           :class="{ active: installMode === 'agent' }"
           @click="installMode = 'agent'"
         >
-          通过 AI Agent 安装
+          {{ translateUi('uiMessages.m71b52069f199') }}
         </button>
         <button
           type="button"
           :class="{ active: installMode === 'manual' }"
           @click="installMode = 'manual'"
         >
-          手动安装
+          {{ translateUi('uiMessages.mb7b8d7022794') }}
         </button>
       </div>
 
       <section v-if="installMode === 'agent'" class="skills-card skills-agent-install">
         <p class="skills-agent-copy">
-          将下面这段话直接发给你的 AI 助手，它会按当前域名和 API Key 完成安装与初始化，适用于 Codex、Claude Code、WorkBuddy、OpenClaw、Hermes 以及其他支持 Skills 调用的智能体。
+          {{ translateUi('uiMessages.mf20a9439aa86') }}
         </p>
-        <div class="skills-prompt-label">提示词</div>
+        <div class="skills-prompt-label">{{ translateUi('directorStudio.inspector.prompt') }}</div>
         <pre class="skills-prompt-box">{{ agentInstallPrompt }}</pre>
         <div class="skills-actions centered">
-          <button class="btn-primary" type="button" :disabled="!agentInstallPrompt" @click="copyText(agentInstallPrompt, '安装提示词已复制')">复制安装提示词</button>
+          <button class="btn-primary" type="button" :disabled="!agentInstallPrompt" @click="copyText(agentInstallPrompt, '安装提示词已复制')">{{ translateUi('uiMessages.m4a7752e23b18') }}</button>
         </div>
       </section>
 
@@ -51,20 +51,20 @@
           <div class="skills-card-head">
             <div>
               <span class="skills-label">API Key</span>
-              <strong>{{ activeKey?.key_prefix || '未创建' }}</strong>
+              <strong>{{ activeKey?.key_prefix || translateUi('uiMessages.m90b310149a74') }}</strong>
             </div>
-            <button class="skills-link-btn" type="button" :disabled="loading" @click="loadSkills">刷新</button>
+            <button class="skills-link-btn" type="button" :disabled="loading" @click="loadSkills">{{ translateUi('common.refresh') }}</button>
           </div>
           <div class="skills-key-row">
             <code>{{ visibleKey }}</code>
             <button class="skills-icon-btn" type="button" :disabled="!fullKey" @click="showKey = !showKey">
-              {{ showKey ? '隐藏' : '显示' }}
+              {{ showKey ? translateUi('onboarding.settings.edgeStyleHidden') : translateUi('directorStudio.inspector.visible') }}
             </button>
           </div>
           <div class="skills-actions">
-            <button class="btn-secondary" type="button" :disabled="!fullKey" @click="copyText(fullKey, 'API Key 已复制')">复制 Key</button>
-            <button class="btn-secondary" type="button" :disabled="!activeKey?.id || resetting" @click="confirmResetKey">重置 Key</button>
-            <button class="btn-secondary" type="button" :disabled="loading" @click="ensureKey">创建 Key</button>
+            <button class="btn-secondary" type="button" :disabled="!fullKey" @click="copyText(fullKey, 'API Key 已复制')">{{ translateUi('uiMessages.mdca92dff9f15') }}</button>
+            <button class="btn-secondary" type="button" :disabled="!activeKey?.id || resetting" @click="confirmResetKey">{{ translateUi('uiMessages.mab38b115fae1') }}</button>
+            <button class="btn-secondary" type="button" :disabled="loading" @click="ensureKey">{{ translateUi('uiMessages.mbad2e4ec0db2') }}</button>
           </div>
         </div>
 
@@ -72,26 +72,28 @@
           <div class="skills-card-head">
             <div>
               <span class="skills-label">SKILL.md</span>
-              <strong>安装内容</strong>
+              <strong>{{ translateUi('uiMessages.ma3b703154298') }}</strong>
             </div>
-            <RouterLink class="skills-docs-link" to="/docs" target="_blank">打开文档</RouterLink>
+            <RouterLink class="skills-docs-link" to="/docs" target="_blank">{{ translateUi('uiMessages.md1961d380a4d') }}</RouterLink>
           </div>
           <pre class="skills-markdown-preview">{{ markdownPreview }}</pre>
           <div class="skills-actions">
-            <button class="btn-secondary" type="button" :disabled="!skillMarkdown" @click="copyText(skillMarkdown, 'SKILL.md 已复制')">复制 SKILL.md</button>
-            <button class="btn-secondary" type="button" :disabled="!packagePayload" @click="downloadPackage">下载 package.json</button>
+            <button class="btn-secondary" type="button" :disabled="!skillMarkdown" @click="copyText(skillMarkdown, 'SKILL.md 已复制')">{{ translateUi('uiMessages.ma068e0e4d2ae') }}</button>
+            <button class="btn-secondary" type="button" :disabled="!packagePayload" @click="downloadPackage">{{ translateUi('uiMessages.m6ce7be0eefbd') }}</button>
           </div>
         </div>
       </section>
 
       <footer class="skills-panel-footer">
-        <span>{{ statusMessage || `使用 ${baseUrl} 调用 /api/skills/*。` }}</span>
+        <span>{{ statusMessage || translateUi('uiMessages.m296abb597806', { value1: (baseUrl) }) }}</span>
       </footer>
     </section>
   </div>
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { X } from '@lucide/vue'
@@ -113,13 +115,13 @@ const baseUrl = ref(normalizeSkillBaseUrl(window.location.origin))
 const activeKey = computed(() => keys.value.find(key => key.status === 'active') || keys.value[0] || null)
 const fullKey = computed(() => activeKey.value?.api_key || packageData.value?.key?.api_key || '')
 const visibleKey = computed(() => {
-  if (!fullKey.value) return '创建或重置后会显示完整 API Key'
+  if (!fullKey.value) return translateUi('uiMessages.me92b88c2e1c6')
   if (showKey.value) return fullKey.value
   const prefix = activeKey.value?.key_prefix || fullKey.value.slice(0, 16)
   return `${prefix}••••••••••••••••`
 })
 const skillMarkdown = computed(() => packageData.value?.markdown || '')
-const markdownPreview = computed(() => skillMarkdown.value || '正在加载 SKILL.md...')
+const markdownPreview = computed(() => skillMarkdown.value || translateUi('uiMessages.m81ca0a483f3e'))
 const packagePayload = computed(() => packageData.value?.package || null)
 const skillName = computed(() => packageData.value?.skillName || `${tenantConfig.brand?.name || 'Banana AI'} skill`)
 const agentInstallPrompt = computed(() => (
@@ -167,7 +169,7 @@ async function loadSkills() {
       await ensureKey()
     }
   } catch (err) {
-    error.value = err.message || '加载 Skills 失败'
+    error.value = err.message || translateUi('uiMessages.mae44567fe6ad')
   } finally {
     loading.value = false
   }
@@ -186,9 +188,9 @@ async function ensureKey() {
       baseUrl.value = normalizeSkillBaseUrl(packageData.value.baseUrl)
     }
     showKey.value = true
-    statusMessage.value = 'API Key 已创建'
+    statusMessage.value = translateUi('uiMessages.me2fb5ac82e4b')
   } catch (err) {
-    error.value = err.message || '创建 API Key 失败'
+    error.value = err.message || translateUi('uiMessages.m438ebef5191d')
   } finally {
     loading.value = false
   }
@@ -196,7 +198,7 @@ async function ensureKey() {
 
 async function confirmResetKey() {
   if (!activeKey.value?.id) return
-  if (!window.confirm('重置后旧 API Key 会失效，继续？')) return
+  if (!window.confirm(translateUi('uiMessages.mff2f151107da'))) return
   resetting.value = true
   error.value = ''
   try {
@@ -208,9 +210,9 @@ async function confirmResetKey() {
       baseUrl.value = normalizeSkillBaseUrl(packageData.value.baseUrl)
     }
     showKey.value = true
-    statusMessage.value = 'API Key 已重置'
+    statusMessage.value = translateUi('uiMessages.m40d0a716b481')
   } catch (err) {
-    error.value = err.message || '重置 API Key 失败'
+    error.value = err.message || translateUi('uiMessages.m5d0b71a01907')
   } finally {
     resetting.value = false
   }

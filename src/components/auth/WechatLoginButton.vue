@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { onMounted, ref } from 'vue'
 import { QrCode } from '@lucide/vue'
 import { getTenantId } from '@/config/tenant'
@@ -32,7 +34,7 @@ async function start() {
   <div v-if="enabled" class="my-4">
     <button type="button" :disabled="busy" class="flex w-full items-center justify-center gap-2 rounded-lg border border-current/20 px-4 py-2.5 text-sm transition hover:bg-gray-500/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50" @click="start">
       <QrCode :size="18" :stroke-width="1.75" aria-hidden="true" />
-      {{ busy ? '正在打开微信…' : '微信扫码登录' }}
+      {{ busy ? translateUi('uiMessages.mc00d4f6b472d') : translateUi('uiMessages.m9e0181f35fc5') }}
     </button>
     <p v-if="error" role="alert" class="mt-2 text-sm text-red-500">{{ error }}</p>
   </div>

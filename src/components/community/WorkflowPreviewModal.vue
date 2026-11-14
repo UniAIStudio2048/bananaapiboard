@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * WorkflowPreviewModal.vue - 窗口式只读工作流预览弹窗
  * 居中弹窗展示，点击克隆后才进入正式画布模式
@@ -266,7 +268,7 @@ async function loadWorkflowData(targetWorkflowId) {
       const data = await loadWorkflow(wfId)
       wf = data.workflow || data
     } else {
-      error.value = '缺少工作流参数'
+      error.value = translateUi('uiMessages.m6e4c88118c25')
       return
     }
     workflowName.value = wf.name || ''
@@ -278,7 +280,7 @@ async function loadWorkflowData(targetWorkflowId) {
       viewport.value = typeof wf.viewport === 'string' ? JSON.parse(wf.viewport) : wf.viewport
     }
   } catch (e) {
-    error.value = e.message || '加载工作流失败'
+    error.value = e.message || translateUi('uiMessages.m50c701a50f8b')
   } finally {
     loading.value = false
     if (nodes.value.length) attachWheelListener()
@@ -317,11 +319,11 @@ function onKeydown(e) {
                 </svg>
               </div>
               <span class="text-white font-medium text-sm truncate">{{ workflowName || title }}</span>
-              <span class="text-[11px] text-neutral-500 bg-neutral-800 px-2 py-0.5 rounded-full shrink-0">只读预览</span>
+              <span class="text-[11px] text-neutral-500 bg-neutral-800 px-2 py-0.5 rounded-full shrink-0">{{ translateUi('uiMessages.mc0ded62056b5') }}</span>
             </div>
             <button
               class="w-7 h-7 flex items-center justify-center rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition shrink-0"
-              aria-label="关闭"
+              :aria-label="translateUi('common.close')"
               @click="close"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -344,7 +346,7 @@ function onKeydown(e) {
               <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <rect x="3" y="3" width="6" height="6" rx="1" stroke-width="2"/><rect x="15" y="3" width="6" height="6" rx="1" stroke-width="2"/><rect x="9" y="15" width="6" height="6" rx="1" stroke-width="2"/><path d="M6 9v3h3M18 9v3h-3M12 15v-3" stroke-width="2"/>
               </svg>
-              {{ wf.name || '未命名' }}
+              {{ wf.name || translateUi('canvas.unnamed') }}
             </button>
           </div>
 
@@ -360,15 +362,15 @@ function onKeydown(e) {
                     </svg>
                   </div>
                   <div>
-                    <p class="text-lg font-medium text-white mb-1">付费工作流</p>
-                    <p class="text-sm text-neutral-400">支付 {{ price }} 积分解锁制作过程</p>
+                    <p class="text-lg font-medium text-white mb-1">{{ translateUi('uiMessages.m2fde101f29e8') }}</p>
+                    <p class="text-sm text-neutral-400">{{ translateUi('uiMessages.m5b5f0d9e861c', { value1: (price) }) }}</p>
                   </div>
-                  <div class="text-2xl font-bold text-white">{{ price }} 积分</div>
+                  <div class="text-2xl font-bold text-white">{{ translateUi('uiMessages.md901f70479c8', { value1: (price) }) }}</div>
                   <button
                     class="w-full px-6 py-3 rounded-lg bg-white hover:bg-neutral-200 text-neutral-900 font-medium transition-colors"
                     @click="showPurchaseDialog = true"
                   >
-                    支付解锁
+                    {{ translateUi('uiMessages.m21bf64b3b0dc') }}
                   </button>
                 </div>
               </div>
@@ -408,7 +410,7 @@ function onKeydown(e) {
                 <MiniMap position="bottom-left" />
               </VueFlow>
               <div v-else-if="!loading" class="absolute inset-0 flex items-center justify-center text-neutral-500 text-sm">
-                工作流不存在
+                {{ translateUi('uiMessages.m72e7fec71cdd') }}
               </div>
             </template>
           </div>
@@ -416,7 +418,7 @@ function onKeydown(e) {
           <!-- 底部操作栏 -->
           <div class="flex items-center justify-between px-5 py-3 border-t border-white/[0.06] shrink-0 bg-neutral-900/80">
             <template v-if="isLocked">
-              <span class="text-xs text-neutral-500">需要付费解锁查看</span>
+              <span class="text-xs text-neutral-500">{{ translateUi('uiMessages.m2286f6d25cd0') }}</span>
               <button
                 class="px-4 py-1.5 bg-white hover:bg-neutral-200 text-neutral-900 text-sm rounded-lg transition flex items-center gap-1.5"
                 @click="showPurchaseDialog = true"
@@ -424,11 +426,11 @@ function onKeydown(e) {
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
-                支付 {{ price }} 积分解锁
+                {{ translateUi('uiMessages.me580f129a8c7', { value1: (price) }) }}
               </button>
             </template>
             <template v-else>
-              <span class="text-xs text-neutral-500">如需创建请点击 →</span>
+              <span class="text-xs text-neutral-500">{{ translateUi('uiMessages.m3528f6c3ca47') }}</span>
               <div class="flex items-center gap-2">
                 <button
                   class="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition flex items-center gap-1.5"
@@ -437,7 +439,7 @@ function onKeydown(e) {
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                   </svg>
-                  克隆工作流
+                  {{ translateUi('uiMessages.m4d307a3717e8') }}
                 </button>
                 <button
                   v-if="isProject"
@@ -448,7 +450,7 @@ function onKeydown(e) {
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
                   </svg>
-                  {{ cloningProject ? '克隆中...' : '克隆项目' }}
+                  {{ cloningProject ? translateUi('uiMessages.m6fd4dd85f9c8') : translateUi('uiMessages.m94e3be406911') }}
                 </button>
               </div>
             </template>

@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -33,7 +34,7 @@ test('image node error preview does not expose a retry button under the failed r
   assert.ok(errorPreviewMatch, 'Expected image error preview template block')
 
   assert.doesNotMatch(errorPreviewMatch[0], /@click="handleRegenerate"/)
-  assert.doesNotMatch(errorPreviewMatch[0], />\s*重试\s*<\/button>/)
+  assert.doesNotMatch(errorPreviewMatch[0], localizedPattern(/>\s*重试\s*<\/button>/))
 })
 
 test('old failed image nodes with taskId are reconciled through background polling', () => {
@@ -45,7 +46,7 @@ test('old failed image nodes with taskId are reconciled through background polli
   assert.match(restoreBody, /props\.data\?\.status === 'error'/)
   assert.match(restoreBody, /ensureTaskPolling\(\{/)
   assert.match(restoreBody, /type:\s*props\.data\?\.taskType \|\| 'image'/)
-  assert.doesNotMatch(restoreBody, /任务丢失，请重新生成[\s\S]*props\.data\?\.taskId/)
+  assert.doesNotMatch(restoreBody, localizedPattern(/任务丢失，请重新生成[\s\S]*props\.data\?\.taskId/))
 })
 
 test('image task failure events with returned media are treated as successful completion', () => {

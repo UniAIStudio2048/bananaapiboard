@@ -2,7 +2,7 @@
   <button
     class="canvas-icon-btn ticket-btn"
     @click="$emit('open')"
-    title="客服工单"
+    :title="translateUi('uiMessages.m35de968ae2fd')"
   >
     <!-- 工单图标：信封 -->
     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -16,6 +16,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, onMounted, onUnmounted } from 'vue'
 import { getUnreadCount } from '@/api/ticket'
 

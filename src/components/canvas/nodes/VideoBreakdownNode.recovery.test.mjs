@@ -1,3 +1,6 @@
+import * as i18nTestRuntime from '../../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
@@ -13,7 +16,7 @@ function fixture(status='error') {
   const result={nodes:[{id:'image',type:'image',version:1,data:{output:{url:'/image.jpg'}}}],edges:[{id:'edge',source:'b',target:'image'}],node:{id:'b',version:3,data:{status:'success',breakdownTaskId:'task',breakdownSummary:{shots:1},error:null}}}
   const request=async path=>{calls.push(path);return path==='/config'?{}:{status:'completed',node:{id:'b',version:10,data:{...props.data}},result:structuredClone(result)}}
   const bindings={ref:value=>({value}),computed:fn=>({get value(){return fn()}}),watch:()=>{},onMounted:fn=>mounted.push(fn),onUnmounted:()=>{},inject:()=>false,unref:x=>x,defineProps:()=>props,useCanvasStore:()=>store,useTeamStore:()=>({getSpaceParams:()=>({spaceType:'personal'})}),requestVideoBreakdown:request,mergeBreakdownResult,getBreakdownSource:()=>null,formatBreakdownTime:()=>'',saveWorkflow:async body=>{saves.push(structuredClone(body));return {workflow:{id:'wf'}}},window:{dispatchEvent(){}},CustomEvent:class {}}
-  const exposed=new Function(...Object.keys(bindings),`${script}\nreturn {poll,alive}`)(...Object.values(bindings))
+  const exposed=new Function('translateUi', 'uiLanguage', ...Object.keys(bindings),`${script}\nreturn {poll,alive}`)(translateUi, uiLanguage, ...Object.values(bindings))
   return {...exposed,mounted,calls,saves,store}
 }
 

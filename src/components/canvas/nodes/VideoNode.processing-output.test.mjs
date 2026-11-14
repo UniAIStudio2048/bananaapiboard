@@ -1,3 +1,6 @@
+import { t as translateUi, currentLanguage } from '../../../i18n/index.js'
+currentLanguage.value = 'zh-CN'
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -18,7 +21,7 @@ function createPreview(data) {
   )
   return runInNewContext(
     `${declarations.map(node => script.slice(node.start, node.end)).join('\n')}\n;({ hasOutput, shouldRenderVideoOutput })`,
-    { props: { data }, computed, ref }
+    { translateUi, props: { data }, computed, ref }
   )
 }
 
@@ -46,7 +49,7 @@ test('rejected submission on a copied node exposes its Chinese error instead of 
   const data = reactive({ status: 'success', output: { type: 'video', url: 'copied.mp4' } })
   const preview = createPreview(data)
   const declaration = ast.program.body.find(node => node.type === 'FunctionDeclaration' && node.id.name === 'executeNodeGeneration')
-  const execute = runInNewContext(`(${script.slice(declaration.start, declaration.end)})`, {
+  const execute = runInNewContext(`(${script.slice(declaration.start, declaration.end)})`, { translateUi,
     canvasStore: { updateNodeData: (_id, patch) => Object.assign(data, patch) },
     updateVideoSubmissionNode: async (_id, patch) => Object.assign(data, patch),
     sendGenerateRequest: async () => {
@@ -60,7 +63,7 @@ test('rejected submission on a copied node exposes its Chinese error instead of 
   })
   assert.equal(await execute('copied-node', 'prompt', [], 0), null)
   assert.equal(data.status, 'error')
-  assert.match(data.error, /输入图片可能包含真人.*不接受真人素材/)
+  assert.match(data.error, localizedPattern(/输入图片可能包含真人.*不接受真人素材/))
   assert.equal(preview.shouldRenderVideoOutput.value, false)
   assert.match(source, /v-if="shouldRenderVideoOutput && isNodeVisible"/)
   assert.match(source, /v-else-if="data.status === 'error'"/)

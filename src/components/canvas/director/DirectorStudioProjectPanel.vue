@@ -1,11 +1,13 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { FolderPlus, Image, Pencil, RotateCcw, Save, Trash2 } from '@lucide/vue'
 import { useDirectorStudioI18n } from './useDirectorStudioI18n.js'
 
 defineProps({
   projects: { type: Array, default: () => [] },
   activeProjectId: { type: String, default: null },
-  title: { type: String, default: '3D导演台' }
+  title: { type: String, get default() { return translateUi('canvas.nodeConfig.directorStudio.label') } }
 })
 
 const emit = defineEmits([
@@ -32,14 +34,14 @@ function formatTime(value) {
   <section class="director-project-panel">
     <div class="director-panel-heading">
       <div>
-        <span>{{ dt('projects.title', '项目') }}</span>
+        <span>{{ dt('projects.title', translateUi('directorStudio.projects.title')) }}</span>
         <strong>{{ title }}</strong>
       </div>
       <div class="director-project-actions">
-        <button type="button" class="director-mini-button" :title="dt('projects.saveActive', '保存当前项目')" @click="emit('save-active-project')">
+        <button type="button" class="director-mini-button" :title="dt('projects.saveActive', translateUi('directorStudio.projects.saveActive'))" @click="emit('save-active-project')">
           <Save :size="14" stroke-width="2" />
         </button>
-        <button type="button" class="director-mini-button" :title="dt('projects.saveNew', '另存为新项目')" @click="emit('save-new-project')">
+        <button type="button" class="director-mini-button" :title="dt('projects.saveNew', translateUi('directorStudio.projects.saveNew'))" @click="emit('save-new-project')">
           <FolderPlus :size="14" stroke-width="2" />
         </button>
       </div>
@@ -58,21 +60,21 @@ function formatTime(value) {
           <small>{{ formatTime(project.updatedAt) }}</small>
         </button>
         <div class="director-project-row-actions">
-          <button type="button" :title="dt('projects.restore', '恢复项目')" @click="emit('restore-project', project.id)">
+          <button type="button" :title="dt('projects.restore', translateUi('directorStudio.projects.restore'))" @click="emit('restore-project', project.id)">
             <RotateCcw :size="13" stroke-width="2" />
           </button>
-          <button type="button" :title="dt('projects.rename', '重命名项目')" @click="emit('rename-project', project.id)">
+          <button type="button" :title="dt('projects.rename', translateUi('directorStudio.projects.rename'))" @click="emit('rename-project', project.id)">
             <Pencil :size="13" stroke-width="2" />
           </button>
-          <button type="button" :title="dt('projects.useSnapshotCover', '使用当前截图作为封面')" @click="emit('update-project-cover', project.id)">
+          <button type="button" :title="dt('projects.useSnapshotCover', translateUi('directorStudio.projects.useSnapshotCover'))" @click="emit('update-project-cover', project.id)">
             <Image :size="13" stroke-width="2" />
           </button>
-          <button type="button" :title="dt('projects.delete', '删除项目')" @click="emit('delete-project', project.id)">
+          <button type="button" :title="dt('projects.delete', translateUi('directorStudio.projects.delete'))" @click="emit('delete-project', project.id)">
             <Trash2 :size="13" stroke-width="2" />
           </button>
         </div>
       </div>
-      <div v-if="projects.length === 0" class="director-empty-row">{{ dt('projects.empty', '暂无保存项目') }}</div>
+      <div v-if="projects.length === 0" class="director-empty-row">{{ dt('projects.empty', translateUi('directorStudio.projects.empty')) }}</div>
     </div>
   </section>
 </template>

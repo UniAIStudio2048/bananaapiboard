@@ -1,21 +1,22 @@
+import { t as translateUi } from '../i18n/index.js'
 export function buildRunningHubMusicInput(model, input) {
   const modelPath = String(model?.actualModel || '')
   if (model?.apiType === 'runninghub-audio' && (/suno-v6/.test(modelPath) || model?.sunoV6)) {
     return buildRunningHubSunoV6Input(model, input)
   }
-  if (!['rhart-audio/suno-v5.5/single', 'rhart-audio/suno-v5.5/custom'].includes(modelPath)) throw new Error('RunningHub 音乐模型配置无效')
+  if (!['rhart-audio/suno-v5.5/single', 'rhart-audio/suno-v5.5/custom'].includes(modelPath)) throw new Error(translateUi('uiMessages.m71d23f617db0'))
   const custom = modelPath.endsWith('/custom')
   const prompt = String(input.prompt || '').trim()
   const title = String(input.title || '').trim()
   const tags = String(input.tags || '').trim()
   const promptLimit = custom ? 5000 : 400
-  if (!prompt || prompt.length > promptLimit) throw new Error(`${custom ? '歌词' : '音乐描述'}必须填写且不能超过 ${promptLimit} 字符`)
-  if ((custom && !title) || title.length > 80) throw new Error('歌曲标题不能超过 80 字符，自定义版必须填写标题')
-  if (custom && (!tags || tags.length > 1000)) throw new Error('请填写音乐风格，不能超过 1000 字符')
+  if (!prompt || prompt.length > promptLimit) throw new Error(translateUi('uiMessages.md21d054d52ab', { value1: (custom ? translateUi('uiMessages.m9dbfa9b42bb3') : translateUi('uiMessages.m49b7c28e3ec2')), value2: (promptLimit) }))
+  if ((custom && !title) || title.length > 80) throw new Error(translateUi('uiMessages.m2dce9342156c'))
+  if (custom && (!tags || tags.length > 1000)) throw new Error(translateUi('uiMessages.mc4fadd347635'))
   const body = custom ? { title, prompt, tags } : { title: title || null, description: prompt, make_instrumental: input.makeInstrumental ? 'true' : 'false' }
   if (String(input.webhookUrl || '').trim()) {
     const webhook = new URL(String(input.webhookUrl).trim())
-    if (webhook.protocol !== 'https:') throw new Error('Webhook 回调地址必须使用 HTTPS')
+    if (webhook.protocol !== 'https:') throw new Error(translateUi('uiMessages.me1dbe08524f6'))
     body.webhookUrl = webhook.href
   }
   return body
@@ -67,20 +68,20 @@ const SUNO6_OPERATION_FIELDS = {
 function optionalNumber(value, label, min, max, integer = false) {
   if (value === '' || value === null || value === undefined) return undefined
   const number = Number(value)
-  if (!Number.isFinite(number) || number < min || number > max || (integer && !Number.isInteger(number))) throw new Error(`${label}必须在 ${min}–${max}${integer ? ' 的整数' : ''}范围内`)
+  if (!Number.isFinite(number) || number < min || number > max || (integer && !Number.isInteger(number))) throw new Error(translateUi('uiMessages.ma25aeb690186', { value1: (label), value2: (min), value3: (max), value4: (integer ? translateUi('uiMessages.mf62f73ba5598') : '') }))
   return number
 }
 
 function optionalEnum(value, label, values) {
   if (!value) return undefined
-  if (!values.includes(String(value))) throw new Error(`${label}参数无效`)
+  if (!values.includes(String(value))) throw new Error(translateUi('uiMessages.m211a391ac11e', { value1: (label) }))
   return String(value)
 }
 
 function optionalText(value, label, max) {
   const text = String(value || '').trim()
   if (!text) return undefined
-  if (text.length > max) throw new Error(`${label}不能超过 ${max} 字符`)
+  if (text.length > max) throw new Error(translateUi('uiMessages.mcac15cca47b4', { value1: (label), value2: (max) }))
   return text
 }
 
@@ -89,7 +90,7 @@ const SUNO6_LONG_GENDER_OPERATIONS = new Set(['inspo', 'upload-cover', 'extend',
 function normalizeVocalGender(value, operationId) {
   if (value === undefined || value === null || value === '') return undefined
   const text = String(value)
-  if (!['m', 'f', 'Male', 'Female'].includes(text)) throw new Error('人声性别参数无效')
+  if (!['m', 'f', 'Male', 'Female'].includes(text)) throw new Error(translateUi('uiMessages.m2cc253de2897'))
   if (SUNO6_LONG_GENDER_OPERATIONS.has(operationId)) return text === 'm' ? 'Male' : text === 'f' ? 'Female' : text
   return text === 'Male' ? 'm' : text === 'Female' ? 'f' : text
 }
@@ -102,7 +103,7 @@ function appendSuno6Common(body, input, operation, { includePrompt = true, allow
     const version = optionalEnum(input.version, '版本', SUNO6_ENUMS.version)
     if (version) body.version = version
   }
-  if (can('custom') && input.custom !== undefined && input.custom !== '') body.custom = input.custom === true || input.custom === 'true' ? 'true' : input.custom === false || input.custom === 'false' ? 'false' : (() => { throw new Error('自定义模式参数无效') })()
+  if (can('custom') && input.custom !== undefined && input.custom !== '') body.custom = input.custom === true || input.custom === 'true' ? 'true' : input.custom === false || input.custom === 'false' ? 'false' : (() => { throw new Error(translateUi('uiMessages.md1e1a015e6c6')) })()
   const textFields = [...(includePrompt && can('prompt') ? [['prompt', '歌词/提示词', 5000]] : []), ...(can('gptDescription') ? [['gptDescription', '灵感描述', 3000]] : []), ...(can('title') ? [['title', '歌曲标题', 80]] : []), ...(can('tags') ? [['tags', '音乐风格', 1000]] : []), ...(can('negativeTags') ? [['negativeTags', '反向风格', 1000]] : []), ...(!customModelId && can('personaId') ? [['personaId', 'Persona 风格 ID', 64]] : [])]
   for (const [key, label, max] of textFields) {
     const value = optionalText(input[key], label, max)
@@ -128,7 +129,7 @@ function appendSuno6Common(body, input, operation, { includePrompt = true, allow
   }
   if (input.webhookUrl) {
     const webhook = new URL(String(input.webhookUrl).trim())
-    if (webhook.protocol !== 'https:') throw new Error('Webhook 回调地址必须使用 HTTPS')
+    if (webhook.protocol !== 'https:') throw new Error(translateUi('uiMessages.me1dbe08524f6'))
     body.webhookUrl = webhook.href
   }
   return body
@@ -136,21 +137,21 @@ function appendSuno6Common(body, input, operation, { includePrompt = true, allow
 
 export function buildRunningHubSunoV6Input(model, input = {}) {
   const operation = SUNO6_BY_ID.get(String(input.operation || input.sunoV6Operation || '')) || SUNO6_BY_PATH.get(String(model?.actualModel || ''))
-  if (!operation) throw new Error('RunningHub Suno v6 操作无效')
+  if (!operation) throw new Error(translateUi('uiMessages.mfb60aea04e5d'))
   const body = { operation: operation.id }
   if (['single', 'wild-single', 'mini-single'].includes(operation.id)) {
     body.description = optionalText(input.description || input.prompt, '音乐描述', 3000)
-    if (!body.description) throw new Error('音乐描述必须填写')
+    if (!body.description) throw new Error(translateUi('uiMessages.mf63bfb240fe6'))
     body.make_instrumental = input.makeInstrumental ? 'true' : 'false'
   } else if (['custom', 'wild-custom', 'mini-custom'].includes(operation.id)) {
     body.title = optionalText(input.title, '歌曲标题', 80)
     body.prompt = optionalText(input.prompt, '歌词', 5000)
     body.tags = optionalText(input.tags, '音乐风格', 1000)
-    if (!body.title || !body.prompt || !body.tags) throw new Error('自定义成曲需要填写标题、歌词和风格')
+    if (!body.title || !body.prompt || !body.tags) throw new Error(translateUi('uiMessages.mae0f92d2c803'))
     body.make_instrumental = input.makeInstrumental ? 'true' : 'false'
   } else if (operation.id === 'sounds') {
     body.prompt = optionalText(input.prompt, '音效描述', 3000)
-    if (!body.prompt) throw new Error('音效描述必须填写')
+    if (!body.prompt) throw new Error(translateUi('uiMessages.mcc4e952f9790'))
     const soundType = optionalEnum(input.soundType, '音效类型', SUNO6_ENUMS.soundType)
     if (soundType) body.soundType = soundType
     const bpm = optionalNumber(input.bpm, 'BPM', 1, 300, true)
@@ -159,21 +160,21 @@ export function buildRunningHubSunoV6Input(model, input = {}) {
     if (musicalKey) body.musicalKey = musicalKey
   } else if (operation.id === 'inspo') {
     const audioUrls = Array.isArray(input.audioUrls) ? input.audioUrls : String(input.audioUrls || '').split(',').map(item => item.trim()).filter(Boolean)
-    if (audioUrls.length < 1 || audioUrls.length > 4) throw new Error('灵感音频需要 1–4 个公开 URL')
+    if (audioUrls.length < 1 || audioUrls.length > 4) throw new Error(translateUi('uiMessages.m8b61b017cae4'))
     body.audioUrls = audioUrls
   } else if (['upload', 'upload-cover', 'upload-extend'].includes(operation.id)) {
     body.audioUrl = optionalText(input.audioUrl, '音频地址', 2048)
-    if (!body.audioUrl || !/^https?:\/\//i.test(body.audioUrl)) throw new Error('音频地址必须是 HTTP(S) URL')
+    if (!body.audioUrl || !/^https?:\/\//i.test(body.audioUrl)) throw new Error(translateUi('uiMessages.md982fbc7c2fa'))
     if (operation.id === 'upload-extend') {
       body.continueAt = optionalNumber(input.continueAt, '续写起点', 1, 479)
-      if (body.continueAt === undefined) throw new Error('续写起点必须填写')
+      if (body.continueAt === undefined) throw new Error(translateUi('uiMessages.m70a98f75fdb0'))
     } else if (operation.id === 'upload-cover') {
       if (input.instrumental === true || input.instrumental === 'true') body.instrumental = 'true'
       else if (input.instrumental === false || input.instrumental === 'false') body.instrumental = 'false'
     }
   } else if (operation.id === 'mashup') {
     const sourceTaskIds = Array.isArray(input.sourceTaskIds) ? input.sourceTaskIds : String(input.sourceTaskIds || '').split(',').map(item => item.trim()).filter(Boolean)
-    if (sourceTaskIds.length !== 2) throw new Error('混搭必须填写两个源任务')
+    if (sourceTaskIds.length !== 2) throw new Error(translateUi('uiMessages.m5b5e58c17fb9'))
     body.sourceTaskIds = sourceTaskIds
     if (input.audioIndexes) body.audioIndexes = Array.isArray(input.audioIndexes) ? input.audioIndexes : String(input.audioIndexes).split(',').map(item => Number(item.trim()))
     if (input.instrumental === true || input.instrumental === 'true') body.instrumental = 'true'
@@ -182,7 +183,7 @@ export function buildRunningHubSunoV6Input(model, input = {}) {
     if (input.audioIndex !== undefined) body.audioIndex = optionalNumber(input.audioIndex, '音轨序号', 1, 20, true)
     body.startS = optionalText(input.startS, '起点秒数', 16)
     body.endS = optionalText(input.endS, '终点秒数', 16)
-    if (!body.sourceTaskId || body.sourceTaskId.length < 15 || !body.startS || !/^\d+(?:\.\d+)?$/.test(body.startS) || !body.endS || !/^\d+(?:\.\d+)?$/.test(body.endS) || Number(body.startS) >= Number(body.endS)) throw new Error('请填写有效的起止秒数和源任务')
+    if (!body.sourceTaskId || body.sourceTaskId.length < 15 || !body.startS || !/^\d+(?:\.\d+)?$/.test(body.startS) || !body.endS || !/^\d+(?:\.\d+)?$/.test(body.endS) || Number(body.startS) >= Number(body.endS)) throw new Error(translateUi('uiMessages.md4c8456d74cf'))
     if (operation.id === 'sample' && (input.makeInstrumental === true || input.makeInstrumental === 'true')) body.make_instrumental = 'true'
     if (operation.id === 'replace-section') {
       const infillLyrics = optionalText(input.infillLyrics, '替换歌词', 5000)
@@ -190,11 +191,11 @@ export function buildRunningHubSunoV6Input(model, input = {}) {
     }
   } else if (['extend', 'cover', 'add-instrumental', 'add-vocals', 'add-stem'].includes(operation.id)) {
     body.sourceTaskId = optionalText(input.sourceTaskId, '源任务', 32)
-    if (!body.sourceTaskId || body.sourceTaskId.length < 15) throw new Error('源任务必须填写 15–32 位 taskId')
+    if (!body.sourceTaskId || body.sourceTaskId.length < 15) throw new Error(translateUi('uiMessages.m9b1d598f6bb4'))
     if (input.audioIndex !== undefined) body.audioIndex = optionalNumber(input.audioIndex, '音轨序号', 1, 20, true)
     if (operation.id === 'extend') {
       body.continueAt = optionalNumber(input.continueAt, '续写起点', 1, 3600)
-      if (body.continueAt === undefined) throw new Error('续写起点必须填写')
+      if (body.continueAt === undefined) throw new Error(translateUi('uiMessages.m70a98f75fdb0'))
     }
   }
   const allowed = ['single', 'wild-single', 'mini-single'].includes(operation.id)

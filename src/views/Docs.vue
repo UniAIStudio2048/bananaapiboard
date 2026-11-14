@@ -1,16 +1,16 @@
 <template>
   <main class="docs-layout">
-    <aside class="docs-sidebar" aria-label="Skills 文档导航">
+    <aside class="docs-sidebar" :aria-label="translateUi('uiMessages.m94785087d77b')">
       <div class="docs-sidebar-inner">
-        <RouterLink class="docs-return" to="/canvas">返回画布</RouterLink>
+        <RouterLink class="docs-return" to="/canvas">{{ translateUi('uiMessages.mbeef286e1e42') }}</RouterLink>
         <p class="docs-kicker">Skills Wiki</p>
-        <h1>Banana Canvas Skills 知识库</h1>
+        <h1>{{ translateUi('uiMessages.ma1244ebf6f97') }}</h1>
         <p class="docs-sidebar-summary">
-          给 Codex、Claude Code、WorkBuddy、OpenClaw、Hermes 以及其他支持 Skills 调用的智能体使用。
+          {{ translateUi('uiMessages.m811eed411af1') }}
         </p>
 
-        <nav class="docs-toc" aria-label="快速跳转">
-          <span class="docs-toc-title">快速跳转</span>
+        <nav class="docs-toc" :aria-label="translateUi('uiMessages.m7ad916b385e7')">
+          <span class="docs-toc-title">{{ translateUi('uiMessages.m7ad916b385e7') }}</span>
           <a v-for="section in docsSections" :key="section.id" :href="`#${section.id}`">
             {{ section.title }}
           </a>
@@ -21,20 +21,19 @@
     <article class="docs-content">
       <section id="quick-start" class="docs-section">
         <p class="section-label">Quick Start</p>
-        <h2>快速开始</h2>
+        <h2>{{ translateUi('uiMessages.m334c20e1a480') }}</h2>
         <p>
-          最省事的安装方式是在画布右上角打开 Skills，创建 API Key，然后复制“安装提示词”给你的智能体。
-          智能体安装后应先调用模型列表接口验证 key，再根据用户需求选择图片、视频、音频、上传或写回流程。
+          {{ translateUi('uiMessages.m2ee1545f56ea') }}
         </p>
         <ol class="docs-steps">
-          <li>打开画布右上角 Skills。</li>
-          <li>复制安装提示词，交给 Codex、Claude Code、WorkBuddy、OpenClaw、Hermes 或其他支持 Skills 调用的智能体。</li>
-          <li>智能体只调用当前站点下的 <code>/api/skills/*</code>，请求头使用 <code>Authorization: Bearer bsk_...</code>。</li>
-          <li>用户提供本地图片、视频或声音克隆参考音频时，先走 COS CDN 直传，再把返回的 URL 传给生成接口。</li>
+          <li>{{ translateUi('uiMessages.m6f3b8275a8be') }}</li>
+          <li>{{ translateUi('uiMessages.m8bc7205567e0') }}</li>
+          <li>{{ translateUi('uiMessages.m3aebf00d9c60') }} <code>/api/skills/*</code>{{ translateUi('uiMessages.med4fdf62488b') }} <code>Authorization: Bearer bsk_...</code>。</li>
+          <li>{{ translateUi('uiMessages.m38a4b6027d11') }}</li>
         </ol>
         <CodeBlock
           id="quick-start-prompt"
-          title="给智能体的一次性提示"
+          :title="translateUi('uiMessages.m5fd644fb78c7')"
           :code="codeBlocks.quickStartPrompt"
           :copied="copiedKey === 'quickStartPrompt'"
           @copy="copyCode('quickStartPrompt')"
@@ -43,17 +42,16 @@
 
       <section id="agent-install" class="docs-section">
         <p class="section-label">Install</p>
-        <h2>安装 Skill</h2>
+        <h2>{{ translateUi('uiMessages.m6c20b954bf44') }}</h2>
         <p>
-          推荐让智能体创建名为 <code>banana-canvas-skills</code> 的 Skill，并把站点域名、API Key、可用端点、上传规则和轮询规则写进 Skill 正文。
-          如果运行环境不支持持久化 Skill，也可以直接按同样规则执行一次性指令。
+          {{ translateUi('uiMessages.mfc872e6ee4bf') }} <code>banana-canvas-skills</code> {{ translateUi('uiMessages.mfe6e0aad9757') }}
         </p>
         <div class="docs-callout">
-          安装后第一步必须调用 <code>GET /api/skills/models</code>。如果这个请求失败，不要继续生成任务，应要求用户重新复制或重置 API Key。
+          {{ translateUi('uiMessages.mcf6d961fe777') }} <code>GET /api/skills/models</code>{{ translateUi('uiMessages.m72aa6d301164') }}
         </div>
         <CodeBlock
           id="install-env"
-          title="环境变量方式"
+          :title="translateUi('uiMessages.m212c530be048')"
           :code="codeBlocks.envExample"
           :copied="copiedKey === 'envExample'"
           @copy="copyCode('envExample')"
@@ -62,14 +60,13 @@
 
       <section id="auth-domain" class="docs-section">
         <p class="section-label">Auth</p>
-        <h2>认证与域名</h2>
+        <h2>{{ translateUi('uiMessages.m1e144659f89c') }}</h2>
         <p>
-          Skills API 使用用户在画布中创建的 <code>bsk_</code> key。智能体不需要浏览器会话，也不需要额外管理后台配置。
-          所有请求都应发往当前 docs 所在站点的 HTTPS 域名，并保持 <code>Content-Type: application/json</code>。
+          {{ translateUi('uiMessages.mcaf01b7201f2') }} <code>bsk_</code> {{ translateUi('uiMessages.mf462d7922bc9') }} <code>Content-Type: application/json</code>。
         </p>
         <CodeBlock
           id="auth-request"
-          title="基础请求格式"
+          :title="translateUi('uiMessages.m67c8e6ed4170')"
           :code="codeBlocks.authExample"
           :copied="copiedKey === 'authExample'"
           @copy="copyCode('authExample')"
@@ -78,21 +75,18 @@
 
       <section id="local-upload" class="docs-section">
         <p class="section-label">Upload</p>
-        <h2>本地文件上传</h2>
+        <h2>{{ translateUi('uiMessages.m2946ca7cb41d') }}</h2>
         <p>
-          图片生成和视频生成接口接收 URL，不接收本地文件路径或原始字节。用户上传本地图片或视频时，智能体应先申请一次性上传地址，
-          把文件直接 PUT 到腾讯云 COS CDN 存储，再把返回的 <code>asset_url</code> 用作图片 <code>input</code>、视频 <code>source_assets</code> 或 <code>reference_assets</code>。
-          声音克隆参考文件使用 <code>audio/mpeg</code>、<code>audio/wav</code>、<code>audio/ogg</code> 或 <code>audio/mp4</code>，单文件最大 100 MB。
-          上传只负责存储，不代表图片已经通过视频供应商审核。
+          {{ translateUi('uiMessages.ma89cba08de24') }} <code>asset_url</code> {{ translateUi('uiMessages.me28a42931f35') }} <code>input</code>{{ translateUi('uiMessages.m95691d962c7b') }} <code>source_assets</code> {{ translateUi('uiMessages.ma2123d69506f') }} <code>reference_assets</code>{{ translateUi('uiMessages.mbd26d44fc6f3') }} <code>audio/mpeg</code>、<code>audio/wav</code>、<code>audio/ogg</code> {{ translateUi('uiMessages.ma2123d69506f') }} <code>audio/mp4</code>{{ translateUi('uiMessages.m3f0104432871') }}
         </p>
         <ol class="docs-steps">
-          <li>调用 <code>POST /api/skills/uploads/presign</code>，传入文件名、MIME、字节大小和媒体类型。</li>
-          <li>使用返回的 <code>upload_url</code>、<code>method</code>、<code>headers</code> 直接上传文件字节。</li>
-          <li>上传成功后，只把 <code>asset_url</code> 传给模型接口，不要询问或暴露对象存储 AK/SK。</li>
+          <li>{{ translateUi('uiMessages.m653b123c956d') }} <code>POST /api/skills/uploads/presign</code>{{ translateUi('uiMessages.mdb860ba6fd03') }}</li>
+          <li>{{ translateUi('uiMessages.m1ca9bf50f7bc') }} <code>upload_url</code>、<code>method</code>、<code>headers</code> {{ translateUi('uiMessages.m2dbb717fb0d3') }}</li>
+          <li>{{ translateUi('uiMessages.m234fc5d0ce24') }} <code>asset_url</code> {{ translateUi('uiMessages.maea6cce83a21') }}</li>
         </ol>
         <CodeBlock
           id="presign-upload"
-          title="申请并使用 COS CDN 直传地址"
+          :title="translateUi('uiMessages.m95553d1a6b8e')"
           :code="codeBlocks.presignUploadExample"
           :copied="copiedKey === 'presignUploadExample'"
           @copy="copyCode('presignUploadExample')"
@@ -103,13 +97,12 @@
         <p class="section-label">Models</p>
         <h2>/api/skills/models</h2>
         <p>
-          模型列表返回当前用户可用的图片、视频和音频模型。音频模型通过 <code>audio[].capability</code> 区分
-          <code>voice_design</code>、<code>voice_clone</code> 和 <code>tts</code>。智能体应优先使用返回的 <code>name</code> 或 <code>id</code>，
-          并避开不可用或需要额外套餐的模型。
+          {{ translateUi('uiMessages.mbad945378028') }} <code>audio[].capability</code> {{ translateUi('uiMessages.m0231bd78c443') }}
+          <code>voice_design</code>、<code>voice_clone</code> {{ translateUi('uiMessages.m3d7114281f5b') }} <code>tts</code>{{ translateUi('uiMessages.m2b82d2d0de33') }} <code>name</code> {{ translateUi('uiMessages.ma2123d69506f') }} <code>id</code>{{ translateUi('uiMessages.madd1a43ee3e9') }}
         </p>
         <CodeBlock
           id="models-request"
-          title="读取可用模型"
+          :title="translateUi('uiMessages.m6e18b7346f13')"
           :code="codeBlocks.modelsExample"
           :copied="copiedKey === 'modelsExample'"
           @copy="copyCode('modelsExample')"
@@ -120,12 +113,11 @@
         <p class="section-label">Images</p>
         <h2>/api/skills/generate</h2>
         <p>
-          图片接口同时支持文生图和图生图。文生图只传 <code>prompt</code>；图生图把一个或多个可访问图片 URL 放入 <code>input</code>。
-          常用参数包括 <code>model</code>、<code>prompt</code>、<code>ratio</code>、<code>size</code>、<code>n</code> 和可选 <code>canvas_writeback</code>。
+          {{ translateUi('uiMessages.m0ece727c3282') }} <code>prompt</code>{{ translateUi('uiMessages.mcf88543a13be') }} <code>input</code>{{ translateUi('uiMessages.mbfcdaeab0e24') }} <code>model</code>、<code>prompt</code>、<code>ratio</code>、<code>size</code>、<code>n</code> {{ translateUi('uiMessages.ma3be65d4e962') }} <code>canvas_writeback</code>。
         </p>
         <CodeBlock
           id="image-generate"
-          title="图生图请求"
+          :title="translateUi('uiMessages.m921b7f191cab')"
           :code="codeBlocks.imageExample"
           :copied="copiedKey === 'imageExample'"
           @copy="copyCode('imageExample')"
@@ -136,18 +128,13 @@
         <p class="section-label">Videos</p>
         <h2>/api/skills/videos/generate</h2>
         <p>
-          视频接口用于文生视频、图生视频、视频参考和多素材工作流。图片或视频素材都必须是可访问 URL；
-          本地素材先通过上传流程转换成 <code>asset_url</code>，再放进 <code>source_assets</code> 或 <code>reference_assets</code>。
-          服务端会根据当前租户渠道自动选择视频模式并执行必要的图片过审，智能体只需要调用统一 Skills 视频端点。
-          视频请求阶段会按该 Skills Key 所属租户和锁定渠道自动过审，不会故障转移到其他渠道；过审失败或超时会停止视频提交。
-          先读取 <code>GET /api/skills/models</code> 中视频模型的 <code>imageInputReview</code>：9000 端口的租户管理后台只是配置入口，不能把端口或模型名硬编码成“必审模型”。
-          只有请求带图片且锁定渠道与当前租户的审图渠道严格匹配时才会过审；审图结果只对该锁定渠道有效，智能体无需也不应直接调用供应商过审接口。
-          <code>mode</code> 可省略；明确需要细分能力时，可传 Seedance 2.0 的 <code>multimodal_ref</code>/<code>video_edit</code>/<code>video_extend</code>
-          或 Kling v3 Omni 的 <code>subject_control</code>/<code>video_reference</code>/<code>multi_shot</code> 等子模式。
+          {{ translateUi('uiMessages.m0e5841be535a') }} <code>asset_url</code>{{ translateUi('uiMessages.m9bf206b91387') }} <code>source_assets</code> {{ translateUi('uiMessages.ma2123d69506f') }} <code>reference_assets</code>{{ translateUi('uiMessages.m9782952ede31') }} <code>GET /api/skills/models</code> {{ translateUi('uiMessages.m886a9cdf2da8') }} <code>imageInputReview</code>{{ translateUi('uiMessages.ma27efc2cbc6c') }}
+          <code>mode</code> {{ translateUi('uiMessages.mae6ba72e3f23') }} <code>multimodal_ref</code>/<code>video_edit</code>/<code>video_extend</code>
+          {{ translateUi('uiMessages.me9cbdc278c79') }} <code>subject_control</code>/<code>video_reference</code>/<code>multi_shot</code> {{ translateUi('uiMessages.mbcda964eb3f1') }}
         </p>
         <CodeBlock
           id="video-generate"
-          title="视频生成请求"
+          :title="translateUi('uiMessages.m7ed2ed2bde4d')"
           :code="codeBlocks.videoExample"
           :copied="copiedKey === 'videoExample'"
           @copy="copyCode('videoExample')"
@@ -158,16 +145,12 @@
         <p class="section-label">Audio</p>
         <h2>/api/skills/audio/generate</h2>
         <p>
-          音频接口统一接入音色设计、声音克隆和 TTS 语音合成。先从 <code>GET /api/skills/models</code> 的
-          <code>audio[]</code> 按 <code>capability</code> 选择模型：音色设计传 <code>prompt</code> 与 <code>style</code>，
-          声音克隆传 <code>reference_audio_url</code>（或 <code>reference_assets</code>），TTS 传 <code>voice_id</code>，
-          也可以用 <code>reference_audio_url</code> + <code>reference_audio_text</code> 直接合成。
-          任务必须轮询统一任务接口；只有真实音频下载并存储成功后才扣积分，失败和 30 分钟超时不扣费。
-          需要回写画布音频节点时，在请求中加入 <code>canvas_writeback</code>。
+          {{ translateUi('uiMessages.m22dc318dbe0f') }} <code>GET /api/skills/models</code> {{ translateUi('uiMessages.m8af2350cfd65') }}
+          <code>audio[]</code> {{ translateUi('uiMessages.meea50f4175bf') }} <code>capability</code> {{ translateUi('uiMessages.m75b23637c80a') }} <code>prompt</code> {{ translateUi('uiMessages.mde1d5dd076fb') }} <code>style</code>{{ translateUi('uiMessages.m5aa750148a1a') }} <code>reference_audio_url</code>{{ translateUi('uiMessages.m1e055fccd727') }} <code>reference_assets</code>{{ translateUi('uiMessages.m0cc486559160') }} <code>voice_id</code>{{ translateUi('uiMessages.m7f4ebe4ba68e') }} <code>reference_audio_url</code> + <code>reference_audio_text</code> {{ translateUi('uiMessages.mcab3911dfb7f') }} <code>canvas_writeback</code>。
         </p>
         <CodeBlock
           id="audio-generate"
-          title="音色设计、声音克隆与 TTS"
+          :title="translateUi('uiMessages.m847cc897cf41')"
           :code="codeBlocks.audioExample"
           :copied="copiedKey === 'audioExample'"
           @copy="copyCode('audioExample')"
@@ -178,12 +161,12 @@
         <p class="section-label">Tasks</p>
         <h2>/api/skills/tasks</h2>
         <p>
-          生成接口通常返回任务 ID。智能体应轮询 <code>GET /api/skills/tasks/:taskId</code>，直到状态进入
-          <code>completed</code>、<code>failed</code>、<code>timeout</code> 等终态，再把结果 URL 或错误说明返回给用户。
+          {{ translateUi('uiMessages.m5293d4ba41fa') }} <code>GET /api/skills/tasks/:taskId</code>{{ translateUi('uiMessages.m6fc7ea2a3912') }}
+          <code>completed</code>、<code>failed</code>、<code>timeout</code> {{ translateUi('uiMessages.m039fe48058cb') }}
         </p>
         <CodeBlock
           id="poll-task"
-          title="轮询任务状态"
+          :title="translateUi('uiMessages.m30acc3ecc74b')"
           :code="codeBlocks.pollTaskExample"
           :copied="copiedKey === 'pollTaskExample'"
           @copy="copyCode('pollTaskExample')"
@@ -194,12 +177,11 @@
         <p class="section-label">Canvas</p>
         <h2>canvas_writeback</h2>
         <p>
-          当用户明确要求把结果写回已有画布节点时，生成请求可携带 <code>canvas_writeback</code>。
-          目前推荐 <code>replace_output</code>，它只替换目标节点的输出，不改变其他画布结构。
+          {{ translateUi('uiMessages.mf7e971a1e128') }} <code>canvas_writeback</code>{{ translateUi('uiMessages.m729d327b06c2') }} <code>replace_output</code>{{ translateUi('uiMessages.mf79eade3afe4') }}
         </p>
         <CodeBlock
           id="writeback-example"
-          title="写回已有画布节点"
+          :title="translateUi('uiMessages.m7458f19c733e')"
           :code="codeBlocks.writebackExample"
           :copied="copiedKey === 'writebackExample'"
           @copy="copyCode('writebackExample')"
@@ -208,14 +190,14 @@
 
       <section id="billing" class="docs-section">
         <p class="section-label">Billing</p>
-        <h2>计费与空间</h2>
+        <h2>{{ translateUi('uiMessages.m455be382d5d4') }}</h2>
         <p>
-          Skills API 不绕过积分、团队空间或模型套餐规则。个人空间可省略空间参数；团队空间任务应传入 <code>space_type: "team"</code>
-          和对应 <code>team_id</code>。如果接口返回套餐或余额错误，智能体应停止重试并把原因告诉用户。
+          {{ translateUi('uiMessages.mbd295a4038a4') }} <code>space_type: "team"</code>
+          {{ translateUi('uiMessages.mbfa48c649732') }} <code>team_id</code>{{ translateUi('uiMessages.m032c41fcdb4c') }}
         </p>
         <CodeBlock
           id="space-context"
-          title="团队空间上下文"
+          :title="translateUi('uiMessages.mab8f33d375d6')"
           :code="codeBlocks.spaceExample"
           :copied="copiedKey === 'spaceExample'"
           @copy="copyCode('spaceExample')"
@@ -224,23 +206,23 @@
 
       <section id="errors" class="docs-section">
         <p class="section-label">Errors</p>
-        <h2>错误处理</h2>
+        <h2>{{ translateUi('uiMessages.md4c908b6f8a9') }}</h2>
         <p>
-          智能体应把错误码翻译成用户能执行的下一步。认证、模型套餐、积分、权限、任务不存在这几类错误不要盲目重试。
+          {{ translateUi('uiMessages.m533d81ad7f55') }}
         </p>
         <div class="docs-table">
-          <span>invalid_skill_key</span><p>API Key 缺失、格式错误或不匹配。让用户回到画布 Skills 面板复制新 key。</p>
-          <span>skill_key_revoked</span><p>API Key 已重置或撤销。停止当前请求，要求用户重新复制。</p>
-          <span>model_package_required</span><p>当前模型不可用。重新读取模型列表，选择可用模型，或提示用户升级/分配权限。</p>
-          <span>skills_image_review_failed</span><p>视频渠道要求图片过审，但图片未通过。换一张可用图片或让用户确认真人素材权限。</p>
-          <span>skills_image_review_timeout</span><p>图片过审仍在处理中。稍后重试同一请求，或换用不需要过审的素材/模型。</p>
-          <span>insufficient_points</span><p>积分不足。停止生成并提示用户充值或切换可用空间。</p>
-          <span>403</span><p>模型、空间或画布写回权限不足。不要改用其他认证方式。</p>
-          <span>404</span><p>任务、工作流或节点不存在。确认 task_id、workflow_id、node_id 后再重试。</p>
+          <span>invalid_skill_key</span><p>{{ translateUi('uiMessages.ma38a95717057') }}</p>
+          <span>skill_key_revoked</span><p>{{ translateUi('uiMessages.me2ef3566aa4f') }}</p>
+          <span>model_package_required</span><p>{{ translateUi('uiMessages.m91d03067557f') }}</p>
+          <span>skills_image_review_failed</span><p>{{ translateUi('uiMessages.mc20872e2bf66') }}</p>
+          <span>skills_image_review_timeout</span><p>{{ translateUi('uiMessages.mc1ee3cd181a6') }}</p>
+          <span>insufficient_points</span><p>{{ translateUi('uiMessages.md12b041b6270') }}</p>
+          <span>403</span><p>{{ translateUi('uiMessages.m9ab6da0f8c17') }}</p>
+          <span>404</span><p>{{ translateUi('uiMessages.m5b60956c042d') }}</p>
         </div>
         <CodeBlock
           id="error-handling"
-          title="错误处理策略"
+          :title="translateUi('uiMessages.m1d99a2b0582b')"
           :code="codeBlocks.errorExample"
           :copied="copiedKey === 'errorExample'"
           @copy="copyCode('errorExample')"
@@ -249,13 +231,13 @@
 
       <section id="complete-example" class="docs-section">
         <p class="section-label">Example</p>
-        <h2>完整 Agent 示例</h2>
+        <h2>{{ translateUi('uiMessages.mda8c682d4a2a') }}</h2>
         <p>
-          下面的示例展示一个智能体如何读取模型、上传本地文件、提交图生图任务并轮询完成。实际运行时请把 API Key 放入环境变量或智能体的安全密钥配置。
+          {{ translateUi('uiMessages.m901a2e96380f') }}
         </p>
         <CodeBlock
           id="complete-agent-example"
-          title="Node.js 端到端示例"
+          :title="translateUi('uiMessages.m2e550f524c2b')"
           :code="codeBlocks.completeAgentExample"
           :copied="copiedKey === 'completeAgentExample'"
           @copy="copyCode('completeAgentExample')"
@@ -266,6 +248,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, defineComponent, h, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
@@ -285,9 +269,9 @@ const CodeBlock = defineComponent({
         h('button', {
           class: 'copy-code-btn',
           type: 'button',
-          'aria-label': `复制 ${props.title}`,
+          'aria-label': translateUi('uiMessages.mf0efbab778ac', { value1: (props.title) }),
           onClick: () => emit('copy')
-        }, props.copied ? '已复制' : '复制')
+        }, props.copied ? translateUi('common.copied') : translateUi('canvas.textNode.copy'))
       ]),
       h('pre', { id: props.id }, [h('code', props.code)])
     ])

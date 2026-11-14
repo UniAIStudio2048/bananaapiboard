@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
@@ -9,7 +10,7 @@ test('数字人形象图引用在图像节点右上角展示 HeyGen 标签', () 
   assert.match(source, /import \{ getAsset \} from '@\/api\/canvas\/assets'/)
   assert.match(source, /const isHeygenDigitalHumanReference = computed\(\(\) => \{/) 
   assert.match(source, /props\.data\?\.digitalHumanAssetId \|\|\s*metadata\.digitalHumanAssetId/)
-  assert.match(source, /v-if="isHeygenDigitalHumanReference" class="heygen-digital-human-badge">HeyGen数字人<\/div>/)
+  assert.match(source, localizedPattern(/v-if="isHeygenDigitalHumanReference" class="heygen-digital-human-badge">HeyGen数字人<\/div>/))
   assert.match(source, /\.heygen-digital-human-badge \{[\s\S]*position: absolute;[\s\S]*right: 8px;[\s\S]*top: 8px;[\s\S]*transform: rotate\(8deg\);[\s\S]*pointer-events: none;/)
 })
 

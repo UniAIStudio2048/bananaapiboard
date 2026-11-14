@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -12,7 +13,7 @@ test('like action is hidden until the community work card is hovered or focused'
   assert.match(source, /group-hover:pointer-events-auto/, 'card hover should restore pointer interaction')
   assert.match(source, /group-focus-within:opacity-100/, 'keyboard focus should reveal the like button')
   assert.match(source, /\[@media\(hover:none\)\]:opacity-100/, 'touch devices should keep the like button visible')
-  assert.match(source, /:aria-label="work\.is_liked \? '取消点赞' : '点赞'"/, 'like button should expose an accessible action label')
+  assert.match(source, localizedPattern(/:aria-label="work\.is_liked \? '取消点赞' : '点赞'"/), 'like button should expose an accessible action label')
 })
 
 test('video work cards play a muted preview only while hovered', () => {

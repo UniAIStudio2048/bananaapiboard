@@ -1,3 +1,4 @@
+import { includesUiText } from '../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
@@ -12,7 +13,7 @@ for (const type of ['Image', 'Video', 'Audio']) {
 
 test('selector exposes all media tabs and does not render every asset as an image', () => {
   const source = read('SeedanceCharacterSelector.vue')
-  for (const label of ['全部', '图片', '视频', '音频']) assert.ok(source.includes(label))
+  for (const label of ['全部', '图片', '视频', '音频']) assert.ok(includesUiText(source, label))
   assert.match(source, /mapLocalSeedanceAsset/)
   assert.match(source, /<video/)
   assert.match(source, /<audio/)

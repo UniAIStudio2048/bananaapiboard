@@ -8,11 +8,13 @@
   >
     <span class="agent-turn-status-bar__phase">{{ phaseLabel }}</span>
     <span v-if="elapsedText" class="agent-turn-status-bar__elapsed">{{ elapsedText }}</span>
-    <span v-if="cancelRequested" class="agent-turn-status-bar__cancelling">正在停止…</span>
+    <span v-if="cancelRequested" class="agent-turn-status-bar__cancelling">{{ translateUi('uiMessages.m8a99be840844') }}</span>
   </div>
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 const props = defineProps({
@@ -30,20 +32,20 @@ onUnmounted(() => {
 })
 
 const PHASE_LABELS = {
-  idle: '空闲',
-  accepted: '已接受',
-  preparing: '正在准备任务',
-  thinking: '正在理解需求',
-  tool_calling: '正在准备任务',
-  waiting_media: '生成任务正在后台执行',
-  waiting_external_task: '生成任务正在后台执行',
-  stopping: '正在停止 AI 回复',
-  finalizing: '整理回复',
-  reconnecting: '连接中断，正在恢复',
-  completed: '已完成',
-  failed: '执行失败',
-  cancelled: '已停止',
-  retrying: '重试中',
+  get idle() { return translateUi('uiMessages.mdae661d17c2d') },
+  get accepted() { return translateUi('uiMessages.mf0c489dc2296') },
+  get preparing() { return translateUi('uiMessages.mb3d50dc76207') },
+  get thinking() { return translateUi('uiMessages.m32b51d4d1a32') },
+  get tool_calling() { return translateUi('uiMessages.mb3d50dc76207') },
+  get waiting_media() { return translateUi('uiMessages.mdfaecbba9496') },
+  get waiting_external_task() { return translateUi('uiMessages.mdfaecbba9496') },
+  get stopping() { return translateUi('uiMessages.m67c27762329e') },
+  get finalizing() { return translateUi('uiMessages.m0613db6c8b2c') },
+  get reconnecting() { return translateUi('uiMessages.mc25eacdf7240') },
+  get completed() { return translateUi('canvas.assetPanel.tagCompleted') },
+  get failed() { return translateUi('uiMessages.m9344597efd49') },
+  get cancelled() { return translateUi('uiMessages.mf006455e3baf') },
+  get retrying() { return translateUi('uiMessages.ma3f9afd0aae3') },
 }
 
 const statusClass = computed(() => {
@@ -63,8 +65,8 @@ const visible = computed(() => {
 })
 
 const phaseLabel = computed(() => {
-  if (props.turn?.cancelRequested || props.turn?.status === 'stopping') return '正在停止 AI 回复'
-  const label = PHASE_LABELS[props.turn?.phase] || PHASE_LABELS[props.turn?.status] || '处理中'
+  if (props.turn?.cancelRequested || props.turn?.status === 'stopping') return translateUi('uiMessages.m67c27762329e')
+  const label = PHASE_LABELS[props.turn?.phase] || PHASE_LABELS[props.turn?.status] || translateUi('videoGen.processing')
   return props.turn?.tool ? `${label} · ${props.turn.tool}` : label
 })
 

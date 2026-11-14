@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { Camera, Check, Download, Trash2 } from '@lucide/vue'
 import { useDirectorStudioI18n } from './useDirectorStudioI18n.js'
 
@@ -25,14 +27,14 @@ const { dt } = useDirectorStudioI18n()
   <section class="director-snapshot-panel">
     <div class="director-panel-heading">
       <div>
-        <span>{{ dt('snapshots.title', '截图') }}</span>
+        <span>{{ dt('snapshots.title', translateUi('directorStudio.shortcuts.captureScreenshot')) }}</span>
         <strong>{{ snapshotHistory.length }}</strong>
       </div>
       <div class="director-snapshot-actions">
         <button
           type="button"
           class="director-mini-button"
-          :title="dt('snapshots.capture', '截图')"
+          :title="dt('snapshots.capture', translateUi('directorStudio.shortcuts.captureScreenshot'))"
           :disabled="busy"
           @click="emit('capture-screenshot')"
         >
@@ -41,7 +43,7 @@ const { dt } = useDirectorStudioI18n()
         <button
           type="button"
           class="director-mini-button"
-          :title="dt('snapshots.addToCanvas', '添加选中截图到画布')"
+          :title="dt('snapshots.addToCanvas', translateUi('directorStudio.snapshots.addToCanvas'))"
           :disabled="busy || !selectedSnapshotUrl"
           @click="emit('add-to-canvas')"
         >
@@ -50,7 +52,7 @@ const { dt } = useDirectorStudioI18n()
         <button
           type="button"
           class="director-mini-button"
-          :title="dt('snapshots.downloadActive', '下载当前截图')"
+          :title="dt('snapshots.downloadActive', translateUi('directorStudio.snapshots.downloadActive'))"
           :disabled="busy || !snapshotUrl"
           @click="emit('download-snapshot', snapshotUrl)"
         >
@@ -59,7 +61,7 @@ const { dt } = useDirectorStudioI18n()
         <button
           type="button"
           class="director-mini-button"
-          :title="dt('snapshots.deleteSelected', '删除选中截图')"
+          :title="dt('snapshots.deleteSelected', translateUi('directorStudio.snapshots.deleteSelected'))"
           :disabled="busy || !selectedSnapshotUrl"
           @click="emit('delete-snapshot')"
         >
@@ -71,7 +73,7 @@ const { dt } = useDirectorStudioI18n()
     <div v-if="snapshotUrl" class="director-active-snapshot">
       <button
         type="button"
-        :title="dt('snapshots.selectCurrent', '选择当前截图')"
+        :title="dt('snapshots.selectCurrent', translateUi('directorStudio.snapshots.selectCurrent'))"
         :class="{ active: snapshotUrl === selectedSnapshotUrl }"
         @click="emit('select-current')"
       >
@@ -91,7 +93,7 @@ const { dt } = useDirectorStudioI18n()
       >
         <img :src="url" alt="">
       </button>
-      <div v-if="snapshotHistory.length === 0" class="director-empty-row">{{ dt('snapshots.empty', '暂无截图') }}</div>
+      <div v-if="snapshotHistory.length === 0" class="director-empty-row">{{ dt('snapshots.empty', translateUi('directorStudio.snapshots.empty')) }}</div>
     </div>
   </section>
 </template>

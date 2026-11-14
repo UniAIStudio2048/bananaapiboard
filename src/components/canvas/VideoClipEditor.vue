@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * VideoClipEditor.vue - 视频裁剪编辑器
  * 
@@ -311,7 +313,7 @@ async function loadAvailableChannels() {
 function handleConfirm() {
   // 如果显示通道选择器但未选择通道，提示用户
   if (showChannelSelector.value && !selectedChannel.value) {
-    alert('请选择要使用的角色创建通道')
+    alert(translateUi('uiMessages.ma2d2693c6c29'))
     return
   }
   
@@ -331,7 +333,7 @@ function handleConfirm() {
   }
 
   // 角色名称：用户输入或默认值
-  const name = characterName.value.trim() || '角色创建1'
+  const name = characterName.value.trim() || translateUi('uiMessages.mf56cdef56d26')
 
   emit('confirm', {
     videoUrl: props.videoUrl,
@@ -403,12 +405,12 @@ onUnmounted(() => {
         <!-- 标题栏 -->
         <div class="clip-header">
           <h3>
-            创建 Sora 角色
+            {{ translateUi('uiMessages.mcbd92851a52d') }}
             <span v-if="characterPointsCost > 0" class="header-points-badge">
-              消耗 {{ characterPointsCost }} 积分
+              {{ translateUi('uiMessages.mfe189bda5260', { value1: (characterPointsCost) }) }}
             </span>
           </h3>
-          <p class="clip-hint">选择 1-3 秒的视频片段用于角色训练</p>
+          <p class="clip-hint">{{ translateUi('uiMessages.m9541f5687cd8') }}</p>
           <button class="close-btn" @click="handleClose">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
@@ -449,7 +451,7 @@ onUnmounted(() => {
             <span class="time-current">{{ formatTime(clipStart) }}</span>
             <span class="time-separator">-</span>
             <span class="time-current">{{ formatTime(clipEnd) }}</span>
-            <span class="time-duration">({{ clipDuration }}秒)</span>
+            <span class="time-duration">{{ translateUi('uiMessages.mbec65c478712', { value1: (clipDuration) }) }}</span>
           </div>
           
           <!-- 时间线 -->
@@ -498,7 +500,7 @@ onUnmounted(() => {
         
         <!-- 创建模式选择 -->
         <div class="create-mode-section">
-          <label class="section-label">创建方式</label>
+          <label class="section-label">{{ translateUi('uiMessages.m7dc7ed46b007') }}</label>
           <div class="create-mode-options">
             <label 
               class="mode-option"
@@ -513,8 +515,8 @@ onUnmounted(() => {
               <div class="mode-content">
                 <span class="mode-icon">⚡</span>
                 <div class="mode-info">
-                  <span class="mode-title">Sora 直连</span>
-                  <span class="mode-desc">{{ canUseSoraMode ? '使用原始任务ID，更快速' : '仅 Sora 生成的视频可用' }}</span>
+                  <span class="mode-title">{{ translateUi('uiMessages.m44e7bd276381') }}</span>
+                  <span class="mode-desc">{{ canUseSoraMode ? translateUi('uiMessages.m520777fefcf0') : translateUi('uiMessages.m5afbf10d2735') }}</span>
                 </div>
               </div>
             </label>
@@ -530,31 +532,31 @@ onUnmounted(() => {
               <div class="mode-content">
                 <span class="mode-icon">🔗</span>
                 <div class="mode-info">
-                  <span class="mode-title">URL 上传</span>
-                  <span class="mode-desc">通过视频URL创建，适用所有视频</span>
+                  <span class="mode-title">{{ translateUi('uiMessages.mffd79eacd5db') }}</span>
+                  <span class="mode-desc">{{ translateUi('uiMessages.m7dbf307f6acf') }}</span>
                 </div>
               </div>
             </label>
           </div>
           <!-- Sora2 备注提示 -->
-          <p class="sora2-note">💡 当前 Sora2 从 URL 上传创建角色成功率较高，不支持真人</p>
+          <p class="sora2-note">{{ translateUi('uiMessages.m8fb4d619c369') }}</p>
         </div>
         
         <!-- 角色名称输入 -->
         <div class="character-name-input">
-          <label class="name-label">角色名称</label>
+          <label class="name-label">{{ translateUi('uiMessages.m519006fe536c') }}</label>
           <input 
             v-model="characterName"
             type="text"
             class="name-input"
-            placeholder="请输入角色名称（可选，默认：角色创建1）"
+            :placeholder="translateUi('uiMessages.mbdadac2e6726')"
             maxlength="50"
           />
         </div>
         
         <!-- 通道选择（仅在多个通道启用时显示） -->
         <div v-if="showChannelSelector" class="channel-selector-section">
-          <label class="section-label">选择创建通道</label>
+          <label class="section-label">{{ translateUi('uiMessages.m9ff74025ad5d') }}</label>
           <div class="channel-options">
             <label
               v-for="channel in availableChannels"
@@ -571,9 +573,9 @@ onUnmounted(() => {
               <div class="channel-info">
                 <span class="channel-name">{{ channel.name }}</span>
                 <span v-if="channel.points_cost > 0" class="channel-points">
-                  {{ channel.points_cost }} 积分/次
+                  {{ translateUi('uiMessages.md576682f3b27', { value1: (channel.points_cost) }) }}
                 </span>
-                <span v-else class="channel-points free">免费</span>
+                <span v-else class="channel-points free">{{ translateUi('uiMessages.m649a0fc7237e') }}</span>
               </div>
             </label>
           </div>
@@ -587,15 +589,15 @@ onUnmounted(() => {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M5 3l14 9-14 9V3z" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            预览片段
+            {{ translateUi('uiMessages.m6b0c5d2dba33') }}
           </button>
           <button class="action-btn primary" @click="handleConfirm" :disabled="!isLoaded">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            确认创建角色
+            {{ translateUi('uiMessages.m64110ea34624') }}
             <span v-if="characterPointsCost > 0" class="points-cost-badge">
-              {{ characterPointsCost }} 积分
+              {{ translateUi('uiMessages.md901f70479c8', { value1: (characterPointsCost) }) }}
             </span>
           </button>
         </div>

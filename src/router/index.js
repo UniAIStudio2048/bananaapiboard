@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 import { createRouter, createWebHistory } from 'vue-router'
 import { getBrand } from '@/config/tenant'
 import { setPageTitle, isIndexableRoute } from '@/utils/pageTitle'
@@ -43,50 +44,50 @@ const router = createRouter({
       path: '/generate', 
       name: 'home',
       component: Home,
-      meta: { title: '图片生成', requiresAuth: true }
+      meta: { get title() { return translateUi('imageGen.title') }, requiresAuth: true }
     },
     {
       path: '/canvas',
       name: 'canvas',
       component: Canvas,
-      meta: { title: '创作画布', requiresAuth: true }
+      meta: { get title() { return translateUi('canvas.title') }, requiresAuth: true }
     },
     {
       path: '/docs',
       name: 'docs',
       component: Docs,
-      meta: { title: '文档', requiresAuth: false }
+      meta: { get title() { return translateUi('uiMessages.m2687ccdbb1d2') }, requiresAuth: false }
     },
     {
       path: '/workflows',
       name: 'workflows',
       component: WorkflowList,
-      meta: { title: '工作流列表', requiresAuth: true }
+      meta: { get title() { return translateUi('uiMessages.m865ce4989456') }, requiresAuth: true }
     },
     {
       path: '/share/workflows/:token',
       name: 'workflowShare',
       component: WorkflowShare,
-      meta: { title: '工作流分享', requiresAuth: false, noindex: true, referrer: 'no-referrer' }
+      meta: { get title() { return translateUi('uiMessages.m82d29589d2de') }, requiresAuth: false, noindex: true, referrer: 'no-referrer' }
     },
-    { path: '/subuser', name: 'subusers', component: () => import('@/views/Subusers.vue'), meta: { title: '子用户管理', requiresAuth: true } },
+    { path: '/subuser', name: 'subusers', component: () => import('@/views/Subusers.vue'), meta: { get title() { return translateUi('uiMessages.md19c97e3879d') }, requiresAuth: true } },
     {
       path: '/group',
       name: 'groupCredits',
       component: GroupCredits,
-      meta: { title: '团队积分', requiresAuth: true }
+      meta: { get title() { return translateUi('user.teamPoints') }, requiresAuth: true }
     },
     { 
       path: '/video', 
       name: 'video',
       component: VideoGeneration,
-      meta: { title: '视频生成', requiresAuth: true }
+      meta: { get title() { return translateUi('user.ledgerType.video_generate') }, requiresAuth: true }
     },
     {
       path: '/text',
       name: 'text',
       component: TextGeneration,
-      meta: { title: '文本生成', requiresAuth: true }
+      meta: { get title() { return translateUi('nav.textGenerate') }, requiresAuth: true }
     },
     // /auth 路由已移除，登录统一从落地页进入
     { 
@@ -97,26 +98,26 @@ const router = createRouter({
       path: '/user', 
       name: 'user',
       component: User,
-      meta: { title: '用户中心', requiresAuth: true }
+      meta: { get title() { return translateUi('uiMessages.m018a3ecf091a') }, requiresAuth: true }
     },
     { 
       path: '/packages', 
       name: 'packages',
       component: Packages,
-      meta: { title: '套餐购买', requiresAuth: true }
+      meta: { get title() { return translateUi('pointsType.package_purchase') }, requiresAuth: true }
     },
     {
       path: '/adminboard',
       name: 'adminboard',
       component: AdminBoard,
-      meta: { title: '管理后台', requiresAuth: true, requiresAdmin: true }
+      meta: { get title() { return translateUi('admin.title') }, requiresAuth: true, requiresAdmin: true }
     },
     // 社区路由
     {
       path: '/community',
       name: 'community',
       component: () => import('@/views/CommunityHome.vue'),
-      meta: { title: '社区', requiresAuth: false }
+      meta: { get title() { return translateUi('uiMessages.m5bcd0ddcdd69') }, requiresAuth: false }
     },
     {
       path: '/community/tvshow',
@@ -128,39 +129,39 @@ const router = createRouter({
       path: '/community/users/:userId',
       name: 'communityUserProfile',
       component: () => import('@/views/CommunityUserProfile.vue'),
-      meta: { title: '作者主页', requiresAuth: false }
+      meta: { get title() { return translateUi('uiMessages.mf2ad3f0f1f90') }, requiresAuth: false }
     },
     {
       path: '/community/messages',
       name: 'communityMessages',
       component: () => import('@/views/CommunityMessages.vue'),
-      meta: { title: '社区私信', requiresAuth: true }
+      meta: { get title() { return translateUi('uiMessages.m40e27b2eddbe') }, requiresAuth: true }
     },
     {
       path: '/community/templates',
       name: 'communityTemplates',
       component: () => import('@/views/TemplateListPage.vue'),
-      meta: { title: '模板库', requiresAuth: false }
+      meta: { get title() { return translateUi('uiMessages.mafd8a25f3078') }, requiresAuth: false }
     },
     {
       path: '/community/:id/workflow',
       alias: '/community/workflow/:id',
       name: 'communityWorkflow',
       component: () => import('@/views/CommunityWorkflow.vue'),
-      meta: { title: '工作流预览', requiresAuth: false }
+      meta: { get title() { return translateUi('uiMessages.m29dff383df15') }, requiresAuth: false }
     },
     {
       path: '/community/:id',
       name: 'communityDetail',
       component: () => import('@/views/CommunityDetail.vue'),
-      meta: { title: '作品详情', requiresAuth: false }
+      meta: { get title() { return translateUi('uiMessages.m2674c80642ac') }, requiresAuth: false }
     },
     // 灵感中心
     {
       path: '/inspiration',
       name: 'inspiration',
       component: () => import('@/views/Inspiration.vue'),
-      meta: { title: '灵感中心', requiresAuth: false }
+      meta: { get title() { return translateUi('uiMessages.m9ab5493d9a33') }, requiresAuth: false }
     },
     // 404 重定向到首页
     {

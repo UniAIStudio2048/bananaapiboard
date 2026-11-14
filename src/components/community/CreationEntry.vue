@@ -1,13 +1,13 @@
 <template>
   <div>
     <div class="flex items-center justify-between mb-4">
-      <h2 class="text-xl font-bold text-white">个人最近项目</h2>
+      <h2 class="text-xl font-bold text-white">{{ translateUi('uiMessages.m5f44117bf297') }}</h2>
       <button
         class="text-sm text-neutral-400 hover:text-white transition-colors"
         type="button"
         @click="openAllProjects"
       >
-        全部项目 <span aria-hidden="true">›</span>
+        {{ translateUi('uiMessages.me3040dfd6b30') }} <span aria-hidden="true">›</span>
       </button>
     </div>
 
@@ -24,10 +24,10 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14m-7-7h14" />
             </svg>
           </span>
-          <span class="block text-white font-semibold text-base">开始创作</span>
-          <span class="block text-blue-200/60 text-xs mt-1">发挥创意，开始你的 AI 创作</span>
+          <span class="block text-white font-semibold text-base">{{ translateUi('landing.startCreating') }}</span>
+          <span class="block text-blue-200/60 text-xs mt-1">{{ translateUi('uiMessages.mdfa4f13f307c') }}</span>
         </span>
-        <span class="text-xs text-blue-200/60 group-hover:text-blue-100/80 transition-colors">立即尝试 →</span>
+        <span class="text-xs text-blue-200/60 group-hover:text-blue-100/80 transition-colors">{{ translateUi('uiMessages.m992b367b26ee') }}</span>
       </button>
 
       <!-- 最近项目横向滚动区 -->
@@ -36,7 +36,7 @@
         class="flex-1 min-w-0 flex gap-3 overflow-x-auto overscroll-x-contain [scrollbar-width:thin]"
         tabindex="0"
         role="list"
-        aria-label="个人最近项目"
+        :aria-label="translateUi('uiMessages.m5f44117bf297')"
         @wheel="handleWheel"
         @keydown="handleKeydown"
       >
@@ -63,7 +63,7 @@
               <img
                 v-if="project.cover_url"
                 :src="project.cover_url"
-                :alt="`${project.name} 封面`"
+                :alt="translateUi('uiMessages.med467ecd8b08', { value1: (project.name) })"
                 class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                 loading="lazy"
               />
@@ -73,11 +73,11 @@
                 </svg>
               </div>
               <span v-if="Number(project.workflow_count || 0) > 0" class="absolute bottom-2 right-2 rounded-full bg-black/70 px-2 py-0.5 text-[11px] text-neutral-200">
-                {{ project.workflow_count }} 个工作流
+                {{ translateUi('uiMessages.m9882de3c01da', { value1: (project.workflow_count) }) }}
               </span>
             </div>
             <div class="p-3">
-              <h3 class="text-sm font-medium text-white truncate">{{ project.name || '未命名项目' }}</h3>
+              <h3 class="text-sm font-medium text-white truncate">{{ project.name || translateUi('uiMessages.md55e16c0a7d0') }}</h3>
               <p class="mt-1 text-xs text-neutral-500">{{ formatProjectDate(project.updated_at) }}</p>
             </div>
           </button>
@@ -87,10 +87,10 @@
           <svg class="w-8 h-8 mb-2 text-neutral-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7.5A2.5 2.5 0 016.5 5h3l1.5 2h6.5A2.5 2.5 0 0120 9.5v7A2.5 2.5 0 0117.5 19h-11A2.5 2.5 0 014 16.5z" />
           </svg>
-          <p v-if="isLoggedIn" class="text-sm">还没有项目，开始创建你的第一个项目吧</p>
+          <p v-if="isLoggedIn" class="text-sm">{{ translateUi('uiMessages.mdc3fae53c074') }}</p>
           <template v-else>
-            <p class="text-sm">登录后查看最近项目</p>
-            <button type="button" class="mt-2 text-xs text-blue-300 hover:text-blue-200" @click="communityStore.showLoginModal = true">立即登录</button>
+            <p class="text-sm">{{ translateUi('uiMessages.md98cc899e808') }}</p>
+            <button type="button" class="mt-2 text-xs text-blue-300 hover:text-blue-200" @click="communityStore.showLoginModal = true">{{ translateUi('auth.loginNow') }}</button>
           </template>
         </div>
       </div>
@@ -104,15 +104,17 @@
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6.5A2.5 2.5 0 016.5 4h11A2.5 2.5 0 0120 6.5v11a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 014 17.5zM8 8h8M8 12h8M8 16h5" />
         </svg>
-        <span class="text-xs">全部项目</span>
+        <span class="text-xs">{{ translateUi('uiMessages.me3040dfd6b30') }}</span>
       </button>
     </div>
 
-    <p v-if="projectsError && isLoggedIn" class="mt-2 text-xs text-neutral-600">最近项目加载失败，请稍后重试</p>
+    <p v-if="projectsError && isLoggedIn" class="mt-2 text-xs text-neutral-600">{{ translateUi('uiMessages.mf38bf7124e16') }}</p>
   </div>
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCommunityStore } from '@/stores/community'
@@ -165,10 +167,10 @@ async function loadProjects() {
 }
 
 function formatProjectDate(value) {
-  if (!value) return '暂无创建时间'
+  if (!value) return translateUi('uiMessages.m5b130f9af8bb')
   const numeric = Number(value)
   const date = new Date(Number.isFinite(numeric) && numeric > 0 ? (numeric < 1e12 ? numeric * 1000 : numeric) : value)
-  if (Number.isNaN(date.getTime())) return '暂无创建时间'
+  if (Number.isNaN(date.getTime())) return translateUi('uiMessages.m5b130f9af8bb')
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')

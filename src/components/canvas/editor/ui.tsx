@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../../i18n/index.js'
 import * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -35,8 +36,8 @@ export function MediaModal({ open, title, children, onCancel, closable = true, c
   if (!open) return null
   const full = width === '100vw'
   return createPortal(<div className="banana-video-editor fixed inset-0 flex items-center justify-center bg-black/65" style={{ zIndex }} onPointerDown={event => event.stopPropagation()} onWheel={event => event.stopPropagation()}>
-    <div ref={root} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : '视频剪辑'} tabIndex={-1} className={`${className} ${full ? 'h-dvh w-screen' : 'max-h-[95dvh] overflow-auto rounded-xl border border-white/15 p-5'} bg-[#0d0d0d] text-zinc-100 outline-none`} style={{ width }}>
-      {title && <div className="mb-3 flex items-center justify-between text-sm font-medium">{title}{closable && <button type="button" aria-label="关闭" onClick={onCancel}><X size={18} /></button>}</div>}
+    <div ref={root} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : translateUi('uiMessages.m11ca06291afe')} tabIndex={-1} className={`${className} ${full ? 'h-dvh w-screen' : 'max-h-[95dvh] overflow-auto rounded-xl border border-white/15 p-5'} bg-[#0d0d0d] text-zinc-100 outline-none`} style={{ width }}>
+      {title && <div className="mb-3 flex items-center justify-between text-sm font-medium">{title}{closable && <button type="button" aria-label={translateUi('directorStudio.close')} onClick={onCancel}><X size={18} /></button>}</div>}
       <div className={`flowx-media-ant-modal-container ${full ? 'h-full' : ''}`}><div className={`flowx-media-ant-modal-body ant-modal-body ${full ? 'h-full' : ''}`}>{children}</div></div>
     </div>
   </div>, document.body)

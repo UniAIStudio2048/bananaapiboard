@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed } from 'vue'
 import { getMiniMapPointerPosition } from '@/utils/canvasMiniMapPointer.js'
 
@@ -70,7 +72,7 @@ function handleClick(event) {
 </script>
 
 <template>
-  <div class="canvas-minimap-overview" aria-label="画布地图">
+  <div class="canvas-minimap-overview" :aria-label="translateUi('uiMessages.mb838d168ca21')">
     <svg
       :width="width"
       :height="height"

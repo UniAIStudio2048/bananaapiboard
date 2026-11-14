@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
@@ -32,16 +33,16 @@ test('HeyGen a2v 模型可在画布模型菜单中被选择，并沿用数字人
   assert.match(source, /isHeygenModel\(m\) \|\| supportsCurrentMode\(m, currentMode\)/)
   assert.match(source, /const isHeygenModelSelected = computed\(\(\) => isHeygenModel\(currentModelConfig\.value\)\)/)
   assert.match(source, /const isHeygenFlow = isHeygenModelSelected\.value \|\| upstreamData\.digitalHumans\.length > 0/)
-  assert.match(source, /HeyGen 需要连接数字人资产和音频，或同时连接视频和音频/)
+  assert.match(source, localizedPattern(/HeyGen 需要连接数字人资产和音频，或同时连接视频和音频/))
   assert.match(source, /v-if="!isHeygenMode \|\| isHeygenModelSelected"/)
 })
 
 test('HeyGen 渠道控件使用中性样式，并说明支持的输入组合', () => {
   assert.match(source, /const heygenInputHint = computed\(/)
-  assert.match(source, /数字人资产 \+ 音频/)
-  assert.match(source, /视频 \+ 音频（换口型）/)
-  assert.match(source, /已随数字人资产绑定/)
-  assert.match(source, /heygenChannels\.length === 1 \? '默认渠道' : channel\.name/)
+  assert.match(source, localizedPattern(/数字人资产 \+ 音频/))
+  assert.match(source, localizedPattern(/视频 \+ 音频（换口型）/))
+  assert.match(source, localizedPattern(/已随数字人资产绑定/))
+  assert.match(source, localizedPattern(/heygenChannels\.length === 1 \? '默认渠道' : channel\.name/))
   assert.doesNotMatch(source, /heygenVoiceId/)
   assert.match(source, /aspectRatio: selectedAspectRatio\.value/)
   assert.match(source, /imageHeight > capturedState\.digitalHuman\?\.imageWidth\s*\? '9:16'/)

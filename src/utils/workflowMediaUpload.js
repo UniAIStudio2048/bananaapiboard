@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 import { sanitizeWorkflowForSave } from './workflowSaveSanitizer.js'
 
 // Keep already-clean worker JSON on the fast path: no second parse/stringify.
@@ -15,17 +16,17 @@ export async function prepareWorkflowSaveBody(jsonBody, uploadMedia) {
         uploaded.set(value, (async () => {
           try {
             const response = await fetch(value, { signal: AbortSignal.timeout(30000) })
-            if (!response.ok) throw new Error('无法读取本地媒体')
+            if (!response.ok) throw new Error(translateUi('uiMessages.m387274a421e9'))
             const blob = await response.blob()
             const type = blob.type.split('/')[0]
-            if (!['image', 'video', 'audio'].includes(type)) throw new Error('不支持的内联媒体类型')
+            if (!['image', 'video', 'audio'].includes(type)) throw new Error(translateUi('uiMessages.m21786ea9812c'))
             const ext = blob.type.split('/')[1]?.replace(/[^a-z0-9]/gi, '') || 'bin'
             const file = new File([blob], `workflow-${type}.${ext}`, { type: blob.type })
             const result = await uploadMedia(file, type, space)
-            if (!result?.url || /^(data:|blob:)/i.test(result.url)) throw new Error('上传未返回持久地址')
+            if (!result?.url || /^(data:|blob:)/i.test(result.url)) throw new Error(translateUi('uiMessages.m00d384323a83'))
             return result.url
           } catch (cause) {
-            const error = new Error(`工作流媒体上传失败，请重试；本地文件失效时请重新上传。${cause.message}`)
+            const error = new Error(translateUi('uiMessages.made8486ecccd', { value1: (cause.message) }))
             error.code = 'workflow_media_upload_failed'
             throw error
           }

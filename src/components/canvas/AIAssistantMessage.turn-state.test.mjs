@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 /**
  * AIAssistantMessage 回合终态渲染测试（reliability design 12.1）。
  * 断言：失败/已停止状态、错误摘要、重试按钮、媒体占位不回归。
@@ -15,14 +16,14 @@ const source = readFileSync(join(__dirname, 'AIAssistantMessage.vue'), 'utf8')
 
 test('failed turn renders an error summary and a retry control', () => {
   assert.match(source, /v-if="message\.turnState === 'failed'" class="ai-message-turn-state ai-message-turn-state--failed"/)
-  assert.match(source, /message\.error_message \|\| '回合执行失败'/)
+  assert.match(source, localizedPattern(/message\.error_message \|\| '回合执行失败'/))
   assert.match(source, /v-if="message\.retryable !== false"/)
   assert.match(source, /\$emit\('retry', message\)/)
 })
 
 test('cancelled turn renders a gray stopped state', () => {
   assert.match(source, /v-else-if="message\.turnState === 'cancelled'" class="ai-message-turn-state ai-message-turn-state--cancelled"/)
-  assert.match(source, /已停止\{\{ message\.cancel_reason \? `（\$\{message\.cancel_reason\}）` : '' \}\}/)
+  assert.match(source, /translateUi\('uiMessages\.m07ba120ca70d', \{ value1: \(message\.cancel_reason \? `（\$\{message\.cancel_reason\}）` : ''\) \}\)/)
   assert.match(source, /\.ai-message-turn-state--cancelled \{[\s\S]*?color: #6b7280;/)
 })
 
@@ -31,7 +32,7 @@ test('retry event is declared on the component', () => {
 })
 
 test('message-level rating feedback UI is removed（不再显示「这次回答有帮助吗」👍/👎）', () => {
-  assert.doesNotMatch(source, /这次回答有帮助吗/)
+  assert.doesNotMatch(source, localizedPattern(/这次回答有帮助吗/))
   assert.doesNotMatch(source, /ai-message-feedback/)
   assert.doesNotMatch(source, /rating: 'up'/)
   assert.doesNotMatch(source, /rating: 'down'/)

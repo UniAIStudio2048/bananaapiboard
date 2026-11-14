@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * FabricMaskCanvas.vue - 原生 Canvas 蒙版/涂鸦编辑器
  * 
@@ -61,10 +63,10 @@ const brushSizes = [10, 20, 30, 50, 80]
 
 // 蒙版颜色
 const maskColors = [
-  { value: '#ff0000', label: '红色' },
-  { value: '#00ff00', label: '绿色' },
-  { value: '#0000ff', label: '蓝色' },
-  { value: '#ffffff', label: '白色' }
+  { value: '#ff0000', get label() { return translateUi('uiMessages.m789f61dbfcc7') } },
+  { value: '#00ff00', get label() { return translateUi('uiMessages.m30c83dc25b12') } },
+  { value: '#0000ff', get label() { return translateUi('uiMessages.m67035e6b7f82') } },
+  { value: '#ffffff', get label() { return translateUi('uiMessages.mf56e7eff58bf') } }
 ]
 
 // 是否为蒙版模式
@@ -400,7 +402,7 @@ defineExpose({
     <div class="editor-toolbar">
       <!-- 画笔粗细 -->
       <div class="toolbar-section">
-        <span class="toolbar-label">画笔大小</span>
+        <span class="toolbar-label">{{ translateUi('uiMessages.m667f2d7b34e2') }}</span>
         <div class="brush-sizes">
           <button
             v-for="size in brushSizes"
@@ -419,7 +421,7 @@ defineExpose({
       
       <!-- 颜色选择（仅涂鸦模式） -->
       <div v-if="!isMaskMode" class="toolbar-section">
-        <span class="toolbar-label">颜色</span>
+        <span class="toolbar-label">{{ translateUi('directorStudio.inspector.color') }}</span>
         <div class="color-options">
           <button
             v-for="color in maskColors"
@@ -438,7 +440,7 @@ defineExpose({
         <button 
           class="tool-btn"
           :class="{ active: !isErasing }"
-          title="画笔"
+          :title="translateUi('uiMessages.m05731b92ad31')"
           @click="isErasing = false"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -449,7 +451,7 @@ defineExpose({
         <button 
           class="tool-btn"
           :class="{ active: isErasing }"
-          title="橡皮擦"
+          :title="translateUi('uiMessages.m05cf56410be3')"
           @click="toggleEraser"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -459,17 +461,17 @@ defineExpose({
         
         <div class="toolbar-divider"></div>
         
-        <button class="tool-btn" title="撤销" @click="undo" :disabled="historyIndex <= 0">
+        <button class="tool-btn" :title="translateUi('canvas.undo')" @click="undo" :disabled="historyIndex <= 0">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M3 10h10a5 5 0 0 1 5 5v2M3 10l4-4M3 10l4 4"/>
           </svg>
         </button>
-        <button class="tool-btn" title="重做" @click="redo" :disabled="historyIndex >= historyStack.length - 1">
+        <button class="tool-btn" :title="translateUi('canvas.redo')" @click="redo" :disabled="historyIndex >= historyStack.length - 1">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 10H11a5 5 0 0 0-5 5v2M21 10l-4-4M21 10l-4 4"/>
           </svg>
         </button>
-        <button class="tool-btn" title="清除所有" @click="clearAll">
+        <button class="tool-btn" :title="translateUi('uiMessages.m3c507e43ef88')" @click="clearAll">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
           </svg>
@@ -480,8 +482,8 @@ defineExpose({
       
       <!-- 操作按钮 -->
       <div class="toolbar-section">
-        <button class="action-btn cancel" @click="handleCancel">取消</button>
-        <button class="action-btn confirm" @click="handleSave">确定</button>
+        <button class="action-btn cancel" @click="handleCancel">{{ translateUi('common.cancel') }}</button>
+        <button class="action-btn confirm" @click="handleSave">{{ translateUi('common.ok') }}</button>
       </div>
     </div>
   </div>

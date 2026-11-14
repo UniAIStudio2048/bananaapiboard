@@ -3,7 +3,7 @@
     <div v-if="isOpen" class="custom-preset-dialog-overlay" @click="handleOverlayClick">
       <div class="custom-preset-dialog" @click.stop>
         <div class="dialog-header">
-          <h2 class="dialog-title">{{ editMode ? '编辑自定义预设' : '新建自定义预设' }}</h2>
+          <h2 class="dialog-title">{{ editMode ? translateUi('uiMessages.mbd117ec09e61') : translateUi('uiMessages.mead4d9819944') }}</h2>
           <button class="close-btn" @click="close">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -15,19 +15,19 @@
           <!-- 预设名称 -->
           <div class="form-group">
             <label class="form-label">
-              预设名称 <span class="required">*</span>
+              {{ translateUi('uiMessages.m5fe110aa6d1d') }} <span class="required">*</span>
             </label>
             <input
               v-model="formData.name"
               type="text"
               class="form-input"
-              placeholder="例如：专业文案助手"
+              :placeholder="translateUi('uiMessages.ma272e61f004e')"
               maxlength="100"
               @input="validateName"
             />
             <div class="form-hint">
               <span :class="{ 'text-warning': formData.name.length > 80 }">
-                {{ formData.name.length }}/100 字符
+                {{ translateUi('uiMessages.m993d9ac82775', { value1: (formData.name.length) }) }}
               </span>
               <span v-if="nameError" class="text-error">{{ nameError }}</span>
             </div>
@@ -36,19 +36,19 @@
           <!-- 系统提示词 -->
           <div class="form-group">
             <label class="form-label">
-              系统提示词 <span class="required">*</span>
+              {{ translateUi('uiMessages.m0894b78b866e') }} <span class="required">*</span>
             </label>
             <textarea
               v-model="formData.systemPrompt"
               class="form-textarea"
-              placeholder="输入系统提示词，定义AI的行为和角色...&#10;&#10;例如：你是一个专业的文案策划师，擅长创作吸引人的营销文案。你的任务是根据用户提供的产品信息，生成引人入胜、富有创意的文案内容。"
+              :placeholder="translateUi('uiMessages.m10b14fea5539')"
               rows="10"
               maxlength="6000"
               @input="validateSystemPrompt"
             ></textarea>
             <div class="form-hint">
               <span :class="{ 'text-warning': formData.systemPrompt.length > 5500, 'text-error': formData.systemPrompt.length > 5900 }">
-                {{ formData.systemPrompt.length }}/6000 字符
+                {{ translateUi('uiMessages.m9ddfcc864398', { value1: (formData.systemPrompt.length) }) }}
               </span>
               <span v-if="promptError" class="text-error">{{ promptError }}</span>
             </div>
@@ -57,7 +57,7 @@
 
         <div class="dialog-footer">
           <button class="btn btn-secondary" @click="close">
-            取消
+            {{ translateUi('common.cancel') }}
           </button>
           <button
             v-if="!editMode"
@@ -65,7 +65,7 @@
             @click="handleTempUse"
             :disabled="!isFormValid || isSubmitting"
           >
-            仅本次使用
+            {{ translateUi('uiMessages.mcd8cf299109f') }}
           </button>
           <button
             class="btn btn-primary"
@@ -76,7 +76,7 @@
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            {{ isSubmitting ? '保存中...' : (editMode ? '更新' : '保存并使用') }}
+            {{ isSubmitting ? translateUi('common.saving') : (editMode ? translateUi('uiMessages.m3055a035f0eb') : translateUi('uiMessages.mbbba898d6e9c')) }}
           </button>
         </div>
       </div>
@@ -85,6 +85,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, computed, watch } from 'vue'
 
 const props = defineProps({
@@ -128,9 +130,9 @@ const isFormValid = computed(() => {
 function validateName() {
   const name = formData.value.name.trim()
   if (!name) {
-    nameError.value = '预设名称不能为空'
+    nameError.value = translateUi('uiMessages.m1e396cf6fce0')
   } else if (name.length > 100) {
-    nameError.value = '预设名称最长100字符'
+    nameError.value = translateUi('uiMessages.m32bd4c26c6a7')
   } else {
     nameError.value = ''
   }
@@ -140,9 +142,9 @@ function validateName() {
 function validateSystemPrompt() {
   const prompt = formData.value.systemPrompt
   if (!prompt.trim()) {
-    promptError.value = '系统提示词不能为空'
+    promptError.value = translateUi('uiMessages.m95fbc11fa699')
   } else if (prompt.length > 6000) {
-    promptError.value = '系统提示词最长6000字符'
+    promptError.value = translateUi('uiMessages.m0fa679f3f25f')
   } else {
     promptError.value = ''
   }

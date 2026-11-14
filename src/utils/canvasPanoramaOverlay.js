@@ -1,6 +1,7 @@
+import { t as translateUi } from '../i18n/index.js'
 export const OVERLAY_TYPE_LABELS = {
-  person: '人物',
-  object: '物品'
+  get person() { return translateUi('directorStudio.modelLibrary.categories.people') },
+  get object() { return translateUi('uiMessages.m7c89d6ebe1f9') }
 }
 
 export function getNextOverlayLabel(overlays = [], type = 'person') {

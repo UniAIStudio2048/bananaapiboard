@@ -1,3 +1,6 @@
+import * as i18nTestRuntime from '../../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -18,7 +21,7 @@ function guardHarness({ flush = { ok: true }, savedNodes = [{ id: 'video-a' }], 
     teamStore: { getSpaceParams: () => ({ spaceType: 'personal' }) },
     saveWorkflow: async () => { saves++; return { workflow: { id: 'wf-a' } } }
   }
-  const run = new Function(...Object.keys(deps), `${extract('ensureCanvasWorkflowForVideoSubmission')}; return ensureCanvasWorkflowForVideoSubmission`)(...Object.values(deps))
+  const run = new Function('translateUi', 'uiLanguage', ...Object.keys(deps), `${extract('ensureCanvasWorkflowForVideoSubmission')}; return ensureCanvasWorkflowForVideoSubmission`)(translateUi, uiLanguage, ...Object.values(deps))
   return { run, get saves() { return saves } }
 }
 test('saved personal video node submits using incremental persistence without full-snapshot conflicts', async () => {
@@ -53,7 +56,7 @@ test('a stalled workflow save times out without continuing to the video submissi
   }
   const body = extract('prepareVideoSubmissionContext')
   assert.ok(body, 'submission preparation must have a bounded lifetime')
-  const prepare = new Function(...Object.keys(deps), `${body}; return prepareVideoSubmissionContext`)(...Object.values(deps))
+  const prepare = new Function('translateUi', 'uiLanguage', ...Object.keys(deps), `${body}; return prepareVideoSubmissionContext`)(translateUi, uiLanguage, ...Object.values(deps))
   const result = prepare('video-a', { submissionTabId: 'tab-a' })
   expire()
   await assert.rejects(result, /超时/)
@@ -77,7 +80,7 @@ test('submission failure after switching tabs updates and persists the original 
   }
   const body = extract('updateVideoSubmissionNode')
   assert.ok(body, 'failure writeback must retain the submitting tab')
-  const update = new Function(...Object.keys(deps), `${body}; return updateVideoSubmissionNode`)(...Object.values(deps))
+  const update = new Function('translateUi', 'uiLanguage', ...Object.keys(deps), `${body}; return updateVideoSubmissionNode`)(translateUi, uiLanguage, ...Object.values(deps))
   const data = { status: 'error', progress: null, error: '保存超时' }
   await update('video-a', data, { submissionTabId: 'tab-a', submissionWorkflowId: 'wf-a' })
   assert.deepEqual(calls, [
@@ -111,7 +114,7 @@ test('task acknowledgement after a tab switch registers the original tab and cle
     selectedModel: { value: 'model-a' }, selectedAspectRatio: { value: '9:16' },
     window: { dispatchEvent: () => {} }, CustomEvent: class {}, console
   }
-  const execute = new Function(...Object.keys(deps), `${extract('executeNodeGeneration')}; return executeNodeGeneration`)(...Object.values(deps))
+  const execute = new Function('translateUi', 'uiLanguage', ...Object.keys(deps), `${extract('executeNodeGeneration')}; return executeNodeGeneration`)(translateUi, uiLanguage, ...Object.values(deps))
   assert.equal(await execute('video-a', 'prompt', [], 0), 'new-task')
   assert.equal(registered[0].tabId, 'tab-a')
   assert.equal(data.taskId, 'new-task')

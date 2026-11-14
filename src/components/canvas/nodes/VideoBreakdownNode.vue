@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, computed, watch, onMounted, onUnmounted, inject, unref } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import { AudioLines, Check, Film, LoaderCircle, PanelsTopLeft, Play, RotateCcw, Upload } from '@lucide/vue'
@@ -27,17 +29,17 @@ const alive = new AbortController()
 let timer, persistence = Promise.resolve(), pollingTask
 
 function assertTab(tabId) {
-  if (alive.signal.aborted || store.getCurrentTab?.()?.id !== tabId) throw new Error('画布已切换，请在原画布查看任务')
+  if (alive.signal.aborted || store.getCurrentTab?.()?.id !== tabId) throw new Error(translateUi('uiMessages.m39e5f5251ec3'))
 }
 async function ensureWorkflow() {
   const tab = store.getCurrentTab?.()
-  if (!tab?.id) throw new Error('当前画布不可用')
+  if (!tab?.id) throw new Error(translateUi('uiMessages.m167d23b2160e'))
   if (tab.workflowId) return { tabId: tab.id, workflowId: tab.workflowId }
   const space = tab.workflowSpaceType ? { spaceType: tab.workflowSpaceType, teamId: tab.workflowTeamId } : teamStore.getSpaceParams('current')
-  const result = await saveWorkflow({ name: tab.name || '逐帧拉片', isDraft: true, uploadToCloud: false, ...space, ...store.exportWorkflowForSave() })
+  const result = await saveWorkflow({ name: tab.name || translateUi('uiMessages.md41f3dc4304e'), isDraft: true, uploadToCloud: false, ...space, ...store.exportWorkflowForSave() })
   assertTab(tab.id)
   const workflow = result.workflow || result
-  if (!workflow.id) throw new Error('画布保存失败')
+  if (!workflow.id) throw new Error(translateUi('uiMessages.m99269f0abbe9'))
   store.markCurrentTabSaved(workflow.id, workflow.workflow_uid, { space_type: space.spaceType, team_id: space.teamId })
   return { tabId: tab.id, workflowId: workflow.id }
 }
@@ -78,17 +80,17 @@ async function upload(event) {
   if (!file || readonly.value || busy.value) return
   uploading.value = true; error.value = ''
   try {
-    if (file.size > 500 * 1024 * 1024) throw new Error('视频超过 500 MB 限制')
-    if (!source.value && store.edges.some(edge => edge.target === props.id)) throw new Error('请先移除多余的输入连线')
+    if (file.size > 500 * 1024 * 1024) throw new Error(translateUi('uiMessages.m9e8ffbf46150'))
+    if (!source.value && store.edges.some(edge => edge.target === props.id)) throw new Error(translateUi('uiMessages.m4d514e667c6f'))
     const tabId = store.getCurrentTab?.()?.id
     const uploaded = await uploadCanvasMedia(file, 'video')
     assertTab(tabId)
-    if (!uploaded.url) throw new Error('视频上传失败')
+    if (!uploaded.url) throw new Error(translateUi('uiMessages.m8bc76392a011'))
     let input = source.value
     if (input) {
       store.updateNodeData(input.id, { output: { type: 'video', url: uploaded.url }, videoUrl: uploaded.url, title: file.name })
     } else {
-      if (store.edges.some(edge => edge.target === props.id)) throw new Error('请先移除多余的输入连线')
+      if (store.edges.some(edge => edge.target === props.id)) throw new Error(translateUi('uiMessages.m4d514e667c6f'))
       const node = store.nodes.find(item => item.id === props.id)
       input = { id: `video_${crypto.randomUUID()}`, type: 'video', position: { x: node.position.x - 460, y: node.position.y }, data: { title: file.name, output: { type: 'video', url: uploaded.url }, videoUrl: uploaded.url } }
       store.addNode(input)
@@ -129,12 +131,12 @@ async function poll(taskId, context) {
         await saveWorkflow({ id: context.workflowId, name: tab.name, uploadToCloud: false, ...space, ...store.exportWorkflowForSave() })
         assertTab(context.tabId)
       }
-      active.value = false; error.value = ''; progress.value = '分析完成'
+      active.value = false; error.value = ''; progress.value = translateUi('uiMessages.m0ff9cc7e060e')
       window.dispatchEvent(new CustomEvent('user-info-updated'))
       return
     }
     if (state.status === 'failed') {
-      active.value = false; progress.value = ''; error.value = state.error || '拉片失败，未扣积分'
+      active.value = false; progress.value = ''; error.value = state.error || translateUi('uiMessages.mceb60423f154')
       store.updateNodeData(props.id, { status: 'error', error: error.value })
       return
     }
@@ -142,13 +144,13 @@ async function poll(taskId, context) {
   } catch (e) {
     if (alive.signal.aborted || store.getCurrentTab?.()?.id !== context.tabId) return
     if ([401,403,404].includes(e.status)) { active.value = false; progress.value = ''; error.value = e.message; return }
-    error.value = `状态读取失败：${e.message}，正在重连`
+    error.value = translateUi('uiMessages.ma5fbf44c14cb', { value1: (e.message) })
   }
   timer = setTimeout(() => poll(taskId, context), 1500)
 }
 async function start(retry = false) {
   if (busy.value || readonly.value || !sourceUrl.value || !dimensions.value.length) return
-  submitting.value = true; error.value = ''; progress.value = retry ? '恢复分析…' : '读取视频与计算费用…'
+  submitting.value = true; error.value = ''; progress.value = retry ? translateUi('uiMessages.mcd49be1712c1') : translateUi('uiMessages.mbcacde425491')
   try {
     await persistence
     const context = await ensureWorkflow()
@@ -157,7 +159,7 @@ async function start(retry = false) {
       taskId = (await requestVideoBreakdown(`/tasks/${props.data.breakdownTaskId}/retry`, {})).taskId
     } else {
       const input = source.value
-      if (/^(blob:|data:)/.test(sourceUrl.value)) throw new Error('请等待视频上传保存完成后再分析')
+      if (/^(blob:|data:)/.test(sourceUrl.value)) throw new Error(translateUi('uiMessages.m96b1b94f859e'))
       await persistNode(context, input)
       await persistNode(context, store.nodes.find(node => node.id === props.id))
       await postWorkflowOps(context.workflowId, [{ op: 'add', target: 'edge', payload: store.edges.find(edge => edge.source === input.id && edge.target === props.id) }])
@@ -188,54 +190,54 @@ onUnmounted(() => { alive.abort(); clearTimeout(timer) })
 </script>
 
 <template>
-  <section class="breakdown-node" :class="{ selected }" :aria-busy="busy" aria-label="逐帧拉片">
+  <section class="breakdown-node" :class="{ selected }" :aria-busy="busy" :aria-label="translateUi('uiMessages.md41f3dc4304e')">
     <header class="node-header">
       <Film class="icon" aria-hidden="true" />
-      <strong>逐帧拉片</strong>
-      <span class="badge">视频分析</span>
+      <strong>{{ translateUi('uiMessages.md41f3dc4304e') }}</strong>
+      <span class="badge">{{ translateUi('uiMessages.m5c43e1ee173b') }}</span>
     </header>
     <Handle id="input" type="target" :position="Position.Left" :connectable="!readonly && !busy" />
 
     <div class="node-body">
       <div class="section-label">
-        <span>视频素材</span>
+        <span>{{ translateUi('uiMessages.mab3ddf77b6fc') }}</span>
         <span v-if="videoMetadata" class="metadata">{{ formatBreakdownTime(videoMetadata.duration) }} · {{ videoMetadata.width }}×{{ videoMetadata.height }}</span>
       </div>
       <div v-if="sourceUrl" class="preview nodrag nopan">
         <video :src="sourceUrl" controls preload="metadata" @loadedmetadata="readMetadata" />
         <button v-if="!readonly" type="button" class="replace" :disabled="busy" @click="uploadInput.click()">
-          <Upload class="icon" aria-hidden="true" />替换素材
+          <Upload class="icon" aria-hidden="true" />{{ translateUi('uiMessages.m1ac0acab457b') }}
         </button>
       </div>
       <button v-else type="button" class="empty nodrag nopan" :disabled="readonly || busy" @click="uploadInput.click()">
         <span class="upload-icon"><LoaderCircle v-if="uploading" class="icon spinning" aria-hidden="true" /><Upload v-else class="icon" aria-hidden="true" /></span>
-        <span class="upload-title">{{ uploading ? '上传中…' : '上传视频' }}</span>
-        <span class="upload-hint">或从左侧连接视频节点</span>
-        <span class="upload-limit">最大 500 MB</span>
+        <span class="upload-title">{{ uploading ? translateUi('uiMessages.mce1c9d61565f') : translateUi('canvas.videoNode.uploadVideo') }}</span>
+        <span class="upload-hint">{{ translateUi('uiMessages.m891c72f07daa') }}</span>
+        <span class="upload-limit">{{ translateUi('uiMessages.mba312869ede8') }}</span>
       </button>
       <input ref="uploadInput" class="hidden-input" type="file" accept="video/*" @change="upload">
 
-      <div class="section-label dimension-label"><span>拆解维度</span><span class="section-hint">多选</span></div>
-      <div class="dimensions nodrag nopan" role="group" aria-label="拆解维度">
+      <div class="section-label dimension-label"><span>{{ translateUi('uiMessages.mc3570eca4d71') }}</span><span class="section-hint">{{ translateUi('uiMessages.m461e085d5ca2') }}</span></div>
+      <div class="dimensions nodrag nopan" role="group" :aria-label="translateUi('uiMessages.mc3570eca4d71')">
         <button v-for="item in [{key:'shots',label:'分镜',icon:PanelsTopLeft},{key:'motions',label:'动态',icon:Play},{key:'audio',label:'音乐',icon:AudioLines}]" :key="item.key" type="button" :class="{ chosen: dimensions.includes(item.key) }" :aria-pressed="dimensions.includes(item.key)" :disabled="busy || readonly" @click="toggleDimension(item.key)">
           <component :is="item.icon" class="icon" aria-hidden="true" />
           <span>{{ item.label }}</span>
           <Check class="check-icon" :class="{ unchecked: !dimensions.includes(item.key) }" aria-hidden="true" />
         </button>
       </div>
-      <select v-if="config?.models?.length > 1" class="model-select nodrag nopan" aria-label="拉片模型" :value="modelId" :disabled="busy || readonly" @change="persistSettings({breakdownModelId:$event.target.value})"><option v-for="model in config.models" :key="model.id" :value="model.id">{{ model.name }}</option></select>
-      <p v-if="config?.enabled === false" class="notice">租户尚未启用逐帧拉片</p>
-      <p v-if="!dimensions.length" class="notice">请至少选择一个拆解维度</p>
+      <select v-if="config?.models?.length > 1" class="model-select nodrag nopan" :aria-label="translateUi('uiMessages.m660de62f78a5')" :value="modelId" :disabled="busy || readonly" @change="persistSettings({breakdownModelId:$event.target.value})"><option v-for="model in config.models" :key="model.id" :value="model.id">{{ model.name }}</option></select>
+      <p v-if="config?.enabled === false" class="notice">{{ translateUi('uiMessages.mb646a1cd3873') }}</p>
+      <p v-if="!dimensions.length" class="notice">{{ translateUi('uiMessages.md038af67839e') }}</p>
       <p v-if="statusText" class="progress" role="status">
         <LoaderCircle v-if="busy" class="icon spinning" aria-hidden="true" />
         <Check v-else-if="summary" class="icon" aria-hidden="true" />
         <span>{{ statusText }}</span>
       </p>
       <p v-if="error || data.error" class="error" role="alert">{{ error || data.error }}</p>
-      <div v-if="summary" class="summary" aria-label="拆解结果">
-        <span><strong>{{ summary.shots ?? 0 }}</strong>张分镜</span>
-        <span><strong>{{ summary.motions ?? 0 }}</strong>段动态</span>
-        <span><strong>{{ summary.audio ?? 0 }}</strong>段音频</span>
+      <div v-if="summary" class="summary" :aria-label="translateUi('uiMessages.m9f7b6a8ec805')">
+        <span><strong>{{ summary.shots ?? 0 }}</strong>{{ translateUi('uiMessages.m43386a7b5eba') }}</span>
+        <span><strong>{{ summary.motions ?? 0 }}</strong>{{ translateUi('uiMessages.m0e4ee25d2e8b') }}</span>
+        <span><strong>{{ summary.audio ?? 0 }}</strong>{{ translateUi('uiMessages.m7e9e60673430') }}</span>
       </div>
       <p v-for="notice in (data.breakdownNotices || []).filter(text => !text.startsWith('音频按分镜截取原视频音轨'))" :key="notice" class="notice">{{ notice }}</p>
     </div>
@@ -243,11 +245,11 @@ onUnmounted(() => { alive.abort(); clearTimeout(timer) })
     <footer class="node-footer">
       <button type="button" class="start nodrag nopan" :disabled="readonly || busy || !sourceUrl || !dimensions.length || !config?.enabled" @click="start()">
         <LoaderCircle v-if="busy" class="icon spinning" aria-hidden="true" /><Play v-else class="icon" aria-hidden="true" />
-        <span>{{ busy ? (uploading ? '上传中…' : '分析中…') : '开始拉片' }}</span>
-        <span v-if="!busy && estimatedCost !== null" class="cost">{{ estimatedCost }} 积分</span>
+        <span>{{ busy ? (uploading ? translateUi('uiMessages.mce1c9d61565f') : translateUi('uiMessages.m9006dd52f23b')) : translateUi('uiMessages.mfdfa30af4b34') }}</span>
+        <span v-if="!busy && estimatedCost !== null" class="cost">{{ translateUi('uiMessages.md901f70479c8', { value1: (estimatedCost) }) }}</span>
       </button>
-      <button v-if="data.status === 'error' && data.breakdownTaskId" type="button" class="retry nodrag nopan" :disabled="busy || readonly" @click="start(true)"><RotateCcw class="icon" aria-hidden="true" />重试未完成的分析</button>
-      <p v-if="config?.enabled" class="price-note">{{ config.billing_mode === 'per_second' ? `${config.points_per_second} 积分/秒，以实际时长结算` : `${config.points_cost} 积分/次` }} · 成功后扣费</p>
+      <button v-if="data.status === 'error' && data.breakdownTaskId" type="button" class="retry nodrag nopan" :disabled="busy || readonly" @click="start(true)"><RotateCcw class="icon" aria-hidden="true" />{{ translateUi('uiMessages.m6bc60f860c2a') }}</button>
+      <p v-if="config?.enabled" class="price-note">{{ translateUi('uiMessages.ma7a644d0f64a', { value1: (config.billing_mode === 'per_second' ? translateUi('uiMessages.m90e1a67bce98', { value1: (config.points_per_second) }) : translateUi('uiMessages.md576682f3b27', { value1: (config.points_cost) })) }) }}</p>
     </footer>
     <Handle id="output" type="source" :position="Position.Right" :connectable="false" />
   </section>

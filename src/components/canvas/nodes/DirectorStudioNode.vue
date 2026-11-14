@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, inject, onUnmounted, ref, watch } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import { Camera, Maximize2 } from '@lucide/vue'
@@ -44,10 +46,10 @@ const DIRECTOR_REFERENCE_COLOR_PALETTE = [
 ]
 const DIRECTOR_IMAGE_NODE_TYPES = new Set(['image', 'image-input', 'image-gen', 'text-to-image', 'image-to-image', 'grid-preview'])
 
-const openLabel = computed(() => translateWithFallback('directorStudio.nodeCard.enter', '打开导演台'))
-const snapshotLabel = computed(() => translateWithFallback('directorStudio.addToCanvas', '截图到画布'))
-const title = computed(() => props.data.title || translateWithFallback('directorStudio.title', '3D导演台'))
-const kickerLabel = computed(() => translateWithFallback('directorStudio.title', '3D导演台'))
+const openLabel = computed(() => translateWithFallback('directorStudio.nodeCard.enter', translateUi('directorStudio.nodeCard.enter')))
+const snapshotLabel = computed(() => translateWithFallback('directorStudio.addToCanvas', translateUi('directorStudio.addToCanvas')))
+const title = computed(() => props.data.title || translateWithFallback('directorStudio.title', translateUi('canvas.nodeConfig.directorStudio.label')))
+const kickerLabel = computed(() => translateWithFallback('directorStudio.title', translateUi('canvas.nodeConfig.directorStudio.label')))
 const statusLabel = computed(() => {
   const status = props.data.status || 'idle'
   return translateWithFallback(`directorStudio.statusValues.${status}`, status)
@@ -173,7 +175,7 @@ async function handleAddSnapshotToCanvas(payloadOrEvent) {
           y: currentPosition.y
         },
         data: {
-          title: '导演台截图',
+          title: translateUi('directorStudio.nodeCard.snapshotAlt'),
           nodeRole: 'source',
           sourceImages: [persistentSnapshotUrl],
           imageUrl: persistentSnapshotUrl,
@@ -191,7 +193,7 @@ async function handleAddSnapshotToCanvas(payloadOrEvent) {
             y: currentPosition.y + 360 + reference.index * 260
           },
           data: {
-            title: `导演台参考 ${reference.index + 1}`,
+            get title() { return translateUi('uiMessages.m681058ba1800', { value1: (reference.index + 1) }) },
             nodeRole: 'source',
             sourceImages: [reference.url],
             imageUrl: reference.url,
@@ -208,7 +210,7 @@ async function handleAddSnapshotToCanvas(payloadOrEvent) {
           y: currentPosition.y
         },
         data: {
-          title: '导演台生成',
+          title: translateUi('directorStudio.generationNodeName'),
           prompt,
           userPrompt: prompt,
           referenceImages: generationReferenceImages,
@@ -256,7 +258,7 @@ async function handleAddSnapshotToCanvas(payloadOrEvent) {
   } catch (error) {
     canvasStore.updateNodeData(props.id, {
       status: 'error',
-      errorMessage: error?.message || '导演台截图添加失败'
+      errorMessage: error?.message || translateUi('uiMessages.mb974db5a91b3')
     })
   } finally {
     addingSnapshotToCanvas.value = false
@@ -325,7 +327,7 @@ function mergeDirectorStudioReferenceImages(nodeId, data, nodes, edges) {
     merged.push({
       id: id || `ref-${index + 1}`,
       url: normalizedUrl,
-      label: `图${index + 1}`,
+      label: translateUi('uiMessages.m2f7cdebbb4b3', { value1: (index + 1) }),
       color: getDirectorReferenceColor(index)
     })
   }
@@ -388,7 +390,7 @@ function mergeDirectorStudioAssetLists(lists) {
       merged.push({
         id: source.id || `asset-${merged.length + 1}-${index}`,
         url,
-        label: source.label || source.title || source.name || `图片 ${merged.length + 1}`,
+        label: source.label || source.title || source.name || translateUi('uiMessages.m6af55e777c95', { value1: (merged.length + 1) }),
         color: source.color || '#38bdf8'
       })
     })
@@ -408,7 +410,7 @@ function collectDirectorStudioCanvasImageAssets(nodes) {
     assets.push({
       id: id || `canvas-image-${assets.length + 1}`,
       url: normalizedUrl,
-      label: label || `画布图片 ${assets.length + 1}`,
+      label: label || translateUi('uiMessages.m1e411f366ca0', { value1: (assets.length + 1) }),
       color
     })
   }
@@ -416,7 +418,7 @@ function collectDirectorStudioCanvasImageAssets(nodes) {
   ;(Array.isArray(nodes) ? nodes : []).forEach((node, index) => {
     if (!node || !DIRECTOR_IMAGE_NODE_TYPES.has(node.type)) return
     const data = node.data || {}
-    const label = data.title || data.label || `画布图片 ${index + 1}`
+    const label = data.title || data.label || translateUi('uiMessages.m1e411f366ca0', { value1: (index + 1) })
 
     if (Array.isArray(data.sourceImages)) {
       data.sourceImages.forEach((url, urlIndex) => add(url, label, `${node.id}-source-${urlIndex}`, '#38bdf8'))

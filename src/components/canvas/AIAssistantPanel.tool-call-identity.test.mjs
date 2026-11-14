@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 /**
  * 工具调用身份（AC-P1-03）—— 面板工具卡以 tool_call_id 为主键。
  *
@@ -38,6 +39,6 @@ test('禁止按 tool 名去重（两次同类调用是两张独立卡）', () =>
 
 test('completed 无 tool_call_id 时才有兼容兜底（不得作为主路径）', () => {
   // 主路径按 tool_call_id；无 ID（旧协议）才退化为最后一张 running 卡
-  assert.match(panel, /completed 无 tool_call_id（旧协议）：退化为最后一张 running 卡（兼容）/)
+  assert.match(panel, localizedPattern(/completed 无 tool_call_id（旧协议）：退化为最后一张 running 卡（兼容）/))
   assert.match(panel, /\[\.\.\.message\.toolEvents\]\.reverse\(\)\.find\(item => item\.status === 'running'\)/)
 })

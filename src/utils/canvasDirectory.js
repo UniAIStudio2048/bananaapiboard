@@ -1,25 +1,26 @@
+import { t as translateUi } from '../i18n/index.js'
 const TYPE_LABELS = {
-  'text-input': '文本',
-  text: '文本',
-  image: '图片',
-  'image-input': '图片',
-  'image-gen': '图片',
-  'text-to-image': '图片',
-  'image-to-image': '图片',
-  video: '视频',
-  'video-input': '视频',
-  'video-gen': '视频',
-  'text-to-video': '视频',
-  'image-to-video': '视频',
-  audio: '音频',
-  'audio-input': '音频',
-  llm: '文本',
-  storyboard: '分镜',
-  'character-card': '角色',
-  'seedance-character': '角色',
-  'bytefor-character': '角色',
-  'director-studio': '导演台',
-  'preview-output': '预览'
+  get 'text-input'() { return translateUi('canvas.nodeConfig.textInput.label') },
+  get text() { return translateUi('canvas.nodeConfig.textInput.label') },
+  get image() { return translateUi('canvas.nodeConfig.imageInput.label') },
+  get 'image-input'() { return translateUi('canvas.nodeConfig.imageInput.label') },
+  get 'image-gen'() { return translateUi('canvas.nodeConfig.imageInput.label') },
+  get 'text-to-image'() { return translateUi('canvas.nodeConfig.imageInput.label') },
+  get 'image-to-image'() { return translateUi('canvas.nodeConfig.imageInput.label') },
+  get video() { return translateUi('canvas.nodeConfig.videoInput.label') },
+  get 'video-input'() { return translateUi('canvas.nodeConfig.videoInput.label') },
+  get 'video-gen'() { return translateUi('canvas.nodeConfig.videoInput.label') },
+  get 'text-to-video'() { return translateUi('canvas.nodeConfig.videoInput.label') },
+  get 'image-to-video'() { return translateUi('canvas.nodeConfig.videoInput.label') },
+  get audio() { return translateUi('canvas.nodeConfig.audioInput.label') },
+  get 'audio-input'() { return translateUi('canvas.nodeConfig.audioInput.label') },
+  get llm() { return translateUi('canvas.nodeConfig.textInput.label') },
+  get storyboard() { return translateUi('uiMessages.mc6b1d5264c01') },
+  get 'character-card'() { return translateUi('user.role') },
+  get 'seedance-character'() { return translateUi('user.role') },
+  get 'bytefor-character'() { return translateUi('user.role') },
+  get 'director-studio'() { return translateUi('uiMessages.mca45d5dc8d56') },
+  get 'preview-output'() { return translateUi('uiMessages.m13d61fea9f17') }
 }
 
 const IMAGE_TYPES = new Set([
@@ -49,7 +50,7 @@ function compareCanvasPosition(a, b) {
 }
 
 export function getCanvasNodeTypeLabel(node) {
-  return TYPE_LABELS[node?.type] || '节点'
+  return TYPE_LABELS[node?.type] || translateUi('canvas.nodeLabel')
 }
 
 export function getCanvasNodeDisplayName(node) {

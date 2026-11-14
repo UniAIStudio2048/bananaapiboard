@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../../i18n/index.js'
 import * as React from 'react'
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
@@ -8,7 +9,7 @@ export function TimelineFilmstrip({strip,imageUrl,start,duration,rate,pixelsPerS
  const ref=useRef<HTMLSpanElement>(null),[visible,setVisible]=useState({left:0,right:1200})
  const width=Math.max(0,duration*pixelsPerSecond),tile=strip?Math.max(16,height*strip.aspect):height
  useEffect(()=>{
-  const element=ref.current,host=element?.closest('[aria-label="时间线"]');if(!element||!host||!strip)return
+  const element=ref.current,host=element?.closest(translateUi('uiMessages.m2a4e31125d3a'));if(!element||!host||!strip)return
   const measure=()=>{const box=element.getBoundingClientRect(),view=host.getBoundingClientRect(),left=Math.max(0,view.left-box.left-tile),right=Math.min(width,view.right-box.left+tile);setVisible(previous=>Math.abs(previous.left-left)<1&&Math.abs(previous.right-right)<1?previous:{left,right})}
   measure();host.addEventListener('scroll',measure,{passive:true});const observer=new ResizeObserver(measure);observer.observe(element);observer.observe(host);window.addEventListener('resize',measure)
   return()=>{host.removeEventListener('scroll',measure);observer.disconnect();window.removeEventListener('resize',measure)}

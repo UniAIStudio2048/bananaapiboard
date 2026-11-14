@@ -1,10 +1,12 @@
 <script setup>
+import { t as translateUi, currentLanguage as uiLanguage } from '@/i18n'
+
 import { computed, ref } from 'vue'
 
 const props = defineProps({
   groupName: {
     type: String,
-    default: '编组'
+    get default() { return translateUi('canvas.nodeTypes.group') }
   },
   mode: {
     type: String,
@@ -36,15 +38,15 @@ const error = ref('')
 
 const normalizedBatchCount = computed(() => Math.min(100, Math.max(1, Number.parseInt(batchCount.value || 1, 10) || 1)))
 const isRecordsMode = computed(() => props.mode === 'records')
-const dialogTitle = computed(() => isRecordsMode.value ? '定时记录' : '定时执行')
+const dialogTitle = computed(() => isRecordsMode.value ? translateUi('uiMessages.me32fd85dcee9') : translateUi('uiMessages.m978cb333292d'))
 
 const statusLabel = {
-  scheduled: '待执行',
-  running: '执行中',
-  completed: '已完成',
-  failed: '失败',
-  cancelled: '已取消',
-  partial: '部分完成'
+  get scheduled() { return translateUi('uiMessages.m637da5612300') },
+  get running() { return translateUi('uiMessages.m5026a63b58cd') },
+  get completed() { return translateUi('canvas.assetPanel.tagCompleted') },
+  get failed() { return translateUi('uiMessages.m28384d7afd2e') },
+  get cancelled() { return translateUi('uiMessages.ma37778f17c5f') },
+  get partial() { return translateUi('uiMessages.m1bd16b45b478') }
 }
 
 function normalizeBatchInput() {
@@ -60,8 +62,8 @@ function normalizeTimestamp(value) {
 
 function formatScheduleTime(value) {
   const timestamp = normalizeTimestamp(value)
-  if (!timestamp) return '时间未知'
-  return new Date(timestamp).toLocaleString('zh-CN', {
+  if (!timestamp) return translateUi('uiMessages.m664939a1fa2e')
+  return new Date(timestamp).toLocaleString(uiLanguage.value, {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
@@ -76,13 +78,13 @@ function canCancelSchedule(schedule) {
 function submitSchedule() {
   error.value = ''
   if (!scheduledAtInput.value) {
-    error.value = '请选择执行时间'
+    error.value = translateUi('uiMessages.m434c7efecbad')
     return
   }
 
   const scheduledAt = new Date(scheduledAtInput.value).getTime()
   if (!Number.isFinite(scheduledAt) || scheduledAt <= Date.now() - 60000) {
-    error.value = '执行时间不能早于当前时间'
+    error.value = translateUi('uiMessages.mb37e1ebbb8fe')
     return
   }
 
@@ -102,30 +104,30 @@ function submitSchedule() {
             <h3>{{ dialogTitle }}</h3>
             <p>{{ props.groupName }}</p>
           </div>
-          <button class="icon-btn" type="button" aria-label="关闭" @click="emit('close')">×</button>
+          <button class="icon-btn" type="button" :aria-label="translateUi('common.close')" @click="emit('close')">×</button>
         </div>
 
         <template v-if="isRecordsMode">
           <div class="records-toolbar">
-            <span>任务记录</span>
+            <span>{{ translateUi('uiMessages.mc542f21d8c90') }}</span>
             <button class="text-btn" type="button" :disabled="loading" @click="emit('refresh')">
-              {{ loading ? '刷新中' : '刷新' }}
+              {{ loading ? translateUi('uiMessages.m3af7e5489e61') : translateUi('common.refresh') }}
             </button>
           </div>
 
-          <div v-if="loading" class="empty-records">正在加载任务记录</div>
-          <div v-else-if="schedules.length === 0" class="empty-records">暂无任务记录</div>
+          <div v-if="loading" class="empty-records">{{ translateUi('uiMessages.m85f144919920') }}</div>
+          <div v-else-if="schedules.length === 0" class="empty-records">{{ translateUi('uiMessages.me393f849bfa1') }}</div>
           <div v-else class="schedule-record-list">
             <div v-for="schedule in schedules" :key="schedule.id" class="schedule-record">
               <div class="record-main">
                 <span class="status-pill" :class="`status-${schedule.status || 'unknown'}`">
-                  {{ statusLabel[schedule.status] || schedule.status || '未知' }}
+                  {{ statusLabel[schedule.status] || schedule.status || translateUi('uiMessages.m4d8c1c5b4283') }}
                 </span>
                 <strong>{{ formatScheduleTime(schedule.scheduled_at || schedule.scheduledAt) }}</strong>
               </div>
               <div class="record-meta">
-                <span>{{ schedule.batch_count || schedule.batchCount || 1 }} 批</span>
-                <span>创建 {{ formatScheduleTime(schedule.created_at || schedule.createdAt) }}</span>
+                <span>{{ translateUi('uiMessages.m4a9466197e7f', { value1: (schedule.batch_count || schedule.batchCount || 1) }) }}</span>
+                <span>{{ translateUi('uiMessages.m449019136aae', { value1: (formatScheduleTime(schedule.created_at || schedule.createdAt)) }) }}</span>
               </div>
               <p v-if="schedule.error" class="record-error">{{ schedule.error }}</p>
               <div v-if="canCancelSchedule(schedule)" class="record-actions">
@@ -135,7 +137,7 @@ function submitSchedule() {
                   :disabled="cancellingId === schedule.id"
                   @click="emit('cancel-schedule', schedule)"
                 >
-                  {{ cancellingId === schedule.id ? '取消中' : '取消任务' }}
+                  {{ cancellingId === schedule.id ? translateUi('uiMessages.m75dfaf262f47') : translateUi('uiMessages.m537d17f1c531') }}
                 </button>
               </div>
             </div>
@@ -144,12 +146,12 @@ function submitSchedule() {
 
         <template v-else>
           <label class="field">
-            <span>执行时间</span>
+            <span>{{ translateUi('uiMessages.m45e03e436ed0') }}</span>
             <input v-model="scheduledAtInput" type="datetime-local" :disabled="submitting" />
           </label>
 
           <label class="field">
-            <span>批次数</span>
+            <span>{{ translateUi('uiMessages.m2f69582f9147') }}</span>
             <input
               v-model.number="batchCount"
               type="number"
@@ -164,9 +166,9 @@ function submitSchedule() {
           <p v-if="error" class="error-text">{{ error }}</p>
 
           <div class="dialog-actions">
-            <button class="secondary-btn" type="button" :disabled="submitting" @click="emit('close')">取消</button>
+            <button class="secondary-btn" type="button" :disabled="submitting" @click="emit('close')">{{ translateUi('common.cancel') }}</button>
             <button class="primary-btn" type="button" :disabled="submitting" @click="submitSchedule">
-              {{ submitting ? '提交中' : '确认定时' }}
+              {{ submitting ? translateUi('uiMessages.mdcc1a22d9e72') : translateUi('uiMessages.m0ffd61afe283') }}
             </button>
           </div>
         </template>
@@ -423,16 +425,16 @@ function submitSchedule() {
   color: #fff;
 }
 
-:global(:root.canvas-theme-light) .group-schedule-backdrop {
+:root.canvas-theme-light .group-schedule-backdrop {
   background: rgba(28, 25, 23, 0.32);
   color-scheme: light;
 }
 
-:global(:root.canvas-theme-light) .group-schedule-dialog {
+:root.canvas-theme-light .group-schedule-dialog {
   box-shadow: 0 20px 50px rgba(28, 25, 23, 0.18);
 }
 
-:global(:root.canvas-theme-light) .field input {
+:root.canvas-theme-light .field input {
   color-scheme: light;
 }
 </style>

@@ -1,3 +1,8 @@
+import { includesUiText } from '../../i18n/sourceAssertions.mjs'
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
+import * as i18nTestRuntime from '../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -17,7 +22,7 @@ function setup(options, assetType = 'Video', savedProvider, savedStatus = 'idle'
   const submitted = []
   let outsideClick
   const props = { nodeId: 'node1', assetType, data: savedProvider ? { seedanceQuickAsset: { providerType: savedProvider } } : {} }
-  const ui = new Function('deps', `with (deps) { ${script}; return { enabled, providers, selectedProvider, loadingProviders, status, queryFailed, buttonText, submitting, submit, loadProviders, getProvider, reviewControl, reviewButton, menuOpen, handleReviewClick, submitToProvider, closeMenu, providerDisabled, data: props.data } }`)({
+  const ui = new Function('deps', `with (deps) { ${script}; return { translateUi, enabled, providers, selectedProvider, loadingProviders, status, queryFailed, buttonText, submitting, submit, loadProviders, getProvider, reviewControl, reviewButton, menuOpen, handleReviewClick, submitToProvider, closeMenu, providerDisabled, data: props.data } }`)({ translateUi, uiLanguage,
     ...Vue, onMounted() {}, onUnmounted() {},
     onClickOutside: (_target, callback) => { outsideClick = callback },
     defineProps: () => props,
@@ -53,7 +58,7 @@ test('multiple channels stay inside the review button and selecting a menu item 
   assert.equal(f.ui.menuOpen.value, true)
   const menuHtml = await f.html()
   assert.ok(menuHtml.includes('role="menu"'))
-  assert.ok(menuHtml.includes('aria-label="素材审核渠道"'))
+  assert.ok(includesUiText(menuHtml, 'aria-label="素材审核渠道"'))
   assert.ok(menuHtml.includes(hub.label))
   await f.ui.submitToProvider(hub.id)
   assert.deepEqual(f.submitted, [hub.id])
@@ -129,7 +134,7 @@ test('choosing another channel preserves the saved review status until a new rev
   await f.ui.submitToProvider(hub.id)
   assert.equal(f.ui.providerDisabled(official.id), true)
   await f.ui.handleReviewClick()
-  assert.match(await f.html(), /已过审/)
+  assert.match(await f.html(), localizedPattern(/已过审/))
 })
 
 test('unsupported media channels are excluded; saved channel wins over the default', async () => {

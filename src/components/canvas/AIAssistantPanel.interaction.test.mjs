@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 /**
  * AIAssistantPanel 交互规则测试（reliability design 3 & 7.5）。
  * 断言：键盘规则、停止/排队/强制插入、服务端队列协议、activeTurn 状态对象。
@@ -104,7 +105,7 @@ test('queue: force insert (running) promotes to next-after-current-round; idle b
   assert.match(forceInsertBlock, /promoteQueuedCodexMessage\(currentCodexThreadId\.value, queued\.turn_id\)/)
   assert.match(forceInsertBlock, /hidePromotedQueueItem\(queued\)/)
   assert.match(forceInsertBlock, /pushPromotedConversationMessages\(queued\)/)
-  assert.doesNotMatch(forceInsertBlock, /只把排队项追加到当前对话/)
+  assert.doesNotMatch(forceInsertBlock, localizedPattern(/只把排队项追加到当前对话/))
   assert.doesNotMatch(forceInsertBlock, /dismissed:\s*true/)
   // 空闲分支：删服务端队列项 → 恢复草稿 → 直接发送（不取消任何回合）
   const idleSrv = forceInsertBlock.slice(forceInsertBlock.lastIndexOf('if (enhancedMode.value && currentCodexThreadId.value) {'))
@@ -154,13 +155,13 @@ test('AgentQueueBar exposes an insert action for queued follow-ups', async () =>
   const bar = readFileSync(join(__dirname, 'AgentQueueBar.vue'), 'utf8')
   assert.match(bar, /item\.text \|\| item\.content/)
   assert.match(bar, /\$emit\('insert', item\)/)
-  assert.match(bar, /立即插入|插入/)
+  assert.match(bar, localizedPattern(/立即插入|插入/))
   assert.doesNotMatch(bar, /item\.inserted/)
 })
 
 test('stop: stopCurrentActivity cancels the server turn and keeps fallback content', () => {
   assert.match(source, /cancelCodexTurn\(currentCodexThreadId\.value, activeTurn\.value\.id, \{ reason: 'user_stop' \}\)/)
-  assert.match(source, /if \(!activeMessage\.content\) activeMessage\.content = '已停止当前对话或任务'/)
+  assert.match(source, localizedPattern(/if \(!activeMessage\.content\) activeMessage\.content = '已停止当前对话或任务'/))
 })
 
 test('activeTurn state object carries server turn metadata', () => {
@@ -181,7 +182,7 @@ test('new chat: startNewChat clears thread reference and queued banner', () => {
 })
 
 test('failure fallback: empty assistant content is replaced with readable error', () => {
-  assert.match(source, /if \(!message\.content\) \{\s*message\.content = `抱歉，发生了错误: \$\{error\.message\}`/)
+  assert.match(source, /if \(!message\.content\) \{\s*message\.content = translateUi\('uiMessages\.mc496c7998ecc', \{ value1: \(error\.message\) \}\)/)
 })
 
 test('streaming callbacks tolerate a replaced message slot (no crash on reconnect)', () => {

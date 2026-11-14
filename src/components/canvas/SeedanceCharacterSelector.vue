@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * SeedanceCharacterSelector.vue - 角色选择弹窗
  * 用于在 SeedanceCharacterNode 中选择/更换角色
@@ -24,7 +26,7 @@ const assetsLoading = ref(false)
 const selectedAsset = ref(null)
 const allLocalAssets = ref([])
 const selectedMediaType = ref('all')
-const mediaTabs = [{ type: 'all', label: '全部' }, { type: 'image', label: '图片' }, { type: 'video', label: '视频' }, { type: 'audio', label: '音频' }]
+const mediaTabs = [{ type: 'all', get label() { return translateUi('common.all') } }, { type: 'image', get label() { return translateUi('canvas.nodes.image') } }, { type: 'video', get label() { return translateUi('canvas.nodes.video') } }, { type: 'audio', get label() { return translateUi('canvas.nodes.audio') } }]
 const availableAssets = computed(() => assets.value.filter(asset => isSeedanceAssetReusable(asset)))
 
 // 只显示 Active 资产
@@ -194,7 +196,7 @@ function positionPreview(event) {
     <div v-if="visible" class="selector-overlay" @click.self="close">
       <div class="selector-modal">
         <div class="selector-header">
-          <h3>选择角色素材</h3>
+          <h3>{{ translateUi('uiMessages.m6d31baf484cc') }}</h3>
           <button class="close-btn" @click="close">✕</button>
         </div>
         <div class="selector-body">
@@ -204,7 +206,7 @@ function positionPreview(event) {
               <div class="spinner-sm"></div>
             </div>
             <div v-else-if="groups.length === 0" class="sidebar-empty">
-              暂无角色组
+              {{ translateUi('uiMessages.mb624ef3b7b4c') }}
             </div>
             <button
               v-for="group in groups"
@@ -215,7 +217,7 @@ function positionPreview(event) {
             >
               <span class="group-btn-name">
                 {{ group.Name }}
-                <span v-if="group._isOwner === false" class="team-badge" title="团队共享">👥</span>
+                <span v-if="group._isOwner === false" class="team-badge" :title="translateUi('uiMessages.m1d31c7a1b891')">👥</span>
               </span>
               <span class="group-btn-count">{{ group._assetCount ?? '...' }}</span>
             </button>
@@ -223,17 +225,17 @@ function positionPreview(event) {
 
           <!-- 右侧：资产网格 -->
           <div class="asset-area">
-            <div class="media-tabs" role="tablist" aria-label="素材类型">
+            <div class="media-tabs" role="tablist" :aria-label="translateUi('uiMessages.m3be96f8eb83d')">
               <button v-for="tab in mediaTabs" :key="tab.type" role="tab" :aria-selected="selectedMediaType === tab.type" :class="{ active: selectedMediaType === tab.type }" @click="selectMediaType(tab.type)">
                 {{ tab.label }} {{ getMediaCount(tab.type) }}
               </button>
             </div>
             <div v-if="assetsLoading" class="area-loading">
               <div class="spinner-sm"></div>
-              <span>加载中...</span>
+              <span>{{ translateUi('common.loading') }}</span>
             </div>
             <div v-else-if="activeAssets.length === 0" class="area-empty">
-              <span>该分类暂无可用角色</span>
+              <span>{{ translateUi('uiMessages.m43ec8691baa0') }}</span>
             </div>
             <div v-else :key="`${selectedGroupId}:${selectedMediaType}`" class="asset-grid">
               <div
@@ -258,8 +260,8 @@ function positionPreview(event) {
                   <img v-else-if="asset.URL" :src="asset.URL" :alt="asset.Name" loading="lazy" />
                   <div v-else class="item-placeholder">👥</div>
                 </div>
-                <span class="item-name">{{ asset.Name || '未命名' }}</span>
-                <span v-if="currentAssetId === asset.Id" class="current-badge">当前</span>
+                <span class="item-name">{{ asset.Name || translateUi('canvas.unnamed') }}</span>
+                <span v-if="currentAssetId === asset.Id" class="current-badge">{{ translateUi('uiMessages.mcb62ebd689ee') }}</span>
               </div>
             </div>
 
@@ -277,13 +279,13 @@ function positionPreview(event) {
         </div>
 
         <div class="selector-footer">
-          <button class="btn-cancel" @click="close">取消</button>
+          <button class="btn-cancel" @click="close">{{ translateUi('common.cancel') }}</button>
           <button
             class="btn-confirm"
             :disabled="!selectedAsset"
             @click="confirm"
           >
-            确认选择
+            {{ translateUi('uiMessages.m2c8691449787') }}
           </button>
         </div>
       </div>

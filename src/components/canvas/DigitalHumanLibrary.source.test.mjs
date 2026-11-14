@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
@@ -28,7 +29,7 @@ test('资产面板仅在数字人资产库开启时显示数字人选项卡', ()
 test('资产面板不再将数字人资产插入为独立画布节点', () => {
   assert.doesNotMatch(assetPanel, /function handleDigitalHumanInsert\(asset\)/)
   assert.doesNotMatch(assetPanel, /@insert="handleDigitalHumanInsert"/)
-  assert.doesNotMatch(digitalHumanPanel, /添加到画布/)
+  assert.doesNotMatch(digitalHumanPanel, localizedPattern(/添加到画布/))
   assert.doesNotMatch(canvas, /case 'digital-human':\s*nodeType = 'digital-human'/)
   assert.doesNotMatch(canvasBoard, /case 'digital-human':\s*canvasStore\.addNode/)
 })
@@ -36,7 +37,7 @@ test('资产面板不再将数字人资产插入为独立画布节点', () => {
 test('已有数字人节点可双击或点击选择角色以更新 HeyGen 绑定', () => {
   assert.match(digitalHumanNode, /import DigitalHumanSelector from '\.\.\/DigitalHumanSelector\.vue'/)
   assert.match(digitalHumanNode, /@dblclick\.stop="openSelector"/)
-  assert.match(digitalHumanNode, /点击选择角色/)
+  assert.match(digitalHumanNode, localizedPattern(/点击选择角色/))
   assert.match(digitalHumanNode, /@select="handleSelect"/)
   assert.match(digitalHumanNode, /canvasStore\.updateNodeData\(props\.id, \{[\s\S]*assetId: asset\.id/)
   assert.match(digitalHumanSelector, /getAssets\(\{[\s\S]*type: 'digital-human'/)
@@ -52,5 +53,5 @@ test('画布图片和视频右键菜单提供一键创建 HeyGen 数字人资产
   assert.match(nodeContextMenu, /isDigitalHumanLibraryEnabled/)
   assert.match(nodeContextMenu, /createDigitalHumanFromNode/)
   assert.match(nodeContextMenu, /isImageNodeWithOutput\.value \|\| isVideoNodeWithOutput\.value/)
-  assert.match(nodeContextMenu, /一键创建 HeyGen 数字人/)
+  assert.match(nodeContextMenu, localizedPattern(/一键创建 HeyGen 数字人/))
 })

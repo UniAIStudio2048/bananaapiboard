@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 /**
  * 附件-only（AC-P2-01）测试：仅添加附件时发送按钮可用；无文字时使用明确的
  * 默认文本语义「请分析我附加的素材」，不静默返回。
@@ -18,5 +19,5 @@ test('hasDraft：附件存在时发送按钮可用（无文字也可发送）', 
 })
 
 test('附件-only 消息使用默认文本语义，不静默返回', () => {
-  assert.match(panel, /inputText\.value\.trim\(\) \|\| \(attachments\.value\.length \? '请分析我附加的素材。' : ''\)/)
+  assert.match(panel, localizedPattern(/inputText\.value\.trim\(\) \|\| \(attachments\.value\.length \? '请分析我附加的素材。' : ''\)/))
 })

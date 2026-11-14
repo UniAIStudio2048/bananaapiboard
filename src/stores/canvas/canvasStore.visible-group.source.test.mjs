@@ -1,3 +1,4 @@
+import { uiTextIndex } from '../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -90,7 +91,7 @@ test('undo and redo rebuild redundant group metadata from visible group nodes', 
 test('directory moves update both visible group membership records atomically', () => {
   const moveSource = storeSource.slice(
     storeSource.indexOf('function moveNodeToGroup('),
-    storeSource.indexOf('/**\n   * 删除节点')
+    uiTextIndex(storeSource, '/**\n   * 删除节点')
   )
 
   assert.match(storeSource, /function moveNodeToGroup\(nodeId, targetGroupId = null\)/)

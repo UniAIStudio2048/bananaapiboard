@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * PublishWorkDialog.vue - 发布作品到社区
  */
@@ -58,7 +60,7 @@ function normalizeMediaType(type = '') {
 async function uploadWorkMedia(file, { onProgress, timeout = 120000 } = {}) {
   const mediaType = inferMediaTypeFromFile(file)
   if (!mediaType) {
-    throw new Error('请上传图片或视频文件')
+    throw new Error(translateUi('uiMessages.m3ff8f8ca7ba2'))
   }
 
   const controller = new AbortController()
@@ -77,13 +79,13 @@ async function uploadWorkMedia(file, { onProgress, timeout = 120000 } = {}) {
     return [result.url]
   } catch (e) {
     const code = e.code || e.message
-    if (controller.signal.aborted || e.name === 'AbortError') throw new Error('文件上传超时，请重试')
-    if (e.status === 401 || code === 'canvas_upload_unauthorized') throw new Error('登录已失效，请重新登录后上传')
-    if (e.status === 403) throw new Error('没有权限上传此文件，请联系管理员')
-    if (code === 'canvas_upload_unavailable') throw new Error('上传服务暂不可用，请稍后重试')
-    if (code === 'canvas_upload_invalid_file') throw new Error('文件格式或大小不符合要求，请更换文件')
-    if (code === 'canvas_upload_verification_failed') throw new Error('文件校验失败，请重新上传')
-    throw new Error('文件上传失败，请检查网络后重试')
+    if (controller.signal.aborted || e.name === 'AbortError') throw new Error(translateUi('uiMessages.m49cd5f420a08'))
+    if (e.status === 401 || code === 'canvas_upload_unauthorized') throw new Error(translateUi('uiMessages.m8c9d841d00c1'))
+    if (e.status === 403) throw new Error(translateUi('uiMessages.m7a23d6061c09'))
+    if (code === 'canvas_upload_unavailable') throw new Error(translateUi('uiMessages.m0cfb912b06bb'))
+    if (code === 'canvas_upload_invalid_file') throw new Error(translateUi('uiMessages.mfda851101074'))
+    if (code === 'canvas_upload_verification_failed') throw new Error(translateUi('uiMessages.m4018a2ff7512'))
+    throw new Error(translateUi('uiMessages.m2a40f7b1b993'))
   } finally {
     clearTimeout(timeoutId)
   }
@@ -136,7 +138,7 @@ const selectedWorkflowName = computed(() => {
   if (!selectedWorkflowId.value) return ''
   const allWfs = workflowGroups.value.flatMap(g => g.workflows)
   const found = allWfs.find(w => w.id === selectedWorkflowId.value)
-  return found ? `${found.name} (${found.workflow_uid || found.id.slice(0, 8)})` : '已选择'
+  return found ? `${found.name} (${found.workflow_uid || found.id.slice(0, 8)})` : translateUi('uiMessages.m3f4ebc4aad97')
 })
 
 function toggleWorkflowDropdown() {
@@ -149,9 +151,9 @@ function selectWorkflow(id) {
 }
 
 const selectedProjectName = computed(() => {
-  if (!selectedProjectId.value) return props.projectName || '选择项目'
+  if (!selectedProjectId.value) return props.projectName || translateUi('uiMessages.m682279bfae23')
   const proj = projects.value.find(p => p.id === selectedProjectId.value || String(p.id) === String(selectedProjectId.value))
-  return proj ? `${proj.name} (${proj.workflow_count || 0} 个工作流)` : (props.projectName || '选择项目')
+  return proj ? translateUi('uiMessages.md7d9bb51bdfb', { value1: (proj.name), value2: (proj.workflow_count || 0) }) : (props.projectName || translateUi('uiMessages.m682279bfae23'))
 })
 
 function selectProject(id) {
@@ -305,7 +307,7 @@ async function loadWorkflows() {
             }
 
             if (teamWfs.length) {
-              groups.push({ label: `团队: ${team.name}`, teamId: team.id, workflows: teamWfs })
+              groups.push({ label: translateUi('uiMessages.m82b022d347c4', { value1: (team.name) }), teamId: team.id, workflows: teamWfs })
             }
           } catch {}
         }
@@ -315,7 +317,7 @@ async function loadWorkflows() {
     }
 
     if (currentWf) {
-      groups.unshift({ label: '当前工作流', workflows: [currentWf] })
+      groups.unshift({ label: translateUi('uiMessages.mb030a2ccb43c'), workflows: [currentWf] })
     }
 
     workflowGroups.value = groups
@@ -340,11 +342,11 @@ function validateWorkFile(file) {
 
   if (uploadType.value === 'image') {
     if (mediaType !== 'image') {
-      error.value = '当前仅支持上传图片文件'
+      error.value = translateUi('uiMessages.me4a2aeeb571d')
       return false
     }
     if (file.size > MAX_IMAGE_SIZE) {
-      error.value = '图片文件不能超过 10MB'
+      error.value = translateUi('uiMessages.m29169bcea18a')
       return false
     }
     return true
@@ -352,11 +354,11 @@ function validateWorkFile(file) {
 
   if (uploadType.value === 'video') {
     if (mediaType !== 'video') {
-      error.value = '作品仅支持上传视频文件（MP4、MOV、WebM）'
+      error.value = translateUi('uiMessages.m32b47c78fdb1')
       return false
     }
     if (file.size > MAX_VIDEO_SIZE) {
-      error.value = `视频文件不能超过 500MB，当前文件 ${(file.size / 1024 / 1024).toFixed(1)}MB`
+      error.value = translateUi('uiMessages.m8daf0455098a', { value1: ((file.size / 1024 / 1024).toFixed(1)) })
       return false
     }
     return true
@@ -364,24 +366,24 @@ function validateWorkFile(file) {
 
   // both
   if (!mediaType) {
-    error.value = '请上传图片或视频文件'
+    error.value = translateUi('uiMessages.m3ff8f8ca7ba2')
     return false
   }
   if (mediaType === 'video' && file.size > MAX_VIDEO_SIZE) {
-    error.value = '视频文件不能超过 500MB'
+    error.value = translateUi('uiMessages.m15597e971a55')
     return false
   }
   if (mediaType === 'image' && file.size > MAX_IMAGE_SIZE) {
-    error.value = '图片文件不能超过 10MB'
+    error.value = translateUi('uiMessages.m29169bcea18a')
     return false
   }
   return true
 }
 
 function getMediaRequiredMessage() {
-  if (uploadType.value === 'image') return '请上传至少 1 张作品图片'
-  if (uploadType.value === 'video') return '请上传作品视频文件'
-  return '请上传作品图片或视频文件'
+  if (uploadType.value === 'image') return translateUi('uiMessages.m426ac2a48543')
+  if (uploadType.value === 'video') return translateUi('uiMessages.m773873ecb2ef')
+  return translateUi('uiMessages.m0264fd8e572f')
 }
 
 // 封面上传
@@ -389,20 +391,20 @@ async function handleCoverChange(e) {
   const file = e instanceof File ? e : e.target.files?.[0]
   if (!file) return
   if (!file.type.startsWith('image/')) {
-    error.value = '封面图请上传图片文件'
+    error.value = translateUi('uiMessages.m5b3581576a0e')
     return
   }
   error.value = ''
   let finalFile = file
   if (file.size > MAX_IMAGE_SIZE) {
     if (file.type === 'image/gif') {
-      error.value = 'GIF 图片不能超过 10MB'
+      error.value = translateUi('uiMessages.m49e38c0c9b55')
       return
     }
     try {
       finalFile = await compressImage(file, { maxSizeMB: 10 })
     } catch {
-      error.value = '图片压缩失败，请换一张图片'
+      error.value = translateUi('uiMessages.m9316294dd038')
       return
     }
   }
@@ -437,7 +439,7 @@ async function handleMultiImageChange(e) {
 
   const remaining = MAX_IMAGE_COUNT - workFiles.value.length
   if (remaining <= 0) {
-    error.value = `最多上传 ${MAX_IMAGE_COUNT} 张图片`
+    error.value = translateUi('uiMessages.m3a10011c2ec7', { value1: (MAX_IMAGE_COUNT) })
     return
   }
 
@@ -445,19 +447,19 @@ async function handleMultiImageChange(e) {
   const processedFiles = []
   for (const rawFile of newFiles) {
     if (!rawFile.type.startsWith('image/')) {
-      error.value = '请选择图片文件'
+      error.value = translateUi('uiMessages.m35fc560913c0')
       return
     }
     let file = rawFile
     if (file.size > MAX_IMAGE_SIZE) {
       if (file.type === 'image/gif') {
-        error.value = `图片 ${file.name} 超过 10MB 限制（GIF 不支持压缩）`
+        error.value = translateUi('uiMessages.m3e8b0bbc69e9', { value1: (file.name) })
         return
       }
       try {
         file = await compressImage(file, { maxSizeMB: 10 })
       } catch {
-        error.value = `图片 ${file.name} 压缩失败，请换一张图片`
+        error.value = translateUi('uiMessages.m70d9c22fb2f7', { value1: (file.name) })
         return
       }
     }
@@ -534,18 +536,18 @@ async function handlePublish() {
   error.value = ''
 
   // 验证
-  if (!title.value.trim()) { error.value = '请输入作品名称'; return }
-  if (!coverFile.value && !coverPreview.value) { error.value = '请上传封面图'; return }
+  if (!title.value.trim()) { error.value = translateUi('uiMessages.m6bafc2ce74d8'); return }
+  if (!coverFile.value && !coverPreview.value) { error.value = translateUi('uiMessages.mc14461c6bc4d'); return }
   const isMultiImage = workFiles.value.length > 0
   if (!isMultiImage && !workFile.value && !workPreview.value) { error.value = getMediaRequiredMessage(); return }
   const hasWorkflow = !!selectedWorkflowId.value
   const hasProject = linkProject.value && !!selectedProjectId.value
-  if (!hasWorkflow && !hasProject) { error.value = '请选择关联工作流或关联项目'; return }
-  if (linkProject.value && !selectedProjectId.value) { error.value = '已启用关联项目，请选择一个项目'; return }
-  if (selectedTags.value.length === 0) { error.value = '请至少选择一个标签'; return }
-  if (!orientation.value) { error.value = '请选择作品方向（横屏或竖屏）'; return }
+  if (!hasWorkflow && !hasProject) { error.value = translateUi('uiMessages.m08a2a19fa3af'); return }
+  if (linkProject.value && !selectedProjectId.value) { error.value = translateUi('uiMessages.m1897ef6a78df'); return }
+  if (selectedTags.value.length === 0) { error.value = translateUi('uiMessages.m025e2de5cc57'); return }
+  if (!orientation.value) { error.value = translateUi('uiMessages.m9f34dd606fda'); return }
   if (shareMode.value === 'paid' && (!price.value || price.value < 1)) {
-    error.value = '请输入有效的积分价格'
+    error.value = translateUi('uiMessages.m874fffd971b6')
     return
   }
   const wfId = selectedWorkflowId.value || props.workflowId || undefined
@@ -565,7 +567,7 @@ async function handlePublish() {
         }
         uploadProgress.value = Math.round(((i + 1) / workFiles.value.length) * 100)
       }
-      if (imageUrls.length === 0) throw new Error('图片上传失败')
+      if (imageUrls.length === 0) throw new Error(translateUi('uiMessages.m2a1aa07b1f9b'))
       mediaUrl = JSON.stringify(imageUrls)
       mediaType = 'image'
       uploadProgress.value = 0
@@ -576,7 +578,7 @@ async function handlePublish() {
         timeout: 600000
       })
       if (!mediaUrls || mediaUrls.length === 0) {
-        throw new Error('作品媒体上传失败')
+        throw new Error(translateUi('uiMessages.m3d23cb3bbf79'))
       }
       mediaUrl = mediaUrls[0]
       mediaType = inferMediaTypeFromFile(workFile.value)
@@ -586,7 +588,7 @@ async function handlePublish() {
     let coverUrl = props.initialCoverUrl || ''
     if (coverFile.value) {
       const coverUrls = await uploadWorkMedia(coverFile.value)
-      if (!coverUrls || coverUrls.length === 0) throw new Error('封面上传失败')
+      if (!coverUrls || coverUrls.length === 0) throw new Error(translateUi('uiMessages.m11f53ffe3855'))
       coverUrl = coverUrls[0]
     } else if (!coverUrl && workFiles.value.length > 0) {
       try {
@@ -618,7 +620,7 @@ async function handlePublish() {
     emit('published', result)
     close()
   } catch (e) {
-    error.value = e.message || '发布失败，请重试'
+    error.value = e.message || translateUi('uiMessages.ma59ac98e1cab')
   } finally {
     loading.value = false
     uploadProgress.value = 0
@@ -658,13 +660,13 @@ async function handlePublish() {
             </svg>
           </div>
           <div class="relative z-10">
-            <h2 class="text-xl font-bold text-white tracking-tight">发布作品到社区</h2>
-            <p class="mt-1.5 text-sm text-white/40 max-w-md leading-relaxed">将您的作品发布到社区参加活动，和全球优秀创作者同台竞技，优质画布/作品/封面将极大提升获奖概率！</p>
+            <h2 class="text-xl font-bold text-white tracking-tight">{{ translateUi('uiMessages.m2ccfea60b74e') }}</h2>
+            <p class="mt-1.5 text-sm text-white/40 max-w-md leading-relaxed">{{ translateUi('uiMessages.m2c5d456a23b6') }}</p>
           </div>
           <button
             class="absolute top-5 right-5 z-20 w-8 h-8 flex items-center justify-center rounded-full text-white/40 hover:text-white hover:bg-white/10 transition-all"
             @click="close"
-            aria-label="关闭"
+            :aria-label="translateUi('common.close')"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
@@ -677,7 +679,7 @@ async function handlePublish() {
             <div class="w-[280px] shrink-0 space-y-5">
               <!-- 作品上传 -->
               <div>
-                <label class="publish-label">上传作品<span class="text-teal-400">*</span></label>
+                <label class="publish-label">{{ translateUi('uiMessages.m0bfe928cd90c') }}<span class="text-teal-400">*</span></label>
 
                 <!-- 多图片上传模式 -->
                 <template v-if="uploadType === 'image'">
@@ -708,10 +710,10 @@ async function handlePublish() {
                         :class="isDraggingWork ? 'border-teal-500/40 bg-teal-500/5' : ''"
                       >
                         <svg class="w-5 h-5 text-white/20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-                        <span class="text-[10px] text-white/20 mt-1">添加图片</span>
+                        <span class="text-[10px] text-white/20 mt-1">{{ translateUi('uiMessages.m9f0d4e4656ee') }}</span>
                       </div>
                     </div>
-                    <p class="text-[11px] text-white/20">支持 PNG、JPG、WebP（超过10MB自动压缩，最多{{ MAX_IMAGE_COUNT }}张，已选{{ workPreviews.length }}张）</p>
+                    <p class="text-[11px] text-white/20">{{ translateUi('uiMessages.m5361df265166', { value1: (MAX_IMAGE_COUNT), value2: (workPreviews.length) }) }}</p>
                   </div>
                   <input ref="workInput" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="handleWorkFileChange" />
                 </template>
@@ -737,21 +739,21 @@ async function handlePublish() {
                     </button>
                     <div v-if="isDraggingWork" class="flex flex-col items-center justify-center h-full text-teal-400">
                       <svg class="w-8 h-8 mb-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-                      <span class="text-xs">松开上传</span>
+                      <span class="text-xs">{{ translateUi('uiMessages.m549800c6db96') }}</span>
                     </div>
-                    <img v-else-if="workPreview && workMediaType === 'image'" :src="workPreview" class="w-full h-full object-cover" alt="作品预览" />
+                    <img v-else-if="workPreview && workMediaType === 'image'" :src="workPreview" class="w-full h-full object-cover" :alt="translateUi('uiMessages.m5d3ca0d047bc')" />
                     <video v-else-if="workPreview && workMediaType === 'video'" :src="workPreview" class="w-full h-full object-cover" muted playsinline />
                     <div v-else class="flex flex-col items-center justify-center h-full text-white/25">
                       <div class="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center mb-2.5">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
                       </div>
-                      <span class="text-xs">点击上传</span>
+                      <span class="text-xs">{{ translateUi('tips.clickToUpload') }}</span>
                     </div>
                   </div>
                   <input ref="workInput" type="file" accept="video/mp4,video/quicktime,video/webm" class="hidden" @change="handleWorkFileChange" />
                   <p v-if="workFile" class="text-xs text-white/30 mt-1.5 truncate">{{ workFile.name }} · {{ formatFileSize(workFile.size) }}</p>
                   <div v-else class="mt-1.5">
-                    <p class="text-[11px] text-white/20">支持 MP4、MOV、WebM 格式（≤500MB）</p>
+                    <p class="text-[11px] text-white/20">{{ translateUi('uiMessages.md595cbec06ff') }}</p>
                   </div>
                 </template>
 
@@ -786,10 +788,10 @@ async function handlePublish() {
                           :class="isDraggingWork ? 'border-teal-500/40 bg-teal-500/5' : ''"
                         >
                           <svg class="w-5 h-5 text-white/20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-                          <span class="text-[10px] text-white/20 mt-1">添加图片</span>
+                          <span class="text-[10px] text-white/20 mt-1">{{ translateUi('uiMessages.m9f0d4e4656ee') }}</span>
                         </div>
                       </div>
-                      <p class="text-[11px] text-white/20">已选{{ workPreviews.length }}/{{ MAX_IMAGE_COUNT }}张图片</p>
+                      <p class="text-[11px] text-white/20">{{ translateUi('uiMessages.m9470ff36daca', { value1: (workPreviews.length), value2: (MAX_IMAGE_COUNT) }) }}</p>
                     </div>
                     <input ref="workInput" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="handleWorkFileChange" />
                   </template>
@@ -814,21 +816,21 @@ async function handlePublish() {
                       </button>
                       <div v-if="isDraggingWork" class="flex flex-col items-center justify-center h-full text-teal-400">
                         <svg class="w-8 h-8 mb-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-                        <span class="text-xs">松开上传</span>
+                        <span class="text-xs">{{ translateUi('uiMessages.m549800c6db96') }}</span>
                       </div>
-                      <img v-else-if="workPreview && workMediaType === 'image'" :src="workPreview" class="w-full h-full object-cover" alt="作品预览" />
+                      <img v-else-if="workPreview && workMediaType === 'image'" :src="workPreview" class="w-full h-full object-cover" :alt="translateUi('uiMessages.m5d3ca0d047bc')" />
                       <video v-else-if="workPreview && workMediaType === 'video'" :src="workPreview" class="w-full h-full object-cover" muted playsinline />
                       <div v-else class="flex flex-col items-center justify-center h-full text-white/25">
                         <div class="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center mb-2.5">
                           <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
                         </div>
-                        <span class="text-xs">点击上传图片或视频</span>
+                        <span class="text-xs">{{ translateUi('uiMessages.m2aa1819851f3') }}</span>
                       </div>
                     </div>
                     <input ref="workInput" type="file" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/quicktime,video/webm" multiple class="hidden" @change="handleWorkFileChange" />
                     <p v-if="workFile" class="text-xs text-white/30 mt-1.5 truncate">{{ workFile.name }} · {{ formatFileSize(workFile.size) }}</p>
                     <div v-else class="mt-1.5">
-                      <p class="text-[11px] text-white/20">支持图片（PNG、JPG，最多9张）或视频（MP4、MOV、WebM，≤500MB）</p>
+                      <p class="text-[11px] text-white/20">{{ translateUi('uiMessages.mfad8a76bd8c5') }}</p>
                     </div>
                   </template>
                 </template>
@@ -836,7 +838,7 @@ async function handlePublish() {
 
               <!-- 封面上传 -->
               <div>
-                <label class="publish-label">上传封面<span class="text-teal-400">*</span></label>
+                <label class="publish-label">{{ translateUi('uiMessages.m3d1a8b4ad8e2') }}<span class="text-teal-400">*</span></label>
                 <div
                   class="publish-upload-card h-[140px]"
                   :class="isDraggingCover ? 'publish-upload-active' : coverPreview ? 'publish-upload-has-file' : ''"
@@ -856,19 +858,19 @@ async function handlePublish() {
                   </button>
                   <div v-if="isDraggingCover" class="flex flex-col items-center justify-center h-full text-teal-400">
                     <svg class="w-8 h-8 mb-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-                    <span class="text-xs">松开上传</span>
+                    <span class="text-xs">{{ translateUi('uiMessages.m549800c6db96') }}</span>
                   </div>
-                  <img v-else-if="coverPreview" :src="coverPreview" class="w-full h-full object-cover" alt="封面预览" />
+                  <img v-else-if="coverPreview" :src="coverPreview" class="w-full h-full object-cover" :alt="translateUi('uiMessages.m7a5379dd7b00')" />
                   <div v-else class="flex flex-col items-center justify-center h-full text-white/25">
                     <div class="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center mb-2.5">
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
                     </div>
-                    <span class="text-xs">点击上传</span>
+                    <span class="text-xs">{{ translateUi('tips.clickToUpload') }}</span>
                   </div>
                 </div>
                 <input ref="coverInput" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden" @change="handleCoverChange" />
                 <div class="mt-1.5 space-y-0.5">
-                  <p class="text-[11px] text-white/20">建议比例 16:9，支持 PNG、JPG、GIF、WebP（超过10MB自动压缩）</p>
+                  <p class="text-[11px] text-white/20">{{ translateUi('uiMessages.m2458d4f2f8d7') }}</p>
                 </div>
               </div>
             </div>
@@ -878,7 +880,7 @@ async function handlePublish() {
               <!-- 作品名称 -->
               <div>
                 <div class="flex items-center justify-between mb-2">
-                  <label class="publish-label mb-0">作品名称<span class="text-teal-400">*</span></label>
+                  <label class="publish-label mb-0">{{ translateUi('uiMessages.m35c086955049') }}<span class="text-teal-400">*</span></label>
                   <span class="text-xs text-white/20 tabular-nums">{{ title.length }}/100</span>
                 </div>
                 <input
@@ -886,14 +888,14 @@ async function handlePublish() {
                   type="text"
                   maxlength="100"
                   class="publish-input"
-                  placeholder="请输入作品名称"
+                  :placeholder="translateUi('uiMessages.m6bafc2ce74d8')"
                 />
               </div>
 
               <!-- 作品描述 -->
               <div>
                 <div class="flex items-center justify-between mb-2">
-                  <label class="publish-label mb-0">作品描述</label>
+                  <label class="publish-label mb-0">{{ translateUi('uiMessages.me2b977df75cd') }}</label>
                   <span class="text-xs text-white/20 tabular-nums">{{ descCount }}/200</span>
                 </div>
                 <textarea
@@ -901,13 +903,13 @@ async function handlePublish() {
                   maxlength="200"
                   rows="3"
                   class="publish-input resize-none"
-                  placeholder="请输入作品描述"
+                  :placeholder="translateUi('uiMessages.m5a96d6315a69')"
                 />
               </div>
 
               <!-- 关联工作流 -->
               <div>
-                <label class="publish-label">关联工作流</label>
+                <label class="publish-label">{{ translateUi('uiMessages.ma088eeb118e6') }}</label>
                 <div v-if="!linkProject">
                   <div class="workflow-dropdown-wrapper relative">
                     <button
@@ -918,7 +920,7 @@ async function handlePublish() {
                       @click="toggleWorkflowDropdown"
                     >
                       <span class="truncate" :class="selectedWorkflowId ? 'text-white/80' : 'text-white/25'">
-                        {{ loadingWorkflows ? '加载中...' : (selectedWorkflowId ? selectedWorkflowName : '请选择工作流') }}
+                        {{ loadingWorkflows ? translateUi('common.loading') : (selectedWorkflowId ? selectedWorkflowName : translateUi('uiMessages.me0dd51c3de13')) }}
                       </span>
                       <svg class="w-4 h-4 shrink-0 text-white/20 transition-transform" :class="workflowDropdownOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     </button>
@@ -946,18 +948,18 @@ async function handlePublish() {
                           </button>
                         </template>
                         <div v-if="workflowGroups.length === 0 && !loadingWorkflows" class="px-3.5 py-4 text-center text-sm text-white/20">
-                          暂无已保存的工作流
+                          {{ translateUi('uiMessages.mba81a9e77427') }}
                         </div>
                       </div>
                     </div>
                   </div>
-                  <p v-if="workflowGroups.length === 0 && !loadingWorkflows" class="text-xs text-white/20 mt-1.5">暂无已保存的工作流，请先在画布中保存</p>
+                  <p v-if="workflowGroups.length === 0 && !loadingWorkflows" class="text-xs text-white/20 mt-1.5">{{ translateUi('uiMessages.m79f694f92a28') }}</p>
                 </div>
               </div>
 
               <!-- 作品方向 -->
               <div>
-                <label class="publish-label">作品方向<span class="text-teal-400">*</span></label>
+                <label class="publish-label">{{ translateUi('uiMessages.m6faea3410968') }}<span class="text-teal-400">*</span></label>
                 <div class="flex gap-3">
                   <button
                     type="button"
@@ -966,7 +968,7 @@ async function handlePublish() {
                     @click="orientation = 'landscape'"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2" stroke-width="1.5"/></svg>
-                    <span>横屏</span>
+                    <span>{{ translateUi('uiMessages.m055a6b3a3de7') }}</span>
                   </button>
                   <button
                     type="button"
@@ -975,14 +977,14 @@ async function handlePublish() {
                     @click="orientation = 'portrait'"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" stroke-width="1.5"/></svg>
-                    <span>竖屏</span>
+                    <span>{{ translateUi('imageGen.layout.vertical') }}</span>
                   </button>
                 </div>
               </div>
 
               <!-- 标签选择 -->
               <div>
-                <label class="publish-label">标签<span class="text-teal-400">*</span></label>
+                <label class="publish-label">{{ translateUi('directorStudio.inspector.label') }}<span class="text-teal-400">*</span></label>
                 <div class="flex flex-wrap gap-2">
                   <button
                     v-for="tag in communityStore.tags"
@@ -992,7 +994,7 @@ async function handlePublish() {
                     :class="selectedTags.includes(tag.id) ? 'publish-tag-active' : ''"
                     @click="toggleTag(tag.id)"
                   >{{ tag.name }}</button>
-                  <span v-if="communityStore.tags.length === 0" class="text-xs text-white/20">暂无标签</span>
+                  <span v-if="communityStore.tags.length === 0" class="text-xs text-white/20">{{ translateUi('canvas.assetPanel.noTags') }}</span>
                 </div>
               </div>
 
@@ -1003,7 +1005,7 @@ async function handlePublish() {
                   <div class="publish-checkbox" :class="linkProject ? 'publish-checkbox-active' : ''">
                     <svg v-if="linkProject" class="w-3 h-3 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
                   </div>
-                  <span class="text-sm text-white/50 group-hover:text-white/70 transition">关联项目（分享项目下所有工作流）</span>
+                  <span class="text-sm text-white/50 group-hover:text-white/70 transition">{{ translateUi('uiMessages.m7208fee8b0a4') }}</span>
                 </label>
 
                 <div v-if="linkProject" class="mt-3">
@@ -1033,35 +1035,35 @@ async function handlePublish() {
                         >
                           <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                           <span class="truncate">{{ p.name }}</span>
-                          <span class="text-xs text-white/20 ml-auto shrink-0">{{ p.workflow_count || 0 }} 个工作流</span>
+                          <span class="text-xs text-white/20 ml-auto shrink-0">{{ translateUi('uiMessages.m9882de3c01da', { value1: (p.workflow_count || 0) }) }}</span>
                         </button>
                         <div v-if="projects.length === 0" class="px-3.5 py-4 text-center text-sm text-white/20">
-                          暂无项目
+                          {{ translateUi('uiMessages.m4550442e55f8') }}
                         </div>
                       </div>
                     </div>
                   </div>
                   <p v-if="selectedProjectId && projectWorkflowCount > 0" class="text-xs text-teal-400/70 mt-1.5">
-                    将分享该项目下所有 {{ projectWorkflowCount }} 个工作流
+                    {{ translateUi('uiMessages.macb89cc58b54', { value1: (projectWorkflowCount) }) }}
                   </p>
                 </div>
               </div>
 
               <!-- 分类选择 -->
               <div>
-                <label class="publish-label">分类<span class="text-white/20 text-xs font-normal ml-1">可选</span></label>
+                <label class="publish-label">{{ translateUi('directorStudio.inspector.category') }}<span class="text-white/20 text-xs font-normal ml-1">{{ translateUi('uiMessages.m537352400c49') }}</span></label>
                 <select
                   v-model="selectedCategory"
                   class="publish-input cursor-pointer"
                 >
-                  <option value="" class="bg-[#1c1c1f]">不选择分类</option>
+                  <option value="" class="bg-[#1c1c1f]">{{ translateUi('uiMessages.me9a823a8026f') }}</option>
                   <option v-for="cat in communityStore.categories" :key="cat.id" :value="cat.id" class="bg-[#1c1c1f]">{{ cat.name }}</option>
                 </select>
               </div>
 
               <!-- 分享模式 -->
               <div>
-                <label class="publish-label">分享模式</label>
+                <label class="publish-label">{{ translateUi('uiMessages.m0eadf0fa4fd8') }}</label>
                 <div class="flex gap-3">
                   <button
                     type="button"
@@ -1070,7 +1072,7 @@ async function handlePublish() {
                     @click="shareMode = 'free'"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v17.25m0 0c-1.472 0-2.882.265-4.185.75M12 20.25c1.472 0 2.882.265 4.185.75M18.75 4.97A48.416 48.416 0 0012 4.5c-2.291 0-4.545.16-6.75.47m13.5 0c1.01.143 2.01.317 3 .52m-3-.52l2.62 10.726c.122.499-.106 1.028-.589 1.202a5.988 5.988 0 01-2.031.352 5.988 5.988 0 01-2.031-.352c-.483-.174-.711-.703-.59-1.202L18.75 4.971zm-16.5.52c.99-.203 1.99-.377 3-.52m0 0l2.62 10.726c.122.499-.106 1.028-.589 1.202a5.989 5.989 0 01-2.031.352 5.989 5.989 0 01-2.031-.352c-.483-.174-.711-.703-.59-1.202L5.25 4.971z"/></svg>
-                    <span>免费</span>
+                    <span>{{ translateUi('uiMessages.m649a0fc7237e') }}</span>
                   </button>
                   <button
                     type="button"
@@ -1079,22 +1081,22 @@ async function handlePublish() {
                     @click="shareMode = 'paid'"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    <span>付费</span>
+                    <span>{{ translateUi('uiMessages.mf9beb133f609') }}</span>
                   </button>
                 </div>
                 <div v-if="shareMode === 'paid'" class="mt-3 p-3 bg-white/[0.02] rounded-xl border border-white/[0.04]">
-                  <label class="block text-xs text-white/30 mb-1.5">积分数量</label>
+                  <label class="block text-xs text-white/30 mb-1.5">{{ translateUi('uiMessages.m5da54b27a36f') }}</label>
                   <input
                     v-model.number="price"
                     type="number"
                     min="1"
                     class="publish-input !w-32"
-                    placeholder="输入积分"
+                    :placeholder="translateUi('uiMessages.m0a1ed5a72e28')"
                   />
                   <p class="mt-2 text-xs text-white/30">
-                    <span class="text-amber-400/60">平台服务费 {{ (feeRate * 100).toFixed(0) }}%</span>
+                    <span class="text-amber-400/60">{{ translateUi('uiMessages.m5ea2d37bba73', { value1: ((feeRate * 100).toFixed(0)) }) }}</span>
                     <template v-if="price > 0">
-                      ，实际到账 <span class="text-teal-400/70">{{ price - Math.floor(price * feeRate) }}</span> 积分
+                      {{ translateUi('uiMessages.m774b2cf07736') }} <span class="text-teal-400/70">{{ price - Math.floor(price * feeRate) }}</span> {{ translateUi('imageGen.points') }}
                     </template>
                   </p>
                 </div>
@@ -1113,9 +1115,9 @@ async function handlePublish() {
                       :class="isAnonymous ? 'translate-x-4' : 'translate-x-0'"
                     />
                   </div>
-                  <span class="text-sm text-white/50">匿名发布</span>
+                  <span class="text-sm text-white/50">{{ translateUi('uiMessages.mb69dd26bad49') }}</span>
                 </label>
-                <span class="text-xs text-white/20">启用后显示为「匿名用户」</span>
+                <span class="text-xs text-white/20">{{ translateUi('uiMessages.m26da9e8b1eb2') }}</span>
               </div>
 
               <!-- 错误 -->
@@ -1144,9 +1146,9 @@ async function handlePublish() {
           >
             <span v-if="loading" class="inline-flex items-center">
               <svg class="animate-spin -ml-0.5 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>
-              发布中...
+              {{ translateUi('uiMessages.m62ed10133dd2') }}
             </span>
-            <span v-else>发布并投稿</span>
+            <span v-else>{{ translateUi('uiMessages.mc10a53895b68') }}</span>
           </button>
         </div>
       </div>

@@ -1,3 +1,5 @@
+import { t as translateUi, currentLanguage } from '../../../i18n/index.js'
+currentLanguage.value = 'zh-CN'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -54,7 +56,7 @@ function createNode(t, data = {}, configuredPresets = presets) {
     extractFunction(storeSource, 'propagateData', '  '),
     source.slice(watcherStart, watcherEnd),
     ';({ select: selectPreset, propagate: propagateData })'
-  ].join('\n'), state))
+  ].join('\n'), Object.assign(state, { translateUi })))
   return {
     ...state, ...methods, patches,
     async connect(type, data = {}) {

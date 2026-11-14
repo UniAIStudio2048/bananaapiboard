@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../i18n/index.js'
 /**
  * 节点类型定义
  * 定义所有可用的节点类型及其配置
@@ -59,9 +60,9 @@ export const NODE_TYPES = {
 // 节点类型配置 - 黑白灰简洁风格图标
 // 注意：label 和 description 使用 i18n 翻译键
 export const NODE_TYPE_CONFIG = {
-  [NODE_TYPES.SCRIPT]: { label: '脚本', description: '剧本 · 资产 · 分镜提示词', icon: 'llm', category: 'input', color: '#8bbac8', hasInput: true, hasOutput: true, inputType: 'text', outputType: 'image' },
+  [NODE_TYPES.SCRIPT]: { get label() { return translateUi('uiMessages.m5d4f709636ee') }, get description() { return translateUi('uiMessages.m8fb4e47134b8') }, icon: 'llm', category: 'input', color: '#8bbac8', hasInput: true, hasOutput: true, inputType: 'text', outputType: 'image' },
   [NODE_TYPES.VIDEO_BREAKDOWN]: {
-    label: '逐帧拉片', description: '拆解视频分镜、动态与音乐参考', icon: 'video',
+    get label() { return translateUi('uiMessages.md41f3dc4304e') }, get description() { return translateUi('uiMessages.mac9daa8643ab') }, icon: 'video',
     category: 'input', hasInput: true, hasOutput: true, inputType: 'video', outputType: 'group', consumesPoints: true
   },
   [NODE_TYPES.TEXT_INPUT]: {
@@ -109,8 +110,8 @@ export const NODE_TYPE_CONFIG = {
   },
 
   [NODE_TYPES.DIGITAL_HUMAN]: {
-    label: '数字人',
-    description: 'HeyGen 专属数字人资产',
+    get label() { return translateUi('uiMessages.mb901660d9e33') },
+    get description() { return translateUi('uiMessages.me41fb883eeaa') },
     icon: 'digital-human',
     category: 'input',
     color: '#38bdf8',
@@ -677,7 +678,7 @@ CONNECTION_RULES[NODE_TYPES.SCRIPT] = ['image', 'video', NODE_TYPES.TEXT_TO_IMAG
 // 节点分类
 export const NODE_CATEGORIES = {
   input: {
-    label: '添加节点',
+    get label() { return translateUi('canvas.addNode') },
     types: [
       NODE_TYPES.TEXT_INPUT,
       NODE_TYPES.IMAGE_INPUT,
@@ -689,15 +690,15 @@ export const NODE_CATEGORIES = {
     ]
   },
   generate: {
-    label: '生成',
+    get label() { return translateUi('imageGen.generate') },
     types: [NODE_TYPES.TEXT_TO_IMAGE, NODE_TYPES.IMAGE_TO_IMAGE, NODE_TYPES.TEXT_TO_VIDEO, NODE_TYPES.IMAGE_TO_VIDEO]
   },
   llm: {
-    label: 'AI 智能',
+    get label() { return translateUi('uiMessages.mcf979c85f703') },
     types: [NODE_TYPES.LLM_PROMPT_ENHANCE, NODE_TYPES.LLM_IMAGE_DESCRIBE, NODE_TYPES.LLM_CONTENT_EXPAND]
   },
   output: {
-    label: '输出',
+    get label() { return translateUi('canvas.nodeTypes.output') },
     types: [NODE_TYPES.PREVIEW_OUTPUT]
   }
 }

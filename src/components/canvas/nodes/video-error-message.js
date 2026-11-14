@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../../i18n/index.js'
 import { withNoChargeNotice } from '../../../utils/mediaTaskBillingMessage.js'
 
 const FORBIDDEN_MODEL_TERMS = /万相\s*3(?:\.0)?|wan\s*3(?:[._-]?0)(?:[-_][a-z0-9.-]+)*|seedance\s*[-_]?2(?:[._-]?(?:0|5))(?:[-_][a-z0-9.-]+)*|火山引擎/gi
@@ -46,22 +47,22 @@ function formatKnownSeedanceError(message) {
 
   if (lower.includes('inputimagesensitivecontentdetected.privacyinformation') ||
       /input image\b.*?may contain real person/i.test(message)) {
-    return withRequestId('输入图片可能包含真人，当前模型不接受真人素材，请更换不含真人的图片后重试')
+    return withRequestId(translateUi('uiMessages.m9e89e53e2865'))
   }
   if (lower.includes('the request failed because the output video may contain sensitive information')) {
-    return withRequestId('生成的视频可能包含敏感内容，已被内容安全系统拦截，请修改提示词后重试')
+    return withRequestId(translateUi('uiMessages.mff592c157e91'))
   }
   if (lower.includes('the request failed because the input may contain sensitive information')) {
-    return withRequestId('输入内容可能包含敏感信息，已被内容安全系统拦截，请修改提示词后重试')
+    return withRequestId(translateUi('uiMessages.mc3e7ea201e84'))
   }
   if (lower.includes('the request failed because the input text may contain sensitive information')) {
-    return withRequestId('提示词可能包含敏感内容，已被内容安全系统拦截，请修改提示词后重试')
+    return withRequestId(translateUi('uiMessages.m837cd60b44a6'))
   }
   if (lower.includes('the request failed because the input image may contain sensitive information')) {
-    return withRequestId('输入图片可能包含敏感内容，请更换图片后重试')
+    return withRequestId(translateUi('uiMessages.m16af09e1c8d3'))
   }
   if (lower.includes('the request failed because the input video may contain sensitive information')) {
-    return withRequestId('输入视频可能包含敏感内容，请更换视频后重试')
+    return withRequestId(translateUi('uiMessages.m8005df5ea697'))
   }
 
   return ''
@@ -71,13 +72,13 @@ export function formatVideoNodeErrorMessage(message, options = {}) {
   const { includeNoChargeNotice = false, model = '' } = options
 
   if (!message || typeof message !== 'string') {
-    return maybeWithNoChargeNotice('生成失败', includeNoChargeNotice)
+    return maybeWithNoChargeNotice(translateUi('canvas.audioNode.generateFailed'), includeNoChargeNotice)
   }
 
   const trimmed = message.trim()
   const lower = trimmed.toLowerCase()
   if (isVideoNodeNetworkError(trimmed)) {
-    return maybeWithNoChargeNotice('网络连接异常，正在确认任务状态，请稍后查看结果', includeNoChargeNotice)
+    return maybeWithNoChargeNotice(translateUi('uiMessages.mff328011b804'), includeNoChargeNotice)
   }
 
   const knownContentSafetyMessage = formatKnownSeedanceError(trimmed)
@@ -87,29 +88,29 @@ export function formatVideoNodeErrorMessage(message, options = {}) {
 
   // Wan3.0 将参考视频时长和输出时长合并校验；上游返回英文表达式时统一给出中文规则。
   if (/input[_ ]video[_ ]duration\s*\([^)]*\)\s*\+\s*duration\s*\([^)]*\).*exceeds\s*30s\s*limit/i.test(trimmed)) {
-    return maybeWithNoChargeNotice('参考视频时长与输出视频时长之和不能超过30秒；未提供参考视频时，最长支持30秒输出', includeNoChargeNotice)
+    return maybeWithNoChargeNotice(translateUi('uiMessages.m47251f2c6902'), includeNoChargeNotice)
   }
   if (/\bduration\s*\([^)]*\).*exceeds\s*30s\s*limit/i.test(trimmed)) {
-    return maybeWithNoChargeNotice('输出视频时长不能超过30秒；未提供参考视频时，最长支持30秒输出', includeNoChargeNotice)
+    return maybeWithNoChargeNotice(translateUi('uiMessages.m67c79e7ff44f'), includeNoChargeNotice)
   }
 
   const videoDurationMatch = trimmed.match(/video duration \(seconds\).*?less than or equal to\s+(\d+(?:\.\d+)?)/i)
   if (videoDurationMatch) {
-    return maybeWithNoChargeNotice(`参考视频时长超限：当前渠道最多支持 ${videoDurationMatch[1]} 秒，请裁剪参考视频后重试。`, includeNoChargeNotice)
+    return maybeWithNoChargeNotice(translateUi('uiMessages.m5ace786bd54e', { value1: (videoDurationMatch[1]) }), includeNoChargeNotice)
   }
 
   const audioDurationMatch = trimmed.match(/audio duration.*?less than or equal to\s+(\d+(?:\.\d+)?)/i)
   if (audioDurationMatch) {
-    return maybeWithNoChargeNotice(`参考音频时长超限：当前渠道最多支持 ${audioDurationMatch[1]} 秒，请裁剪音频后重试。`, includeNoChargeNotice)
+    return maybeWithNoChargeNotice(translateUi('uiMessages.m1b9129a8d05c', { value1: (audioDurationMatch[1]) }), includeNoChargeNotice)
   }
 
   const videoPixelCountMatch = trimmed.match(/video pixel count.*?less than or equal to\s+(\d+)/i)
   if (videoPixelCountMatch) {
-    return maybeWithNoChargeNotice(`参考视频分辨率过高：当前渠道要求单帧像素数不超过 ${videoPixelCountMatch[1]}，请压缩参考视频分辨率后重试。`, includeNoChargeNotice)
+    return maybeWithNoChargeNotice(translateUi('uiMessages.mfc6a047147d5', { value1: (videoPixelCountMatch[1]) }), includeNoChargeNotice)
   }
 
   if (lower.includes('audio format specified in the request is not valid')) {
-    return maybeWithNoChargeNotice('参考音频格式不受当前渠道支持，请改用常见的 MP3 或 WAV 后重试。', includeNoChargeNotice)
+    return maybeWithNoChargeNotice(translateUi('uiMessages.m8c9f8eed1d02'), includeNoChargeNotice)
   }
 
   return maybeWithNoChargeNotice(
@@ -122,7 +123,7 @@ export function formatVideoNodeAsyncErrorMessage(message, model, options = {}) {
   const { includeNoChargeNotice = false } = options
 
   if (isVideoNodeNetworkError(message)) {
-    return maybeWithNoChargeNotice('网络连接异常，正在确认任务状态，请稍后查看结果', includeNoChargeNotice)
+    return maybeWithNoChargeNotice(translateUi('uiMessages.mff328011b804'), includeNoChargeNotice)
   }
 
   if (isSeedanceVideoModel(model)) {
@@ -131,7 +132,7 @@ export function formatVideoNodeAsyncErrorMessage(message, model, options = {}) {
       return maybeWithNoChargeNotice(seedanceMessage, includeNoChargeNotice)
     }
     return maybeWithNoChargeNotice(
-      sanitizeVideoNodeMessage(typeof message === 'string' && message.trim() ? message.trim() : '生成失败'),
+      sanitizeVideoNodeMessage(typeof message === 'string' && message.trim() ? message.trim() : translateUi('canvas.audioNode.generateFailed')),
       includeNoChargeNotice
     )
   }

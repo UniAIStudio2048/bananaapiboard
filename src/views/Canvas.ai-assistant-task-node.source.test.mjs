@@ -1,3 +1,4 @@
+import { localizedPattern } from '../i18n/sourceAssertions.mjs'
 /**
  * AI 助手任务提交时画布同步建节点（handleAIAssistantCanvasTaskStarted）源码测试。
  *
@@ -20,7 +21,7 @@ test('任务提交时创建 processing 节点（生成中），参数对应', ()
   assert.match(source, /function handleAIAssistantCanvasTaskStarted\(payload = \{\}\)/)
   assert.match(source, /const taskId = payload\.task_id \|\| payload\.taskId \|\| null/)
   assert.match(source, /status: 'processing'/)
-  assert.match(source, /progress: mediaType === 'video' \? '视频生成中\.\.\.' : '生成中\.\.\.'/)
+  assert.match(source, localizedPattern(/progress: mediaType === 'video' \? '视频生成中\.\.\.' : '生成中\.\.\.'/))
   assert.match(source, /processingStartedAt: Date\.now\(\)/)
   assert.match(source, /taskType: mediaType/)
   assert.match(source, /prompt: payload\.prompt \|\| ''/)

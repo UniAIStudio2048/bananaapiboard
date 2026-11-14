@@ -7,6 +7,7 @@ import { ref, h, render } from 'vue'
 import CanvasDialog from '@/components/canvas/CanvasDialog.vue'
 import CanvasToast from '@/components/canvas/CanvasToast.vue'
 import { formatPoints } from '@/utils/format'
+import { t } from '@/i18n'
 
 // 存储当前弹窗的容器
 let dialogContainer = null
@@ -15,12 +16,7 @@ let dialogContainer = null
 let toastContainer = null
 
 function getDefaultConfirmText() {
-  const language = String(
-    (typeof localStorage !== 'undefined' && localStorage.getItem('language')) ||
-    (typeof navigator !== 'undefined' && (navigator.language || navigator.userLanguage)) ||
-    ''
-  ).toLowerCase()
-  return language.startsWith('en') ? 'OK' : '确定'
+  return t('common.ok')
 }
 
 /**
@@ -77,8 +73,8 @@ function showDialog(options) {
       title: options.title || '',
       message: options.message || '',
       detail: options.detail || '',
-      confirmText: options.confirmText || '确定',
-      cancelText: options.cancelText || '取消',
+      confirmText: options.confirmText || getDefaultConfirmText(),
+      cancelText: options.cancelText || t('common.cancel'),
       'onUpdate:modelValue': (value) => {
         isVisible.value = value
         if (!value) {
@@ -126,8 +122,8 @@ export function showConfirm(message, title = '', options = {}) {
     title,
     message,
     detail: options.detail || '',
-    confirmText: options.confirmText || '确定',
-    cancelText: options.cancelText || '取消'
+    confirmText: options.confirmText || getDefaultConfirmText(),
+    cancelText: options.cancelText || t('common.cancel')
   })
 }
 
@@ -141,10 +137,10 @@ export function showConfirm(message, title = '', options = {}) {
 export function showInsufficientPointsDialog(required, current, count = 1) {
   return showDialog({
     type: 'alert',
-    title: '积分不足',
-    message: `${count}次生成需要 ${formatPoints(required)} 积分，您当前只有 ${formatPoints(current)} 积分`,
-    detail: '请前往购买套餐充值积分',
-    confirmText: '确定'
+    title: t('imageGen.insufficientPoints'),
+    message: t('imageGen.insufficientPointsDetail', { count, required: formatPoints(required), current: formatPoints(current) }),
+    detail: t('user.buyPackage'),
+    confirmText: getDefaultConfirmText()
   })
 }
 

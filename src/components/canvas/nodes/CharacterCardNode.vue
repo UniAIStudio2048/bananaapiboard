@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * CharacterCardNode.vue - Sora角色卡节点
  *
@@ -35,7 +37,7 @@ onMounted(() => {
 })
 
 // 角色数据
-const characterName = computed(() => props.data.name || '未命名角色')
+const characterName = computed(() => props.data.name || translateUi('uiMessages.m440cf6aec248'))
 const characterUsername = computed(() => props.data.username || '')
 const characterAvatar = computed(() => props.data.avatar || props.data.url || props.data.cover || '')
 
@@ -170,7 +172,7 @@ function handleMouseLeave() {
       <div
         class="character-name"
         @click="copyToClipboard('name', $event)"
-        :title="`点击复制 @${characterName}`"
+        :title="translateUi('uiMessages.m04d6c6825da2', { value1: (characterName) })"
       >
         <span class="name-text">{{ characterName }}</span>
         <span class="copy-hint">📋</span>
@@ -181,7 +183,7 @@ function handleMouseLeave() {
         v-if="characterUsername"
         class="character-username"
         @click="copyToClipboard('username', $event)"
-        :title="`点击复制 @${characterUsername}`"
+        :title="translateUi('uiMessages.m04d6c6825da2', { value1: (characterUsername) })"
       >
         <span class="username-text">@{{ characterUsername }}</span>
         <span class="copy-hint">📋</span>
@@ -193,7 +195,7 @@ function handleMouseLeave() {
       <div v-if="copySuccess" class="copy-toast">
         <span class="toast-icon">✓</span>
         <span class="toast-text">
-          已复制 {{ copyType === 'name' ? `@${characterName}` : `@${characterUsername}` }}
+          {{ translateUi('uiMessages.m4faa77c7ca92', { value1: (copyType === 'name' ? `@${characterName}` : `@${characterUsername}`) }) }}
         </span>
       </div>
     </Transition>

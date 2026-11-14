@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -10,7 +11,7 @@ const source = readFileSync(join(__dirname, 'llm.js'), 'utf8')
 test('canvas LLM API normalizes browser fetch failures into a user-facing message', () => {
   assert.match(source, /function\s+normalizeLLMNetworkError\(/, 'LLM API should have a shared network error normalizer')
   assert.match(source, /Failed to fetch/, 'normalizer should explicitly handle the browser network failure text')
-  assert.match(source, /LLM 请求连接失败/, 'network failures should not surface raw "Failed to fetch" in canvas nodes')
+  assert.match(source, localizedPattern(/LLM 请求连接失败/), 'network failures should not surface raw "Failed to fetch" in canvas nodes')
   assert.match(source, /async function\s+fetchLLMApi\(/, 'LLM API calls should go through the shared fetch wrapper')
 })
 

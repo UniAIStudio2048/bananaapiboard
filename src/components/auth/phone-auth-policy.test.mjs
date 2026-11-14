@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -11,7 +12,7 @@ globalThis.__readPhoneAuthTestPolicy = async () => structuredClone(currentPolicy
 const hooks = registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier === '@/api/sms') return { shortCircuit: true, url: 'data:text/javascript,export const smsRequest=(...args)=>globalThis.__readPhoneAuthTestPolicy(...args);export const completeSmsAuthentication=()=>{};' }
-    if (specifier === '@/i18n') return { shortCircuit: true, url: "data:text/javascript,export const useI18n=()=>({currentLanguage:{value:'zh-CN'}});" }
+    if (specifier === '@/i18n') return { shortCircuit: true, url: "data:text/javascript,export const t=(key)=>key;export const useI18n=()=>({currentLanguage:{value:'zh-CN'}});" }
     if (specifier.startsWith('@/')) return nextResolve(new URL(`../../${specifier.slice(2)}${/\.(vue|js)$/.test(specifier) ? '' : '.js'}`, import.meta.url).href, context)
     return nextResolve(specifier, context)
   },
@@ -43,7 +44,7 @@ test('international SMS fields offer the configured country choices', async () =
 })
 test('phone registration has no email field even when email policy previously required it', async () => {
   const html = await renderToString(createSSRApp(PhoneAuthForm, { mode: 'register', policy: { ...currentPolicy, registration_mode: 'phone' } }))
-  assert.doesNotMatch(html, /type="email"|邮箱/)
+  assert.doesNotMatch(html, localizedPattern(/type="email"|邮箱/))
   assert.match(html, /type="tel"/)
 })
 test('unified password login shows country selection only for international phone input', async () => {

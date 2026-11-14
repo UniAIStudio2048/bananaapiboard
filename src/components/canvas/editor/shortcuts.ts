@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../../i18n/index.js'
 // Default bindings follow CapCut (剪映专业版) so editors can reuse their muscle memory.
 export const editorShortcuts = {
  playPause: ['Space'],
@@ -32,7 +33,7 @@ export const editorShortcuts = {
 export type EditorShortcut = keyof typeof editorShortcuts
 
 const macSymbols: Record<string, string> = { Mod: '⌘', Shift: '⇧', Alt: '⌥', Delete: '⌫' }
-const keyNames: Record<string, string> = { Space: '空格' }
+const keyNames: Record<string, string> = { get Space() { return translateUi('uiMessages.mbfa4a6e0fe42') } }
 
 export function isMacPlatform() {
  return typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent)

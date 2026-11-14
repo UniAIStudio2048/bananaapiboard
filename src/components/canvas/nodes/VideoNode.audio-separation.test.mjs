@@ -1,3 +1,7 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
+import * as i18nTestRuntime from '../../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -33,12 +37,12 @@ function harness({ result, saveError, processError } = {}) {
     showToast: (message, kind) => calls.push(['toast', message, kind]),
     uploadCanvasMedia: async () => { throw new Error('unexpected upload') }
   }
-  const handle = new Function(...Object.keys(dependencies), `${body}; return handleToolbarAudioSeparate`)(...Object.values(dependencies))
+  const handle = new Function('translateUi', 'uiLanguage', ...Object.keys(dependencies), `${body}; return handleToolbarAudioSeparate`)(translateUi, uiLanguage, ...Object.values(dependencies))
   return { handle, calls, store, tab, busy, dependencies }
 }
 
 test('toolbar exposes an accessible click action with a busy state', () => {
-  assert.ok(/<button[^>]*title="音频分离"[\s\S]*?@click\.stop\.prevent="handleToolbarAudioSeparate"[\s\S]*?<\/button>/.test(source))
+  assert.ok(localizedPattern(/<button[^>]*title="音频分离"[\s\S]*?@click\.stop\.prevent="handleToolbarAudioSeparate"[\s\S]*?<\/button>/).test(source))
   assert.ok(source.includes(':disabled="isAudioSeparating"'))
 })
 

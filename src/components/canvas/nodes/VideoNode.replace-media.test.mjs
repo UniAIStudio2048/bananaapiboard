@@ -1,3 +1,7 @@
+import * as i18nTestRuntime from '../../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -10,7 +14,7 @@ const ast = parse(source, { sourceType: 'module' })
 function getFunction(name, context) {
   const declaration = ast.program.body.find(node => node.type === 'FunctionDeclaration' && node.id.name === name)
   assert.ok(declaration, `${name} should exist`)
-  return runInNewContext(`${source.slice(declaration.start, declaration.end)}\n;${name}`, context)
+  return runInNewContext(`${source.slice(declaration.start, declaration.end)}\n;${name}`, Object.assign(context, { translateUi, uiLanguage }))
 }
 function createContext() {
   const calls = []
@@ -38,10 +42,10 @@ function createContext() {
 }
 
 test('单个替换按钮打开菜单并保留本地上传及素材选择入口', () => {
-  assert.match(fullSource, /aria-label="替换素材"/)
-  assert.match(fullSource, /本地上传/)
-  assert.match(fullSource, /选择素材/)
-  assert.doesNotMatch(fullSource, /@click\.stop="handleRegenerate" title="重新生成"/)
+  assert.match(fullSource, localizedPattern(/aria-label="替换素材"/))
+  assert.match(fullSource, localizedPattern(/本地上传/))
+  assert.match(fullSource, localizedPattern(/选择素材/))
+  assert.doesNotMatch(fullSource, localizedPattern(/@click\.stop="handleRegenerate" title="重新生成"/))
   assert.match(fullSource, /<VideoReplacementPicker/)
 })
 

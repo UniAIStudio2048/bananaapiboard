@@ -1,3 +1,7 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
+import * as i18nTestRuntime from '../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -9,7 +13,7 @@ import { getPointsLedgerTypeText } from '../../utils/pointsLedger.js'
 const source = readFileSync(new URL('./UserProfilePanel.vue', import.meta.url), 'utf8')
 const translate = key => key.split('.').reduce((value, part) => value?.[part], zhCN) || key
 const typeFunction = source.slice(source.indexOf('function getLedgerTypeText('), source.indexOf('const ledgerDisplayItems'))
-const label = new Function('t', 'getPointsLedgerTypeText', `${typeFunction}; return getLedgerTypeText`)(translate, getPointsLedgerTypeText)
+const label = new Function('translateUi', 'uiLanguage', 't', 'getPointsLedgerTypeText', `${typeFunction}; return getLedgerTypeText`)(translateUi, uiLanguage, translate, getPointsLedgerTypeText)
 
 test('subuser ledger types are Chinese, including the screenshot return record', () => {
   for (const [type, expected] of Object.entries({
@@ -44,13 +48,14 @@ test('shared labels preserve translation priority and support the chosen languag
 
 function harness(fetch) {
   const state = {
+    translateUi: translate,
     token: 'mock-token', ledger: ref([{ id: 'old', type: 'checkin' }]), ledgerPage: ref(1),
     ledgerPageSize: ref(20), ledgerTotal: ref(101), ledgerTotalPages: ref(6),
     ledgerLoading: ref(false), ledgerError: ref(''), ledgerRequestId: 0,
     ledgerPageSizeOptions: [20, 50, 100], getTenantHeaders: () => ({}), getApiUrl: url => url, fetch
   }
   const functions = source.slice(source.indexOf('async function loadLedger('), source.indexOf('// 加载数据\n'))
-  return { ...state, ...new Function(...Object.keys(state), `${functions}; return {loadLedger, changeLedgerPageSize, goLedgerPage}`)(...Object.values(state)) }
+  return { ...state, ...new Function('translateUi', 'uiLanguage', ...Object.keys(state), `${functions}; return {loadLedger, changeLedgerPageSize, goLedgerPage}`)(translateUi, uiLanguage, ...Object.values(state)) }
 }
 
 const response = (page = 1, pageSize = 20) => ({ ok: true, json: async () => ({ records: [{ id: `page-${page}` }], total: 101, page, pageSize, totalPages: Math.ceil(101 / pageSize) }) })
@@ -138,5 +143,5 @@ test('details are rendered in a standalone accessible dialog with the existing s
   assert.ok(/class="ledger-details-modal"[\s\S]*?role="dialog"/.test(source), 'standalone dialog exists')
   assert.ok(/aria-modal="true"/.test(source), 'dialog is modal')
   assert.ok(/@keydown="handleLedgerDialogKeydown"/.test(source), 'dialog handles keyboard navigation')
-  assert.ok(/积分记录详情/.test(source), 'dialog has a Chinese title')
+  assert.match(source, localizedPattern(/积分记录详情/), 'dialog has a translated title')
 })

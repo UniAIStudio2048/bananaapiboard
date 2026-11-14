@@ -1,3 +1,6 @@
+import * as i18nTestRuntime from '../../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -10,7 +13,7 @@ const ast = parse(source, { sourceType: 'module' })
 function getFunction(name, context) {
   const declaration = ast.program.body.find(node => node.type === 'FunctionDeclaration' && node.id.name === name)
   assert.ok(declaration, `${name} should exist`)
-  return runInNewContext(`${source.slice(declaration.start, declaration.end)}\n;${name}`, context)
+  return runInNewContext(`${source.slice(declaration.start, declaration.end)}\n;${name}`, Object.assign(context, { translateUi, uiLanguage }))
 }
 
 test('frame crop persists a connected result node and updates it with the exported video', async () => {

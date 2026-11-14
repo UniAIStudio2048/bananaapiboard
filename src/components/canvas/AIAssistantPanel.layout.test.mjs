@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -27,7 +28,7 @@ test('assistant panel stays within its fixed-width container', () => {
 })
 
 test('assistant model picker uses tenant-allowed models and sends a selected model hint', () => {
-  assert.match(source, /选择生图模型/)
+  assert.match(source, localizedPattern(/选择生图模型/))
   assert.match(source, /model-picker-dialog/)
   assert.match(source, /getAvailableImageModels/)
   assert.match(source, /<ModelIcon :icon="getAssistantModelIcon\(model\)" :label="model\.label \|\| model\.value" \/>/)
@@ -51,7 +52,7 @@ test('assistant model picker is anchored above the toolbar and supports daytime 
 
 test('assistant surfaces Skill generation progress and media results', () => {
   assert.match(source, /onToolEvent: \(event\) => \{/)
-  assert.match(source, /生成任务已提交，正在等待结果/)
+  assert.match(source, localizedPattern(/生成任务已提交，正在等待结果/))
   assert.match(source, /findGeneratedMediaResult\(result\?\.tool_results\)/)
   assert.match(source, /result\?\.tool_results/)
 })

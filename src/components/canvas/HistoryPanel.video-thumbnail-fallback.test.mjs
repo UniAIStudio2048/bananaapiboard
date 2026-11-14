@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -44,7 +45,7 @@ assert.match(
 
 assert.match(
   source,
-  /requestServerVideoThumbnail\(item\)[\s\S]*\/\/ 只有在可见区域内才触发提取/,
+  localizedPattern(/requestServerVideoThumbnail\(item\)[\s\S]*\/\/ 只有在可见区域内才触发提取/),
   'getVideoThumbnail should start server thumbnail extraction before falling back to browser-side extraction'
 )
 

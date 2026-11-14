@@ -2,13 +2,13 @@
   <div class="create-form">
     <!-- 头部 -->
     <div class="form-header">
-      <button class="back-btn" @click="$emit('back')" title="返回">
+      <button class="back-btn" @click="$emit('back')" :title="translateUi('common.back')">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M19 12H5M12 19l-7-7 7-7"/>
         </svg>
       </button>
-      <h3 class="header-title">创建工单</h3>
-      <button class="close-btn" @click="$emit('close')" title="关闭">
+      <h3 class="header-title">{{ translateUi('uiMessages.m7f49b9561401') }}</h3>
+      <button class="close-btn" @click="$emit('close')" :title="translateUi('common.close')">
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M18 6L6 18M6 6l12 12"/>
         </svg>
@@ -21,34 +21,34 @@
         <!-- 类型和优先级并排 -->
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">工单类型 <span class="required">*</span></label>
+            <label class="form-label">{{ translateUi('uiMessages.m6b680b35f5c0') }} <span class="required">*</span></label>
             <select v-model="form.type" class="form-select" required>
-              <option value="">请选择</option>
-              <option value="bug">问题反馈</option>
-              <option value="feature">功能建议</option>
-              <option value="invoice">开票申请</option>
-              <option value="other">其他</option>
+              <option value="">{{ translateUi('uiMessages.mda590a8fe3ce') }}</option>
+              <option value="bug">{{ translateUi('uiMessages.m55a2ce1324c1') }}</option>
+              <option value="feature">{{ translateUi('uiMessages.m118db8121c01') }}</option>
+              <option value="invoice">{{ translateUi('uiMessages.m7cc4ddd2fcde') }}</option>
+              <option value="other">{{ translateUi('uiMessages.md2909f1647e7') }}</option>
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">优先级</label>
+            <label class="form-label">{{ translateUi('uiMessages.m565d64601d4d') }}</label>
             <select v-model="form.priority" class="form-select">
-              <option value="low">低</option>
-              <option value="normal">中</option>
-              <option value="high">高</option>
-              <option value="urgent">紧急</option>
+              <option value="low">{{ translateUi('uiMessages.maa9e366f68d3') }}</option>
+              <option value="normal">{{ translateUi('uiMessages.ma567bdaa1136') }}</option>
+              <option value="high">{{ translateUi('uiMessages.mb1c27820fec2') }}</option>
+              <option value="urgent">{{ translateUi('uiMessages.m0efa477b24b1') }}</option>
             </select>
           </div>
         </div>
 
         <!-- 标题 -->
         <div class="form-group">
-          <label class="form-label">标题 <span class="required">*</span></label>
+          <label class="form-label">{{ translateUi('uiMessages.mc3405f8c7d9d') }} <span class="required">*</span></label>
           <input
             v-model="form.title"
             type="text"
             class="form-input"
-            placeholder="请简要描述问题"
+            :placeholder="translateUi('uiMessages.mff7aeda7b705')"
             required
             maxlength="100"
           />
@@ -56,11 +56,11 @@
 
         <!-- 详细描述 -->
         <div class="form-group">
-          <label class="form-label">详细描述 <span class="required">*</span></label>
+          <label class="form-label">{{ translateUi('uiMessages.m74524a52d5e1') }} <span class="required">*</span></label>
           <textarea
             v-model="form.description"
             class="form-textarea"
-            placeholder="请详细描述您的问题或建议"
+            :placeholder="translateUi('uiMessages.m54d388901964')"
             required
             rows="6"
           ></textarea>
@@ -68,7 +68,7 @@
 
         <!-- 附件上传 -->
         <div class="form-group">
-          <label class="form-label">附件</label>
+          <label class="form-label">{{ translateUi('uiMessages.mc7225dbf105e') }}</label>
           <div
             class="upload-area"
             :class="{ dragging: isDragging }"
@@ -88,8 +88,8 @@
             <svg class="w-8 h-8 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
             </svg>
-            <p class="upload-text">点击或拖拽文件到此处上传</p>
-            <p class="upload-hint">支持图片、PDF、Word文档</p>
+            <p class="upload-text">{{ translateUi('uiMessages.m5104955fb487') }}</p>
+            <p class="upload-hint">{{ translateUi('uiMessages.me1346cb10940') }}</p>
           </div>
 
           <!-- 附件列表 -->
@@ -108,11 +108,11 @@
         <!-- 提交按钮 -->
         <div class="form-actions">
           <button type="button" class="btn-cancel" @click="$emit('back')">
-            取消
+            {{ translateUi('common.cancel') }}
           </button>
           <button type="submit" class="btn-submit" :disabled="submitting">
             <span v-if="submitting" class="spinner-small"></span>
-            {{ submitting ? '提交中...' : '提交工单' }}
+            {{ submitting ? translateUi('uiMessages.m2fb1db2875cb') : translateUi('uiMessages.m31325070f8dc') }}
           </button>
         </div>
       </form>
@@ -121,6 +121,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref } from 'vue'
 import { createTicket, uploadAttachment } from '@/api/ticket'
 
@@ -161,7 +163,7 @@ function addFiles(files) {
   for (const file of files) {
     // 检查文件大小（限制10MB）
     if (file.size > 10 * 1024 * 1024) {
-      alert(`文件 ${file.name} 超过10MB限制`)
+      alert(translateUi('uiMessages.me249f2010e7c', { value1: (file.name) }))
       continue
     }
     attachments.value.push(file)
@@ -211,7 +213,7 @@ async function handleSubmit() {
     emit('success')
   } catch (e) {
     console.error('创建工单失败:', e)
-    alert(e.message || '创建工单失败，请重试')
+    alert(e.message || translateUi('uiMessages.mdb89918b252c'))
   } finally {
     submitting.value = false
   }

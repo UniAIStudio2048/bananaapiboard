@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -40,7 +41,7 @@ test('image node uses persisted preset prompt snapshot when cloned users cannot 
   )
   assert.match(
     source,
-    /return props\.data\?\.selectedPresetName \|\| '无预设'/,
+    localizedPattern(/return props\.data\?\.selectedPresetName \|\| '无预设'/),
     'the preset dropdown should show the saved preset name after reload or community clone'
   )
 })

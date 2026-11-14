@@ -1,3 +1,4 @@
+import { localizedPattern } from '../i18n/sourceAssertions.mjs'
 import { strict as assert } from 'node:assert'
 import { readFileSync } from 'node:fs'
 
@@ -17,7 +18,7 @@ assert.doesNotMatch(
 
 assert.match(
   source,
-  /catch \(e\) \{\s+console\.error\('\[CommunityHome\] 加载横屏作品失败:', e\)\s+landscapeWorks\.value = generateMockWorks/,
+  localizedPattern(/catch \(e\) \{\s+console\.error\('\[CommunityHome\] 加载横屏作品失败:', e\)\s+landscapeWorks\.value = generateMockWorks/),
   'the existing fallback remains limited to a failed request'
 )
 

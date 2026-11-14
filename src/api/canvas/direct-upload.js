@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../i18n/index.js'
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { useTeamStore } from '@/stores/team'
 import { createCanvasDirectUploader } from '@/utils/canvasDirectUpload'
@@ -24,7 +25,7 @@ async function apiFetch(path, options = {}) {
   })
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) {
-    const error = new Error(payload.error || payload.message || `上传控制请求失败 (${response.status})`)
+    const error = new Error(payload.error || payload.message || translateUi('uiMessages.mb32003bfa97f', { value1: (response.status) }))
     error.code = payload.error || 'canvas_upload_api_failed'
     error.status = response.status
     throw error
@@ -70,7 +71,7 @@ function currentSpaceOptions(options) {
 
 export async function uploadCanvasFile(file, mediaType, options = {}) {
   if (!['image', 'video', 'audio'].includes(mediaType)) {
-    throw new Error(`不支持的文件类型: ${mediaType}`)
+    throw new Error(translateUi('uiMessages.m0b7b2c2a0831', { value1: (mediaType) }))
   }
   const controller = uploadCancellation.begin(options.nodeId, options.tabId)
   const abortUpload = () => controller.abort()

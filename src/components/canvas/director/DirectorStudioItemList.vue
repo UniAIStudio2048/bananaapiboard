@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed } from 'vue'
 import { useDirectorStudioI18n } from './useDirectorStudioI18n.js'
 
@@ -17,7 +19,7 @@ const visibleItems = computed(() => (
 ))
 
 function itemLabel(item, index) {
-  return item.label || item.title || item.name || item.id || dt('items.defaultName', '元素 {count}', { count: index + 1 })
+  return item.label || item.title || item.name || item.id || dt('items.defaultName', translateUi('directorStudio.items.defaultName'), { count: index + 1 })
 }
 
 function itemCategory(item) {
@@ -34,7 +36,7 @@ function itemCategoryLabel(item) {
   <section class="director-item-list">
     <div class="director-item-list-heading">
       <div>
-        <span>{{ dt('items.title', '元素') }}</span>
+        <span>{{ dt('items.title', translateUi('directorStudio.elements')) }}</span>
         <strong>{{ visibleItems.length }}</strong>
       </div>
     </div>
@@ -54,7 +56,7 @@ function itemCategoryLabel(item) {
           <small>{{ itemCategoryLabel(item) }}</small>
         </span>
       </button>
-      <div v-if="visibleItems.length === 0" class="director-empty-row">{{ dt('items.empty', '暂无元素') }}</div>
+      <div v-if="visibleItems.length === 0" class="director-empty-row">{{ dt('items.empty', translateUi('directorStudio.items.empty')) }}</div>
     </div>
   </section>
 </template>

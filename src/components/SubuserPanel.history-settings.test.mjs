@@ -1,3 +1,5 @@
+import { t as translateUi } from '../i18n/index.js'
+import { localizedPattern } from '../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -21,7 +23,7 @@ async function mount({ disabled = false, failLoad = false } = {}) {
     }
     return { users: [], summary: {}, total: 0 }
   } }
-  const ui = new Function('ref', 'computed', 'onMounted', 'defineProps', `${source}; return { historySettings, historySettingsBusy, loadHistorySettings, toggleHistoryDeletion, error, notice }`)(Vue.ref, Vue.computed, fn => callbacks.push(fn), () => props)
+  const ui = new Function('translateUi', 'ref', 'computed', 'onMounted', 'defineProps', `${source}; return { historySettings, historySettingsBusy, loadHistorySettings, toggleHistoryDeletion, error, notice }`)(translateUi, Vue.ref, Vue.computed, fn => callbacks.push(fn), () => props)
   await Promise.all(callbacks.map(fn => fn()))
   return { ...ui, calls, props, setFailSave: () => { failSave = true } }
 }
@@ -59,8 +61,8 @@ test('load failure disables the switch and the real template exposes saved acces
   const render = new Function('Vue', compile(template, { prefixIdentifiers: true }).code)(Vue)
   for (const disabled of [false, true]) {
     const ui = await mount({ disabled })
-    const html = await renderToString(Vue.createSSRApp({ setup: () => ({ ...ui, loading: false, busy: false, forbidden: false }), render }))
-    assert.match(html, /禁止子用户删除历史记录/)
+    const html = await renderToString(Vue.createSSRApp({ setup: () => ({ translateUi, ...ui, loading: false, busy: false, forbidden: false }), render }))
+    assert.match(html, localizedPattern(/禁止子用户删除历史记录/))
     assert.match(html, new RegExp(`aria-checked="${disabled}"`))
   }
 })

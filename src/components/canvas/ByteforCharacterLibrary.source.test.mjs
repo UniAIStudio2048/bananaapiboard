@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -30,7 +31,7 @@ test('NodeContextMenu has a Bytefor right-click character creation path gated se
   assert.match(nodeContextMenu, /openByteforDialog/)
   assert.match(nodeContextMenu, /createByteforCharacterAsync/)
   assert.match(nodeContextMenu, /'bytefor-character'/)
-  assert.match(nodeContextMenu, /创建 Bytefor 角色/)
+  assert.match(nodeContextMenu, localizedPattern(/创建 Bytefor 角色/))
 })
 
 test('NodeContextMenu sends a short explicit FaceCode when creating Bytefor characters', () => {

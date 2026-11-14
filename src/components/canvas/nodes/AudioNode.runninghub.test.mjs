@@ -1,3 +1,4 @@
+import { includesUiText } from '../../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -82,5 +83,5 @@ test('actual audio polling persists both RunningHub alternatives and the primary
 })
 
 test('music parameter controls include title, custom styles, instrumental and persisted webhook', () => {
-  for (const text of ['v-model="title"', 'v-model="tags"', 'v-model="makeInstrumental"', 'v-model="runninghubWebhookUrl"', 'watch(runninghubWebhookUrl', 'runninghubMusicResults']) assert.ok(source.includes(text), text)
+  for (const text of ['v-model="title"', 'v-model="tags"', 'v-model="makeInstrumental"', 'v-model="runninghubWebhookUrl"', 'watch(runninghubWebhookUrl', 'runninghubMusicResults']) assert.ok(includesUiText(source, text), text)
 })

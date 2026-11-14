@@ -46,7 +46,7 @@ test('VideoGeneration keeps the Seedance 2.5 30-second total video cap separate 
 
 test('VideoGeneration applies the Seedance 2.5 2-30 second audio and 30-second total limits', () => {
   assert.match(source, /seedanceAudioMax = isWan3Model\.value \? 15 : \(seedanceModelLimits\.value\.maxReferenceMediaDuration \|\| 15\)/)
-  assert.match(source, /参考音频时长需在2到\$\{seedanceAudioMax\}秒之间/)
+  assert.match(source, /translateUi\('uiMessages\.m5c7acba7c630', \{ value1: \(seedanceAudioMax\) \}\)/)
   assert.match(source, /seedanceAudioTotalMax = isWan3Model\.value \? 15 : \(seedanceModelLimits\.value\.maxTotalReferenceMediaDuration \|\| 15\)/)
-  assert.match(source, /参考音频总时长不能超过\$\{seedanceAudioTotalMax\}秒/)
+  assert.match(source, /translateUi\('uiMessages\.m1c414bb36e0f', \{ value1: \(seedanceAudioTotalMax\) \}\)/)
 })

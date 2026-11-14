@@ -1,3 +1,5 @@
+import { t as translateUi } from '../i18n/index.js'
+import { localizedPattern } from '../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -48,7 +50,7 @@ function renderFeatures(file, className, context) {
   const node = find(baseParse(descriptor.template.content))
   assert.ok(node, `missing feature list in ${file}`)
   const { code } = compile(node.loc.source, { mode: 'function' })
-  return new Function('Vue', code)({ ...Vue, resolveComponent: name => featureIcons[name] })(context, [])
+  return new Function('Vue', code)({ ...Vue, resolveComponent: name => featureIcons[name] })({ ...context, translateUi }, [])
 }
 
 function textContent(node) {
@@ -76,7 +78,7 @@ for (const [file, className] of [
     assert.equal(iconCount(vnode), 6)
     pkg.generation_rates = { image: 1, video: 1, audio: 1 }
     const undiscounted = renderFeatures(file, className, { pkg, getPackageDiscounts, formatPoints: value => String(value) })
-    assert.doesNotMatch(textContent(undiscounted), /生成享/)
+    assert.doesNotMatch(textContent(undiscounted), localizedPattern(/生成享/))
     assert.equal(iconCount(undiscounted), 3)
   })
 }

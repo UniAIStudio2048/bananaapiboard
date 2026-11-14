@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 /**
  * 工作流数据迁移工具
  * 
@@ -195,7 +196,7 @@ export function analyzeWorkflow(workflow) {
   if (result.blobUrls.length > 0) {
     result.issues.push({
       type: 'error',
-      message: `${result.blobUrls.length} 个本地临时文件已失效，需要重新上传`,
+      get message() { return translateUi('uiMessages.m0b2b51dc82c4', { value1: (result.blobUrls.length) }) },
       details: result.blobUrls
     })
   }
@@ -206,7 +207,7 @@ export function analyzeWorkflow(workflow) {
     }, 0)
     result.issues.push({
       type: 'warning',
-      message: `${result.base64Data.length} 个文件使用旧格式存储 (${totalSize}KB)，将自动迁移到云存储`,
+      get message() { return translateUi('uiMessages.m22665c04085a', { value1: (result.base64Data.length), value2: (totalSize) }) },
       details: result.base64Data
     })
   }

@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { openCheckout } from '@/utils/openCheckout'
 import { ref, computed, onMounted, watch } from 'vue'
 import { ArrowRight, ArrowRightLeft, ArrowUpRight, Check, CheckCircle2, CircleAlert, Clock3, Coins, Info, Layers, LoaderCircle, PackageOpen, Plus, ShoppingCart, Wallet, X } from '@lucide/vue'
@@ -130,7 +132,7 @@ async function loadPackages() {
   try {
     const token = localStorage.getItem('token')
     if (!token) {
-      error.value = '请先登录'
+      error.value = translateUi('uiMessages.m48144f96c150')
       loading.value = false
       return
     }
@@ -154,7 +156,7 @@ async function loadPackages() {
       const data = await pkgRes.json()
       packages.value = data.packages || []
     } else {
-      error.value = '加载套餐失败'
+      error.value = translateUi('uiMessages.m3eb439c8e6bb')
     }
 
     // 获取当前套餐
@@ -167,7 +169,7 @@ async function loadPackages() {
     }
   } catch (e) {
     console.error('[PackageModal] 加载套餐失败:', e)
-    error.value = '加载套餐失败，请稍后重试'
+    error.value = translateUi('uiMessages.m2b90977bb582')
   } finally {
     loading.value = false
   }
@@ -198,7 +200,7 @@ function isDowngrade(pkgType) {
 // 打开购买确认弹窗
 async function purchasePackage(pkg) {
   if (isDowngrade(pkg.type)) {
-    error.value = '不支持降级套餐'
+    error.value = translateUi('uiMessages.me5ee1cf41124')
     return
   }
 
@@ -235,7 +237,7 @@ async function openRechargeModal() {
   selectedRechargeCard.value = null
   try {
     const response = await fetch(getApiUrl('/api/recharge-cards'), { headers: getTenantHeaders() })
-    if (!response.ok) throw new Error('充值卡片加载失败')
+    if (!response.ok) throw new Error(translateUi('uiMessages.mc54d2d8aaf79'))
     rechargeCards.value = (await response.json()).recharge_cards || []
   } catch (e) { rechargeCards.value = []; rechargeError.value = e.message }
 }
@@ -280,7 +282,7 @@ function getRechargeAmountInCents() {
 async function confirmRecharge() {
   const amountInCents = getRechargeAmountInCents()
   if (amountInCents < rechargeLimits.value.minAmount * 100 || amountInCents > rechargeLimits.value.maxAmount * 100) {
-    rechargeError.value = `充值金额须在 ${rechargeLimits.value.minAmount}–${rechargeLimits.value.maxAmount}${currencyUnitLabel.value}之间`
+    rechargeError.value = translateUi('uiMessages.m726e1c06b4a0', { value1: (rechargeLimits.value.minAmount), value2: (rechargeLimits.value.maxAmount), value3: (currencyUnitLabel.value) })
     return
   }
   const input = { kind: 'recharge', amount: amountInCents, ...(selectedRechargeCard.value ? { recharge_card_id: selectedRechargeCard.value.id } : {}) }
@@ -298,7 +300,7 @@ const purchaseInfo = computed(() => {
 
   const isCurrent = isCurrentPackage(pkg.type)
   const isUpgrade = canUpgrade(pkg.type)
-  const action = isCurrent ? '续费' : (isUpgrade ? '升级' : '购买')
+  const action = isCurrent ? translateUi('packages.renew') : (isUpgrade ? translateUi('packages.upgrade') : translateUi('pointsType.purchase'))
 
   // 1. 原始套餐价格
   let finalPrice = pkg.price
@@ -362,7 +364,7 @@ async function applyCoupon() {
     const data = await res.json()
 
     if (!res.ok) {
-      couponError.value = data.message || '优惠券无效'
+      couponError.value = data.message || translateUi('uiMessages.mc691d9d4b78b')
       appliedCoupon.value = null
       couponDiscount.value = 0
       return
@@ -372,7 +374,7 @@ async function applyCoupon() {
     couponDiscount.value = data.discount_amount || 0
   } catch (e) {
     console.error('[applyCoupon] error:', e)
-    couponError.value = '验证失败，请稍后重试'
+    couponError.value = translateUi('uiMessages.me02ac107185b')
   } finally {
     couponLoading.value = false
   }
@@ -383,7 +385,7 @@ async function confirmPurchase() {
   if (!selectedPackage.value || purchaseLoading.value) return
   const input = { kind: 'package', package_id: selectedPackage.value.id,
     ...(appliedCoupon.value ? { coupon_code: purchaseCouponCode.value.trim() } : {}) }
-  const title = selectedPackage.value.name || '套餐购买'
+  const title = selectedPackage.value.name || translateUi('pointsType.package_purchase')
   closePurchaseModal()
   const result = await openCheckout(input, title)
   if (result) { await loadPackages(); emit('purchase-success', result) }
@@ -413,16 +415,16 @@ function closeConvertModal() {
 async function submitConvert() {
   const yuan = parseFloat(convertAmount.value)
   if (!yuan || yuan <= 0) {
-    convertError.value = '请输入有效的金额'
+    convertError.value = translateUi('uiMessages.m66f60bc8a056')
     return
   }
   if (yuan < 1) {
-    convertError.value = `最低划转金额为1${currencyUnitLabel.value}`
+    convertError.value = translateUi('uiMessages.ma05f75ffcb36', { value1: (currencyUnitLabel.value) })
     return
   }
   const amountInCents = Math.floor(yuan * 100)
   if ((user.value?.balance || 0) < amountInCents) {
-    convertError.value = `余额不足，当前余额 ${((user.value?.balance || 0) / 100).toFixed(2)} ${currencyUnitLabel.value}`
+    convertError.value = translateUi('uiMessages.m0da544c506a5', { value1: (((user.value?.balance || 0) / 100).toFixed(2)), value2: (currencyUnitLabel.value) })
     return
   }
 
@@ -442,9 +444,9 @@ async function submitConvert() {
       body: JSON.stringify({ amount: amountInCents })
     })
     const data = await res.json()
-    if (!res.ok) throw new Error(data.message || '划转失败')
+    if (!res.ok) throw new Error(data.message || translateUi('uiMessages.m035abb665e84'))
 
-    convertSuccess.value = data.message || `成功划转 ${yuan.toFixed(2)} ${currencyUnitLabel.value}为 ${formatPoints(data.points)} 积分`
+    convertSuccess.value = data.message || translateUi('uiMessages.md02a94474b72', { value1: (yuan.toFixed(2)), value2: (currencyUnitLabel.value), value3: (formatPoints(data.points)) })
 
     if (data.newBalance !== undefined && data.newPoints !== undefined) {
       user.value = {
@@ -460,7 +462,7 @@ async function submitConvert() {
 
     setTimeout(() => closeConvertModal(), 2000)
   } catch (e) {
-    convertError.value = e.message || '划转失败，请重试'
+    convertError.value = e.message || translateUi('user.transferFailed')
   } finally {
     convertLoading.value = false
   }
@@ -513,7 +515,7 @@ function handleRecipientSearch() {
   if (query.length < 3) {
     recipientSuggestions.value = []
     if (query.length > 0 && query.length < 3) {
-      transferPointsForm.value.recipientError = '请至少输入3个字符'
+      transferPointsForm.value.recipientError = translateUi('uiMessages.m4587b57f554b')
     }
     return
   }
@@ -525,14 +527,14 @@ function handleRecipientSearch() {
       const res = await fetch(getApiUrl(`/api/user/search-users?q=${encodeURIComponent(query)}`), {
         headers: { ...getTenantHeaders(), Authorization: `Bearer ${token}` }
       })
-      if (!res.ok) throw new Error('搜索失败')
+      if (!res.ok) throw new Error(translateUi('uiMessages.m6b5dde6e3a59'))
       const data = await res.json()
       recipientSuggestions.value = data.users || []
       if (data.users.length === 0) {
-        transferPointsForm.value.recipientError = '未找到匹配的用户'
+        transferPointsForm.value.recipientError = translateUi('uiMessages.me939c7818e0d')
       }
     } catch (e) {
-      transferPointsForm.value.recipientError = '搜索失败，请重试'
+      transferPointsForm.value.recipientError = translateUi('uiMessages.md7b6b97f66b2')
       recipientSuggestions.value = []
     }
   }, 300)
@@ -554,11 +556,11 @@ function confirmTransferPoints() {
   if (!canTransferPoints.value) return
   const amount = transferPointsForm.value.amount
   if (!amount || amount <= 0) {
-    transferPointsForm.value.amountError = '转让金额必须大于0'
+    transferPointsForm.value.amountError = translateUi('uiMessages.m4f0f7eb286c2')
     return
   }
   if (amount > (user.value?.points || 0)) {
-    transferPointsForm.value.amountError = '转让金额不能超过当前永久积分'
+    transferPointsForm.value.amountError = translateUi('uiMessages.m3d961040ea5d')
     return
   }
   showTransferConfirm.value = true
@@ -585,16 +587,16 @@ async function executeTransferPoints() {
       })
     })
     const data = await res.json()
-    if (!res.ok) throw new Error(data.message || data.error || '转让失败')
+    if (!res.ok) throw new Error(data.message || data.error || translateUi('uiMessages.m078a1a9b0281'))
 
-    showToastNotification('success', '转让成功',
-      data.message || `成功转让 ${formatPoints(transferPointsForm.value.amount)} 积分给 ${transferPointsForm.value.selectedRecipient.username}`)
+    showToastNotification('success', translateUi('uiMessages.mc5c09175e3b6'),
+      data.message || translateUi('uiMessages.md9503edda07f', { value1: (formatPoints(transferPointsForm.value.amount)), value2: (transferPointsForm.value.selectedRecipient.username) }))
 
     closeTransferPointsModal()
     await loadPackages()
     window.dispatchEvent(new CustomEvent('user-info-updated'))
   } catch (e) {
-    showToastNotification('error', '转让失败', e.message)
+    showToastNotification('error', translateUi('uiMessages.m078a1a9b0281'), e.message)
   } finally {
     transferringPoints.value = false
   }
@@ -618,33 +620,33 @@ function close() {
 
 // 格式化剩余时间
 function formatRemainingTime(expiresAt) {
-  if (!expiresAt) return '永久'
+  if (!expiresAt) return translateUi('canvas.contextMenu.permanent')
 
   const now = Date.now()
   const remaining = expiresAt - now
 
-  if (remaining <= 0) return '已过期'
+  if (remaining <= 0) return translateUi('user.expired')
 
   const days = Math.floor(remaining / (1000 * 60 * 60 * 24))
   const hours = Math.floor((remaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
 
   if (days > 0) {
-    return `${days}天${hours}小时`
+    return translateUi('uiMessages.mef74f79d690a', { value1: (days), value2: (hours) })
   } else {
-    return `${hours}小时`
+    return translateUi('uiMessages.mf512482fac29', { value1: (hours) })
   }
 }
 
 // 获取套餐类型标签
 function getPackageTypeLabel(type) {
   const labels = {
-    daily: '日卡',
-    weekly: '周卡',
-    monthly: '月卡',
-    supmonthly: '超级月卡',
-    quarterly: '季卡',
-    quarter: '季卡',
-    yearly: '年卡'
+    daily: translateUi('uiMessages.m47f4f505a362'),
+    weekly: translateUi('uiMessages.m3b9423711672'),
+    monthly: translateUi('uiMessages.mccd53d571c2c'),
+    supmonthly: translateUi('uiMessages.me69b5f1ca82f'),
+    quarterly: translateUi('uiMessages.m6ef1b9169d83'),
+    quarter: translateUi('uiMessages.m6ef1b9169d83'),
+    yearly: translateUi('uiMessages.md3ec0aad1b96')
   }
   return labels[type] || type
 }
@@ -689,8 +691,8 @@ defineExpose({ openConvertModal, openRechargeModal })
               <strong class="banner-name">{{ activePackage.package_name }}</strong>
             </div>
             <div class="banner-stats">
-              <span>并发 <strong>{{ activePackage.concurrent_limit }}</strong></span>
-              <span>剩余 <strong>{{ formatRemainingTime(activePackage.expires_at) }}</strong></span>
+              <span>{{ translateUi('uiMessages.m2b66a2b53a76') }} <strong>{{ activePackage.concurrent_limit }}</strong></span>
+              <span>{{ translateUi('uiMessages.md6822b04178d') }} <strong>{{ formatRemainingTime(activePackage.expires_at) }}</strong></span>
             </div>
           </div>
 
@@ -757,9 +759,9 @@ defineExpose({ openConvertModal, openRechargeModal })
                 <span class="price-value">{{ (pkg.price / 100).toFixed(0) }}</span>
               </div>
               <div class="package-features">
-                <div class="feature-item"><Coins class="feature-icon" aria-hidden="true" /><span>到账积分：<strong>{{ formatPoints(pkg.points) }}</strong> <span class="feature-note">（过期清零）</span></span></div>
-                <div class="feature-item"><Layers class="feature-icon" aria-hidden="true" /><span>并发限制：<strong>{{ pkg.concurrent_limit }}</strong></span></div>
-                <div class="feature-item"><Clock3 class="feature-icon" aria-hidden="true" /><span>有效期：<strong>{{ pkg.duration_days }}</strong> 天</span></div>
+                <div class="feature-item"><Coins class="feature-icon" aria-hidden="true" /><span>{{ translateUi('uiMessages.m1156bed8216a') }}<strong>{{ formatPoints(pkg.points) }}</strong> <span class="feature-note">{{ translateUi('uiMessages.me4bafdb7ccc3') }}</span></span></div>
+                <div class="feature-item"><Layers class="feature-icon" aria-hidden="true" /><span>{{ translateUi('uiMessages.m2f721f6acd6b') }}<strong>{{ pkg.concurrent_limit }}</strong></span></div>
+                <div class="feature-item"><Clock3 class="feature-icon" aria-hidden="true" /><span>{{ translateUi('uiMessages.me3eb8a016259') }}<strong>{{ pkg.duration_days }}</strong> {{ translateUi('time.days') }}</span></div>
                 <div v-for="discount in getPackageDiscounts(pkg)" :key="discount.type" class="feature-item"><Check class="feature-icon" aria-hidden="true" /><span>{{ discount.text }}</span></div>
               </div>
               <button type="button" class="purchase-btn" :class="{ 'is-current': isCurrentPackage(pkg.type) }" :disabled="isDowngrade(pkg.type) && !isCurrentPackage(pkg.type)" @click="purchasePackage(pkg)">
@@ -788,8 +790,8 @@ defineExpose({ openConvertModal, openRechargeModal })
                   </svg>
                 </div>
                 <div class="modal-title-group">
-                  <h3 class="modal-title">确认{{ selectedPackage ? purchaseInfo?.action : '充值' }}</h3>
-                  <p class="modal-subtitle">{{ selectedPackage ? selectedPackage.name : '账户充值' }}</p>
+                  <h3 class="modal-title">{{ translateUi('uiMessages.mc447e931aca1', { value1: (selectedPackage ? purchaseInfo?.action : translateUi('packages.rechargeBtn')) }) }}</h3>
+                  <p class="modal-subtitle">{{ selectedPackage ? selectedPackage.name : translateUi('user.accountRecharge') }}</p>
                 </div>
               </div>
               <button class="modal-close" @click="closePurchaseModal">
@@ -814,8 +816,8 @@ defineExpose({ openConvertModal, openRechargeModal })
                       </svg>
                     </div>
                     <div class="benefit-info">
-                      <div class="benefit-value">{{ formatPoints(selectedPackage.points) }}积分</div>
-                      <div class="benefit-label">到账积分（过期清零）</div>
+                      <div class="benefit-value">{{ translateUi('uiMessages.m0b5bba8d3d7b', { value1: (formatPoints(selectedPackage.points)) }) }}</div>
+                      <div class="benefit-label">{{ translateUi('uiMessages.mbf15f7dbfcd3') }}</div>
                     </div>
                   </div>
                   <div class="benefit-item">
@@ -826,7 +828,7 @@ defineExpose({ openConvertModal, openRechargeModal })
                     </div>
                     <div class="benefit-info">
                       <div class="benefit-value">{{ selectedPackage.concurrent_limit }}</div>
-                      <div class="benefit-label">并发限制</div>
+                      <div class="benefit-label">{{ translateUi('uiMessages.m44c5959863d8') }}</div>
                     </div>
                   </div>
                   <div class="benefit-item">
@@ -837,8 +839,8 @@ defineExpose({ openConvertModal, openRechargeModal })
                       </svg>
                     </div>
                     <div class="benefit-info">
-                      <div class="benefit-value">{{ selectedPackage.duration_days }}天</div>
-                      <div class="benefit-label">有效期</div>
+                      <div class="benefit-value">{{ translateUi('uiMessages.mb4baa30d48ff', { value1: (selectedPackage.duration_days) }) }}</div>
+                      <div class="benefit-label">{{ translateUi('uiMessages.m9c2a28e8f98f') }}</div>
                     </div>
                   </div>
                 </div>
@@ -852,7 +854,7 @@ defineExpose({ openConvertModal, openRechargeModal })
                     <input
                       v-model="purchaseCouponCode"
                       type="text"
-                      placeholder="优惠券码（可选）"
+                      :placeholder="translateUi('user.couponCode')"
                       class="coupon-input"
                       :disabled="couponLoading || appliedCoupon"
                     />
@@ -862,37 +864,37 @@ defineExpose({ openConvertModal, openRechargeModal })
                       class="coupon-btn"
                       :disabled="!purchaseCouponCode || couponLoading"
                     >
-                      {{ couponLoading ? '...' : '使用' }}
+                      {{ couponLoading ? '...' : translateUi('uiMessages.mcdfd0b34e491') }}
                     </button>
                     <button
                       v-else
                       @click="() => { appliedCoupon = null; couponDiscount = 0; purchaseCouponCode = '' }"
                       class="coupon-btn remove"
                     >
-                      移除
+                      {{ translateUi('user.removeCoupon') }}
                     </button>
                   </div>
                   <div v-if="couponError" class="coupon-error">{{ couponError }}</div>
-                  <div v-if="appliedCoupon" class="coupon-success">✓ 已优惠 {{ formatMoney(couponDiscount) }}</div>
+                  <div v-if="appliedCoupon" class="coupon-success">{{ translateUi('uiMessages.m7dcb7a1eef68', { value1: (formatMoney(couponDiscount)) }) }}</div>
                 </div>
 
                 <!-- 价格明细 -->
                 <div class="price-breakdown">
                   <div class="price-row">
-                    <span class="price-label">套餐价格</span>
+                    <span class="price-label">{{ translateUi('uiMessages.m91886a0922ef') }}</span>
                     <span class="price-value">{{ formatMoney(purchaseInfo.totalAmount) }}</span>
                   </div>
                   <div v-if="purchaseInfo.upgradeDiscount > 0" class="price-row discount">
-                    <span class="price-label">升级折抵</span>
+                    <span class="price-label">{{ translateUi('uiMessages.m288f601c81ac') }}</span>
                     <span class="price-value">-{{ formatMoney(purchaseInfo.upgradeDiscount) }}</span>
                   </div>
                   <div v-if="purchaseInfo.couponDiscount > 0" class="price-row discount">
-                    <span class="price-label">优惠券</span>
+                    <span class="price-label">{{ translateUi('uiMessages.m3e2581c8de38') }}</span>
                     <span class="price-value">-{{ formatMoney(purchaseInfo.couponDiscount) }}</span>
                   </div>
                   <div class="price-row">
                     <span class="price-label">
-                      账户余额
+                      {{ translateUi('packages.accountBalance') }}
                       <span class="balance-hint">{{ formatMoney(purchaseInfo.balance) }}</span>
                     </span>
                     <span class="price-value">-{{ formatMoney(purchaseInfo.balanceUsed) }}</span>
@@ -901,7 +903,7 @@ defineExpose({ openConvertModal, openRechargeModal })
 
                 <!-- 应付金额 -->
                 <div class="total-row">
-                  <span class="total-label">{{ purchaseInfo.needOnlinePayment ? '需支付' : '余额支付' }}</span>
+                  <span class="total-label">{{ purchaseInfo.needOnlinePayment ? translateUi('uiMessages.m05c45fac7201') : translateUi('uiMessages.m55c5630730c0') }}</span>
                   <span class="total-value">{{ formatMoney(purchaseInfo.needPay) }}</span>
                 </div>
               </div>
@@ -913,7 +915,7 @@ defineExpose({ openConvertModal, openRechargeModal })
                   <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
                   <polyline points="22 4 12 14.01 9 11.01"/>
                 </svg>
-                <span>余额充足，将直接从账户余额扣款</span>
+                <span>{{ translateUi('uiMessages.mc639d9ed2b45') }}</span>
               </div>
 
               <!-- 错误提示 -->
@@ -930,14 +932,14 @@ defineExpose({ openConvertModal, openRechargeModal })
 
             <!-- 底部按钮（等待支付时隐藏） -->
             <div class="modal-footer">
-              <button class="btn-cancel" @click="closePurchaseModal">取消</button>
+              <button class="btn-cancel" @click="closePurchaseModal">{{ translateUi('common.cancel') }}</button>
               <button
                 class="btn-confirm"
                 @click="confirmPurchase"
                 :disabled="purchaseLoading"
               >
                 <span v-if="purchaseLoading" class="loading-dot"></span>
-                {{ purchaseLoading ? '处理中...' : (purchaseInfo?.needOnlinePayment ? '去支付' : '确认购买') }}
+                {{ purchaseLoading ? translateUi('common.processing') : (purchaseInfo?.needOnlinePayment ? translateUi('uiMessages.mfe824971dad7') : translateUi('packages.purchaseConfirm')) }}
               </button>
             </div>
           </div>
@@ -959,8 +961,8 @@ defineExpose({ openConvertModal, openRechargeModal })
                   </svg>
                 </div>
                 <div class="modal-title-group">
-                  <h3 class="modal-title">余额划转永久积分</h3>
-                  <p class="modal-subtitle">将账户余额转换为永不过期的积分</p>
+                  <h3 class="modal-title">{{ translateUi('uiMessages.m3e7955452005') }}</h3>
+                  <p class="modal-subtitle">{{ translateUi('uiMessages.m7df91ec0ffad') }}</p>
                 </div>
               </div>
               <button class="modal-close" @click="closeConvertModal">
@@ -973,7 +975,7 @@ defineExpose({ openConvertModal, openRechargeModal })
               <!-- 当前资产信息 -->
               <div class="convert-assets-info">
                 <div class="convert-asset-item">
-                  <span class="convert-asset-label">当前余额</span>
+                  <span class="convert-asset-label">{{ translateUi('uiMessages.m32cdac4f29d7') }}</span>
                   <span class="convert-asset-value">{{ formatMoney(user?.balance || 0) }}</span>
                 </div>
                 <div class="convert-asset-divider">
@@ -983,7 +985,7 @@ defineExpose({ openConvertModal, openRechargeModal })
                   </svg>
                 </div>
                 <div class="convert-asset-item">
-                  <span class="convert-asset-label">永久积分</span>
+                  <span class="convert-asset-label">{{ translateUi('imageGen.permanentPoints') }}</span>
                   <span class="convert-asset-value permanent">{{ formatPoints(user?.points || 0) }}</span>
                 </div>
               </div>
@@ -995,18 +997,18 @@ defineExpose({ openConvertModal, openRechargeModal })
                   <line x1="12" y1="16" x2="12" y2="12"/>
                   <line x1="12" y1="8" x2="12.01" y2="8"/>
                 </svg>
-                <span>汇率：1{{ currencyUnitLabel }} = {{ convertExchangeRate }}积分</span>
+                <span>{{ translateUi('uiMessages.mf075f934ac3b', { value1: (currencyUnitLabel), value2: (convertExchangeRate) }) }}</span>
               </div>
 
               <!-- 输入金额 -->
               <div class="convert-input-section">
-                <label class="convert-input-label">划转金额（{{ currencyUnitLabel }}）</label>
+                <label class="convert-input-label">{{ translateUi('uiMessages.m3f1fed5cf9e7', { value1: (currencyUnitLabel) }) }}</label>
                 <div class="convert-input-wrapper">
                   <span class="convert-currency">{{ currencySymbol }}</span>
                   <input
                     v-model="convertAmount"
                     type="number"
-                    :placeholder="`请输入划转金额，最低1${currencyUnitLabel}`"
+                    :placeholder="translateUi('uiMessages.m5a32113da9bb', { value1: (currencyUnitLabel) })"
                     min="1"
                     step="1"
                     class="convert-input"
@@ -1016,8 +1018,8 @@ defineExpose({ openConvertModal, openRechargeModal })
 
               <!-- 预计获得积分 -->
               <div v-if="convertCalculatedPoints > 0" class="convert-preview">
-                <span class="convert-preview-label">预计获得</span>
-                <span class="convert-preview-value">{{ formatPoints(convertCalculatedPoints) }} 永久积分</span>
+                <span class="convert-preview-label">{{ translateUi('uiMessages.m9d97db483907') }}</span>
+                <span class="convert-preview-value">{{ translateUi('uiMessages.mb7df782407ba', { value1: (formatPoints(convertCalculatedPoints)) }) }}</span>
               </div>
 
               <!-- 成功提示 -->
@@ -1040,14 +1042,14 @@ defineExpose({ openConvertModal, openRechargeModal })
               </div>
             </div>
             <div class="modal-footer">
-              <button class="btn-cancel" @click="closeConvertModal">取消</button>
+              <button class="btn-cancel" @click="closeConvertModal">{{ translateUi('common.cancel') }}</button>
               <button
                 class="btn-confirm"
                 @click="submitConvert"
                 :disabled="convertLoading || !convertAmount || convertCalculatedPoints <= 0"
               >
                 <span v-if="convertLoading" class="loading-dot"></span>
-                {{ convertLoading ? '处理中...' : '确认划转' }}
+                {{ convertLoading ? translateUi('common.processing') : translateUi('user.confirmTransfer') }}
               </button>
             </div>
           </div>
@@ -1068,8 +1070,8 @@ defineExpose({ openConvertModal, openRechargeModal })
                   </svg>
                 </div>
                 <div class="modal-title-group">
-                  <h3 class="modal-title">永久积分转让</h3>
-                  <p class="modal-subtitle">当前可转让：{{ formatPoints(user?.points || 0) }} 积分</p>
+                  <h3 class="modal-title">{{ translateUi('uiMessages.mdb639af1deee') }}</h3>
+                  <p class="modal-subtitle">{{ translateUi('uiMessages.m3379eddf1647', { value1: (formatPoints(user?.points || 0)) }) }}</p>
                 </div>
               </div>
               <button class="modal-close" @click="closeTransferPointsModal">
@@ -1081,12 +1083,12 @@ defineExpose({ openConvertModal, openRechargeModal })
             <div class="modal-body">
               <!-- 搜索接收用户 -->
               <div class="transfer-field">
-                <label class="transfer-field-label">接收用户</label>
+                <label class="transfer-field-label">{{ translateUi('uiMessages.m64931b069744') }}</label>
                 <div class="transfer-search-wrapper">
                   <input
                     v-model="transferPointsForm.recipientQuery"
                     type="text"
-                    placeholder="输入用户名或邮箱搜索（至少3个字符）"
+                    :placeholder="translateUi('uiMessages.md5a01dff5d3b')"
                     class="transfer-search-input"
                     @input="handleRecipientSearch"
                     :disabled="!!transferPointsForm.selectedRecipient"
@@ -1112,7 +1114,7 @@ defineExpose({ openConvertModal, openRechargeModal })
                   >
                     <div class="suggestion-avatar">{{ (u.username || u.email || '?')[0].toUpperCase() }}</div>
                     <div class="suggestion-info">
-                      <span class="suggestion-name">{{ u.username || '未设置昵称' }}</span>
+                      <span class="suggestion-name">{{ u.username || translateUi('uiMessages.mc4ba6cb05c0c') }}</span>
                       <span class="suggestion-email">{{ u.email }}</span>
                     </div>
                   </div>
@@ -1124,7 +1126,7 @@ defineExpose({ openConvertModal, openRechargeModal })
               <div v-if="transferPointsForm.selectedRecipient" class="transfer-selected-user">
                 <div class="selected-user-avatar">{{ (transferPointsForm.selectedRecipient.username || transferPointsForm.selectedRecipient.email || '?')[0].toUpperCase() }}</div>
                 <div class="selected-user-info">
-                  <span class="selected-user-name">{{ transferPointsForm.selectedRecipient.username || '未设置昵称' }}</span>
+                  <span class="selected-user-name">{{ transferPointsForm.selectedRecipient.username || translateUi('uiMessages.mc4ba6cb05c0c') }}</span>
                   <span class="selected-user-email">{{ transferPointsForm.selectedRecipient.email }}</span>
                 </div>
                 <svg class="selected-user-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
@@ -1135,11 +1137,11 @@ defineExpose({ openConvertModal, openRechargeModal })
 
               <!-- 转让数量 -->
               <div class="transfer-field">
-                <label class="transfer-field-label">转让积分数量</label>
+                <label class="transfer-field-label">{{ translateUi('uiMessages.m32f04dd740f5') }}</label>
                 <input
                   v-model.number="transferPointsForm.amount"
                   type="number"
-                  placeholder="请输入转让积分数量"
+                  :placeholder="translateUi('uiMessages.mcf6650bf4071')"
                   min="1"
                   :max="user?.points || 0"
                   class="transfer-amount-input"
@@ -1149,11 +1151,11 @@ defineExpose({ openConvertModal, openRechargeModal })
 
               <!-- 备注 -->
               <div class="transfer-field">
-                <label class="transfer-field-label">备注（可选）</label>
+                <label class="transfer-field-label">{{ translateUi('uiMessages.mb405227c7e3f') }}</label>
                 <input
                   v-model="transferPointsForm.memo"
                   type="text"
-                  placeholder="添加备注信息"
+                  :placeholder="translateUi('uiMessages.m23f26727df07')"
                   class="transfer-memo-input"
                 />
               </div>
@@ -1169,14 +1171,14 @@ defineExpose({ openConvertModal, openRechargeModal })
               </div>
             </div>
             <div class="modal-footer">
-              <button class="btn-cancel" @click="closeTransferPointsModal">取消</button>
+              <button class="btn-cancel" @click="closeTransferPointsModal">{{ translateUi('common.cancel') }}</button>
               <button
                 class="btn-confirm"
                 @click="confirmTransferPoints"
                 :disabled="!canTransferPoints || transferringPoints"
               >
                 <span v-if="transferringPoints" class="loading-dot"></span>
-                {{ transferringPoints ? '处理中...' : '确认转让' }}
+                {{ transferringPoints ? translateUi('common.processing') : translateUi('uiMessages.me7a4b20fbac2') }}
               </button>
             </div>
           </div>
@@ -1194,16 +1196,16 @@ defineExpose({ openConvertModal, openRechargeModal })
                 <line x1="12" y1="17" x2="12.01" y2="17"/>
               </svg>
             </div>
-            <h3 class="confirm-title">确认转让积分？</h3>
+            <h3 class="confirm-title">{{ translateUi('uiMessages.m43a80bd77945') }}</h3>
             <p class="confirm-desc">
-              即将向 <span class="confirm-highlight">{{ transferPointsForm.selectedRecipient?.username || transferPointsForm.selectedRecipient?.email }}</span>
-              转让 <span class="confirm-highlight">{{ formatPoints(transferPointsForm.amount) }}</span> 永久积分，此操作不可撤销。
+              {{ translateUi('uiMessages.m2c396b7a8c6d') }} <span class="confirm-highlight">{{ transferPointsForm.selectedRecipient?.username || transferPointsForm.selectedRecipient?.email }}</span>
+              {{ translateUi('packages.transfer') }} <span class="confirm-highlight">{{ formatPoints(transferPointsForm.amount) }}</span> {{ translateUi('uiMessages.mf0d90de3376b') }}
             </p>
             <div class="confirm-btn-group">
-              <button class="btn-cancel" @click="showTransferConfirm = false">取消</button>
+              <button class="btn-cancel" @click="showTransferConfirm = false">{{ translateUi('common.cancel') }}</button>
               <button class="btn-confirm btn-danger" @click="executeTransferPoints" :disabled="transferringPoints">
                 <span v-if="transferringPoints" class="loading-dot"></span>
-                {{ transferringPoints ? '处理中...' : '确认转让' }}
+                {{ transferringPoints ? translateUi('common.processing') : translateUi('uiMessages.me7a4b20fbac2') }}
               </button>
             </div>
           </div>
@@ -1236,7 +1238,7 @@ defineExpose({ openConvertModal, openRechargeModal })
         <div class="recharge-modal-container">
           <!-- 头部 -->
           <div class="recharge-modal-header">
-            <h3>账户充值</h3>
+            <h3>{{ translateUi('user.accountRecharge') }}</h3>
             <button class="close-btn" @click="closeRechargeModal">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="18" y1="6" x2="6" y2="18"/>
@@ -1249,7 +1251,7 @@ defineExpose({ openConvertModal, openRechargeModal })
           <div class="recharge-modal-body">
             <!-- 充值卡片选择（有配置时显示） -->
             <div v-if="rechargeCards.length > 0" class="recharge-section">
-              <label class="section-label">选择充值金额</label>
+              <label class="section-label">{{ translateUi('uiMessages.maf82a2e314b1') }}</label>
               <div class="quick-amounts">
                 <button
                   v-for="card in rechargeCards"
@@ -1261,8 +1263,8 @@ defineExpose({ openConvertModal, openRechargeModal })
                   <span v-if="card.bonus_enabled" class="bonus-star">★</span>
                   <div class="card-amount-v2">{{ currencySymbol }}{{ (card.amount / 100).toFixed(0) }}</div>
                   <div v-if="card.bonus_enabled" class="card-bonus-hover">
-                    <span v-if="card.bonus_type === 'random'">+{{ card.bonus_min }}~{{ card.bonus_max }} 随机积分</span>
-                    <span v-else>+{{ card.bonus_fixed }} 积分奖励</span>
+                    <span v-if="card.bonus_type === 'random'">{{ translateUi('uiMessages.m36c92eefe1c4', { value1: (card.bonus_min), value2: (card.bonus_max) }) }}</span>
+                    <span v-else>{{ translateUi('uiMessages.mff467e49bb29', { value1: (card.bonus_fixed) }) }}</span>
                   </div>
                 </button>
               </div>
@@ -1270,7 +1272,7 @@ defineExpose({ openConvertModal, openRechargeModal })
 
             <!-- 快捷金额选择（无充值卡片配置时回退显示） -->
             <div v-else class="recharge-section">
-              <label class="section-label">选择充值金额</label>
+              <label class="section-label">{{ translateUi('uiMessages.maf82a2e314b1') }}</label>
               <div class="quick-amounts">
                 <button
                   v-for="item in quickAmounts"
@@ -1286,7 +1288,7 @@ defineExpose({ openConvertModal, openRechargeModal })
 
             <!-- 自定义金额 -->
             <div class="recharge-section">
-              <label class="section-label">或输入自定义金额（{{ currencyUnitLabel }}）</label>
+              <label class="section-label">{{ translateUi('uiMessages.m532ab77c2437', { value1: (currencyUnitLabel) }) }}</label>
               <div class="custom-amount-wrapper">
                 <span class="currency-prefix">{{ currencySymbol }}</span>
                 <input
@@ -1315,7 +1317,7 @@ defineExpose({ openConvertModal, openRechargeModal })
               :disabled="rechargeLoading || (getRechargeAmountInCents() <= 0)"
             >
               <span v-if="rechargeLoading" class="loading-dot"></span>
-              {{ rechargeLoading ? '处理中...' : '确认充值' }}
+              {{ rechargeLoading ? translateUi('common.processing') : translateUi('user.confirmRecharge') }}
             </button>
           </div>
         </div>

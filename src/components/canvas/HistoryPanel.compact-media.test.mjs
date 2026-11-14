@@ -1,3 +1,6 @@
+import * as i18nTestRuntime from '../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'
@@ -9,7 +12,7 @@ const player = existsSync(playerPath) ? readFileSync(playerPath, 'utf8') : ''
 
 function columns(width, selectionMode, fullscreen) {
   const declaration = panel.match(/const columnCount = computed\([\s\S]*?\n\n/)[0]
-  return runInNewContext(`${declaration}; columnCount.value`, {
+  return runInNewContext(`${declaration}; columnCount.value`, { translateUi, uiLanguage,
     computed: fn => ({ get value() { return fn() } }),
     historyListWidth: { value: width }, props: { selectionMode }, isFullscreen: { value: fullscreen }
   })
@@ -27,7 +30,7 @@ function createPlayers() {
   assert.ok(player, 'History audio needs a playable waveform card')
   const setup = player.match(/<script setup>([\s\S]*?)<\/script>/)[1].replace(/^import .*\n/gm, '')
   const module = player.match(/<script>([\s\S]*?)<\/script>/)[1]
-  return runInNewContext(`${module}; (function createPlayer() { ${setup}; return { audioRef, playing, currentTime, duration, error, togglePlayback, handlePlay, seekTo, resetPlayback } })`, {
+  return runInNewContext(`${module}; (function createPlayer() { ${setup}; return { audioRef, playing, currentTime, duration, error, togglePlayback, handlePlay, seekTo, resetPlayback } })`, { translateUi, uiLanguage,
     defineProps: () => ({ src: '/audio.wav', duration: 10, active: true }),
     ref: value => ({ value }), computed: fn => ({ get value() { return fn() } }),
     watch() {}, onBeforeUnmount() {}

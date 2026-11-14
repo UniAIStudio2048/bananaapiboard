@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 /**
  * 媒体生成动效生命周期测试（回归：生成中动效保持到 task.completed 真正返回结果）。
  *
@@ -59,7 +60,7 @@ test('onTaskEvent task.completed 应用结果、task.failed 清理动效并显�
   assert.ok(block, 'onTaskEvent must exist')
   assert.match(block, /event\.type === 'task\.completed'[\s\S]*?applyGeneratedResult/)
   assert.match(block, /event\.type === 'task\.failed'[\s\S]*?finalizeMediaGenerationState/)
-  assert.match(block, /媒体任务执行失败/)
+  assert.match(block, localizedPattern(/媒体任务执行失败/))
 })
 
 test('普通模式 tool_completed 保留结果应用但不删除生成中动效', () => {
@@ -86,7 +87,7 @@ test('多图生成：applyAgentResultToMessage 按 URL 合并累积，不整体�
   assert.match(block, /existing\.push\(/)
   assert.match(block, /messages\.value\[index\]\.attachments = existing/)
   // 计数文案按累积数量生成（8 张全部返回后显示"已生成 8 张图片"）
-  assert.match(block, /已生成 \$\{imageCount\} 张图片/)
+  assert.match(block, /translateUi\('uiMessages\.m9a3e018a2dee', \{ value1: \(imageCount\), value2: \(videoCount\) \}\)/)
 })
 
 test('多图生成：applyGeneratedResult 每张完成时占位递减，全部完成才清除生成中状态', () => {

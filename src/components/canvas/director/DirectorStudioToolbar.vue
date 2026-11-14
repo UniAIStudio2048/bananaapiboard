@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import {
   Box,
   Camera,
@@ -18,7 +20,7 @@ import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import { useDirectorStudioI18n } from './useDirectorStudioI18n.js'
 
 const props = defineProps({
-  projectName: { type: String, default: '3D导演台' },
+  projectName: { type: String, get default() { return translateUi('canvas.nodeConfig.directorStudio.label') } },
   transformMode: { type: String, default: 'move' },
   camera: { type: Object, default: () => ({}) },
   lighting: { type: Object, default: () => ({}) },
@@ -65,42 +67,42 @@ function selectCameraPreset(event) {
 <template>
   <header class="director-toolbar">
     <div class="director-toolbar-project">
-      <button type="button" class="director-icon-button" :title="dt('close', '关闭')" @click="emit('close')">
+      <button type="button" class="director-icon-button" :title="dt('close', translateUi('common.close'))" @click="emit('close')">
         <X :size="17" stroke-width="2.1" />
       </button>
       <Box :size="18" stroke-width="2" class="director-toolbar-mark" />
       <div class="director-toolbar-title">
-        <span>{{ dt('title', '3D导演台') }}</span>
+        <span>{{ dt('title', translateUi('directorStudio.title')) }}</span>
         <strong>{{ projectName }}</strong>
       </div>
     </div>
 
     <div class="director-toolbar-group">
-      <button type="button" class="director-command" :title="dt('toolbar.saveProjectTitle', '保存项目')" @click="emit('save-project')">
+      <button type="button" class="director-command" :title="dt('toolbar.saveProjectTitle', translateUi('directorStudio.saveProject'))" @click="emit('save-project')">
         <Save :size="15" stroke-width="2" />
-        <span>{{ dt('toolbar.save', '保存') }}</span>
+        <span>{{ dt('toolbar.save', translateUi('common.save')) }}</span>
       </button>
-      <button type="button" class="director-command" :title="dt('toolbar.captureTitle', '截图')" @click="emit('capture-screenshot')">
+      <button type="button" class="director-command" :title="dt('toolbar.captureTitle', translateUi('directorStudio.snapshots.title'))" @click="emit('capture-screenshot')">
         <Camera :size="15" stroke-width="2" />
-        <span>{{ dt('toolbar.capture', '截图') }}</span>
+        <span>{{ dt('toolbar.capture', translateUi('directorStudio.snapshots.title')) }}</span>
       </button>
       <button
         type="button"
         class="director-command"
-        :title="dt('toolbar.addToCanvasTitle', '添加截图到画布')"
+        :title="dt('toolbar.addToCanvasTitle', translateUi('directorStudio.toolbar.addToCanvasTitle'))"
         @click="emit('add-to-canvas')"
       >
         <Download :size="15" stroke-width="2" />
-        <span>{{ dt('toolbar.canvas', '画布') }}</span>
+        <span>{{ dt('toolbar.canvas', translateUi('directorStudio.toolbar.canvas')) }}</span>
       </button>
     </div>
 
-    <div class="director-toolbar-segment" :aria-label="dt('toolbar.transformMode', '变换模式')">
+    <div class="director-toolbar-segment" :aria-label="dt('toolbar.transformMode', translateUi('directorStudio.toolbar.transformMode'))">
       <button
         type="button"
         class="director-tool-button"
         :class="{ active: transformMode === 'move' }"
-        :title="dt('toolbar.move', '移动')"
+        :title="dt('toolbar.move', translateUi('directorStudio.toolbar.move'))"
         @click="selectTransform('move')"
       >
         <Move3D :size="16" stroke-width="2" />
@@ -109,7 +111,7 @@ function selectCameraPreset(event) {
         type="button"
         class="director-tool-button"
         :class="{ active: transformMode === 'rotate' }"
-        :title="dt('toolbar.rotate', '旋转')"
+        :title="dt('toolbar.rotate', translateUi('directorStudio.toolbar.rotate'))"
         @click="selectTransform('rotate')"
       >
         <RotateCcw :size="16" stroke-width="2" />
@@ -118,7 +120,7 @@ function selectCameraPreset(event) {
         type="button"
         class="director-tool-button"
         :class="{ active: transformMode === 'scale' }"
-        :title="dt('toolbar.scale', '缩放')"
+        :title="dt('toolbar.scale', translateUi('directorStudio.toolbar.scale'))"
         @click="selectTransform('scale')"
       >
         <Scale3D :size="16" stroke-width="2" />
@@ -128,7 +130,7 @@ function selectCameraPreset(event) {
     <div class="director-toolbar-group compact">
       <select
         class="director-toolbar-select"
-        :title="dt('toolbar.cameraPreset', '镜头预设')"
+        :title="dt('toolbar.cameraPreset', translateUi('directorStudio.toolbar.cameraPreset'))"
         :value="camera.activePreset || 'standard'"
         @change="selectCameraPreset"
       >
@@ -136,13 +138,13 @@ function selectCameraPreset(event) {
           {{ dt(preset.labelKey, preset.id) }}
         </option>
       </select>
-      <button type="button" class="director-icon-button" :title="dt('toolbar.focusSelected', '聚焦选中')" :disabled="!hasSelection" @click="emit('focus-selected')">
+      <button type="button" class="director-icon-button" :title="dt('toolbar.focusSelected', translateUi('directorStudio.toolbar.focusSelected'))" :disabled="!hasSelection" @click="emit('focus-selected')">
         <Maximize2 :size="16" stroke-width="2" />
       </button>
-      <button type="button" class="director-icon-button" :title="dt('toolbar.fitScene', '适配场景')" @click="emit('fit-scene')">
+      <button type="button" class="director-icon-button" :title="dt('toolbar.fitScene', translateUi('directorStudio.toolbar.fitScene'))" @click="emit('fit-scene')">
         <Maximize2 :size="16" stroke-width="2" />
       </button>
-      <button type="button" class="director-icon-button" :title="dt('toolbar.resetCamera', '重置镜头')" @click="emit('reset-camera')">
+      <button type="button" class="director-icon-button" :title="dt('toolbar.resetCamera', translateUi('directorStudio.toolbar.resetCamera'))" @click="emit('reset-camera')">
         <RotateCcw :size="16" stroke-width="2" />
       </button>
     </div>
@@ -152,7 +154,7 @@ function selectCameraPreset(event) {
         type="button"
         class="director-icon-button"
         :class="{ active: lighting.enabled !== false }"
-        :title="dt('toolbar.toggleLighting', '切换灯光')"
+        :title="dt('toolbar.toggleLighting', translateUi('directorStudio.toolbar.toggleLighting'))"
         @click="emit('lighting-patch', { enabled: lighting.enabled === false })"
       >
         <Lamp :size="16" stroke-width="2" />
@@ -161,18 +163,18 @@ function selectCameraPreset(event) {
         type="button"
         class="director-icon-button"
         :class="{ active: grid.visible !== false }"
-        :title="dt('toolbar.toggleGrid', '切换网格')"
+        :title="dt('toolbar.toggleGrid', translateUi('directorStudio.toolbar.toggleGrid'))"
         @click="emit('grid-patch', { visible: grid.visible === false })"
       >
         <Grid3X3 :size="16" stroke-width="2" />
       </button>
-      <button type="button" class="director-icon-button" :title="dt('toolbar.copySelected', '复制选中')" :disabled="!hasSelection" @click="emit('copy-selected')">
+      <button type="button" class="director-icon-button" :title="dt('toolbar.copySelected', translateUi('directorStudio.toolbar.copySelected'))" :disabled="!hasSelection" @click="emit('copy-selected')">
         <Copy :size="16" stroke-width="2" />
       </button>
-      <button type="button" class="director-icon-button" :title="dt('toolbar.pasteItem', '粘贴元素')" :disabled="!canPaste" @click="emit('paste-item')">
+      <button type="button" class="director-icon-button" :title="dt('toolbar.pasteItem', translateUi('directorStudio.toolbar.pasteItem'))" :disabled="!canPaste" @click="emit('paste-item')">
         <Download :size="16" stroke-width="2" />
       </button>
-      <button type="button" class="director-icon-button danger" :title="dt('toolbar.deleteSelected', '删除选中')" :disabled="!hasSelection" @click="emit('delete-selected')">
+      <button type="button" class="director-icon-button danger" :title="dt('toolbar.deleteSelected', translateUi('directorStudio.toolbar.deleteSelected'))" :disabled="!hasSelection" @click="emit('delete-selected')">
         <Trash2 :size="16" stroke-width="2" />
       </button>
     </div>

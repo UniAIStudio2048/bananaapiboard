@@ -1,3 +1,4 @@
+import { localizedPattern } from '../i18n/sourceAssertions.mjs'
 import { strict as assert } from 'node:assert'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -38,7 +39,7 @@ assert.match(
 
 assert.match(
   source,
-  /一键过审/,
+  localizedPattern(/一键过审/),
   'the beginner image upload UI should expose one-click review'
 )
 

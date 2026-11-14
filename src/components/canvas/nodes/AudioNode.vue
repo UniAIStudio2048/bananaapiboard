@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import BreakdownReferenceDetails from '../BreakdownReferenceDetails.vue'
 import SeedanceReviewButton from '../SeedanceReviewButton.vue'
 defineOptions({
@@ -103,7 +105,7 @@ const audioModelGroups = computed(() => {
   const groups = []
   const groupMap = new Map()
   musicModels.value.forEach(model => {
-    const name = model.kind === 'music' ? '音乐' : (model.groupName || '其他')
+    const name = model.kind === 'music' ? translateUi('uiMessages.mdb9514212493') : (model.groupName || translateUi('uiMessages.md2909f1647e7'))
     const value = `${model.kind}:${name}`
     if (!groupMap.has(value)) {
       const group = { name, value, logo: model.groupLogo || model.icon || '♫', models: [] }
@@ -157,7 +159,7 @@ const savedVoiceStyles = ref(
   Array.isArray(props.data.savedVoiceStyles)
     ? props.data.savedVoiceStyles.slice(0, 10).map((style, index) => ({
       id: String(style?.id || `voice-style-${index}`),
-      name: String(style?.name || `音色方案 ${index + 1}`),
+      name: String(style?.name || translateUi('uiMessages.mc0fdb0b3bb58', { value1: (index + 1) })),
       dialect: String(style?.dialect || ''),
       ageGender: String(style?.ageGender || ''),
       texture: String(style?.texture || ''),
@@ -185,49 +187,49 @@ const voiceDesignOptions = {
   intensity: ['轻声耳语感', '压低声音', '轻柔克制', '温和有力', '饱满有力', '情绪逐步加强', '强忍情绪', '爆发式表达', '略带喘息感', '近距离贴耳感']
 }
 const voiceDesignFields = [
-  { key: 'dialect', label: '方言 / 语种', options: voiceDesignOptions.dialect },
-  { key: 'ageGender', label: '年龄 / 性别', options: voiceDesignOptions.ageGender },
-  { key: 'texture', label: '音色质感', options: voiceDesignOptions.texture },
-  { key: 'pace', label: '语速 / 节奏', options: voiceDesignOptions.pace },
-  { key: 'mood', label: '情绪 / 画面感', options: voiceDesignOptions.mood },
-  { key: 'articulation', label: '吐字 / 口语感', options: voiceDesignOptions.articulation },
-  { key: 'delivery', label: '停顿 / 重音', options: voiceDesignOptions.delivery },
-  { key: 'intensity', label: '气息 / 力度', options: voiceDesignOptions.intensity }
+  { key: 'dialect', get label() { return translateUi('uiMessages.m1f4eac7871f5') }, options: voiceDesignOptions.dialect },
+  { key: 'ageGender', get label() { return translateUi('uiMessages.m3a966013308e') }, options: voiceDesignOptions.ageGender },
+  { key: 'texture', get label() { return translateUi('uiMessages.mae5b7c3a940e') }, options: voiceDesignOptions.texture },
+  { key: 'pace', get label() { return translateUi('uiMessages.m7c064f7a412b') }, options: voiceDesignOptions.pace },
+  { key: 'mood', get label() { return translateUi('uiMessages.mab93b6300584') }, options: voiceDesignOptions.mood },
+  { key: 'articulation', get label() { return translateUi('uiMessages.m2c07025809bb') }, options: voiceDesignOptions.articulation },
+  { key: 'delivery', get label() { return translateUi('uiMessages.mfa056b7e7daa') }, options: voiceDesignOptions.delivery },
+  { key: 'intensity', get label() { return translateUi('uiMessages.md3ba1ddc84ab') }, options: voiceDesignOptions.intensity }
 ]
 const speechToneGroups = [
   {
-    label: '笑声与叹气',
+    get label() { return translateUi('uiMessages.m85c1d6b308a5') },
     tones: [
-      { label: '笑声', token: '[laughing]' },
-      { label: '叹气', token: '[sigh]' }
+      { get label() { return translateUi('uiMessages.m17eea351c960') }, token: '[laughing]' },
+      { get label() { return translateUi('uiMessages.m7675cc0d27a7') }, token: '[sigh]' }
     ]
   },
   {
-    label: '停顿与思考',
+    get label() { return translateUi('uiMessages.m0e208ad0633f') },
     tones: [
-      { label: '呃…', token: '[Uhm]' },
-      { label: '嘘', token: '[Shh]' },
-      { label: '咳嗽', token: '[cough]' }
+      { get label() { return translateUi('uiMessages.me10b7570d9e8') }, token: '[Uhm]' },
+      { get label() { return translateUi('uiMessages.m54920524747c') }, token: '[Shh]' },
+      { get label() { return translateUi('uiMessages.mdd05a455a629') }, token: '[cough]' }
     ]
   },
   {
-    label: '疑问与确认语气',
+    get label() { return translateUi('uiMessages.m2409cbf8c88e') },
     tones: [
-      { label: '疑问啊', token: '[Question-ah]' },
-      { label: '疑问诶', token: '[Question-ei]' },
-      { label: '疑问嗯', token: '[Question-en]' },
-      { label: '疑问哦', token: '[Question-oh]' },
-      { label: '确认嗯', token: '[Confirmation-en]' }
+      { get label() { return translateUi('uiMessages.m588c04517a63') }, token: '[Question-ah]' },
+      { get label() { return translateUi('uiMessages.m075a34bb0487') }, token: '[Question-ei]' },
+      { get label() { return translateUi('uiMessages.m8b95d65e437d') }, token: '[Question-en]' },
+      { get label() { return translateUi('uiMessages.m4b8b2cb18acf') }, token: '[Question-oh]' },
+      { get label() { return translateUi('uiMessages.mc9c374c5926b') }, token: '[Confirmation-en]' }
     ]
   },
   {
-    label: '惊讶与小情绪',
+    get label() { return translateUi('uiMessages.m5365e0a0edfb') },
     tones: [
-      { label: '惊讶哇', token: '[Surprise-wa]' },
-      { label: '惊讶哟', token: '[Surprise-yo]' },
-      { label: '惊讶啊', token: '[Surprise-ah]' },
-      { label: '惊讶哦', token: '[Surprise-oh]' },
-      { label: '不满哼', token: '[Dissatisfaction-hnn]' }
+      { get label() { return translateUi('uiMessages.mbd417d12b4ae') }, token: '[Surprise-wa]' },
+      { get label() { return translateUi('uiMessages.mcd5f201cc795') }, token: '[Surprise-yo]' },
+      { get label() { return translateUi('uiMessages.m5041a02b9050') }, token: '[Surprise-ah]' },
+      { get label() { return translateUi('uiMessages.mbff22daf78ff') }, token: '[Surprise-oh]' },
+      { get label() { return translateUi('uiMessages.m13c88b2d39a9') }, token: '[Dissatisfaction-hnn]' }
     ]
   }
 ]
@@ -236,6 +238,131 @@ const paralinguisticCues = [
   '笑声', '轻笑', '咳嗽', '清嗓子', '呻吟', '正常换气', '喘气', '吸气',
   '叹气', '哼', '打嗝', '咂嘴', '哼唱', '嘶嘶声', '呃', '喷嚏'
 ]
+const voiceOptionKeys = {
+  "普通话": "uiMessages.mf43591b09c1b",
+  "粤语": "uiMessages.m3b0aa680e2b6",
+  "四川话": "uiMessages.m15cfa1cb1cef",
+  "吴语": "uiMessages.m3419d825b1d7",
+  "东北话": "uiMessages.mf9bf8d2b7a1d",
+  "河南话": "uiMessages.m681908ed772d",
+  "陕西话": "uiMessages.m607f03f32c5b",
+  "山东话": "uiMessages.m79a9a91f4dd3",
+  "天津话": "uiMessages.m1fe03132f080",
+  "闽南话": "uiMessages.m17e3233bcd0c",
+  "英文": "uiMessages.m348ea84c6046",
+  "日语": "uiMessages.m3a944ddb3868",
+  "韩语": "uiMessages.m259cdcf75199",
+  "西班牙语": "uiMessages.m6c872d27f835",
+  "法语": "uiMessages.m99cdf164a814",
+  "德语": "uiMessages.m7566092dce72",
+  "俄语": "uiMessages.mbdb6608a4dc8",
+  "阿拉伯语": "uiMessages.mfc9a0bdeb77f",
+  "泰语": "uiMessages.ma15fb0d0595f",
+  "越南语": "uiMessages.m8648ba069ee0",
+  "印尼语": "uiMessages.m1f3ef878b068",
+  "意大利语": "uiMessages.m5bdde8257c53",
+  "葡萄牙语": "uiMessages.m6ce072a79389",
+  "印地语": "uiMessages.m99012cae1587",
+  "儿童": "uiMessages.m5246f67f9da5",
+  "少年": "uiMessages.m749ca4675490",
+  "少女": "uiMessages.mdef0173ec2e7",
+  "青年男声": "uiMessages.m7170effbb43d",
+  "青年女声": "uiMessages.m71cfecd3fe3b",
+  "成熟男声": "uiMessages.mc60e14de5059",
+  "成熟女声": "uiMessages.m0e0c5fcb6626",
+  "中年男声": "uiMessages.mbc04ac482ae1",
+  "中年女声": "uiMessages.m9d097c6df12f",
+  "老年男声": "uiMessages.mb3af0adcfe65",
+  "老年女声": "uiMessages.m578c31d951ae",
+  "清亮通透": "uiMessages.mb5ccca333d5d",
+  "温暖醇厚": "uiMessages.m4a65980e023d",
+  "低沉磁性": "uiMessages.ma3a411d94748",
+  "柔和甜美": "uiMessages.mf1ec00f85614",
+  "沙哑颗粒感": "uiMessages.me9b2105c6757",
+  "明亮有活力": "uiMessages.mfdf3df400c82",
+  "圆润饱满": "uiMessages.m1ed59842e88f",
+  "冷冽通透": "uiMessages.m8f72235cb6a1",
+  "略带鼻音": "uiMessages.m0fe1fa5c766f",
+  "干净贴耳": "uiMessages.m8de2c0545fdf",
+  "播音腔": "uiMessages.m7e41612160d2",
+  "气声感": "uiMessages.m45c3c79ff529",
+  "语速缓慢": "uiMessages.m277fcfa92fab",
+  "语速适中": "uiMessages.meaeca26c613a",
+  "语速偏快": "uiMessages.m4177a31ad8ec",
+  "节奏明快": "uiMessages.m0d98480c09c3",
+  "节奏舒缓": "uiMessages.m28ec1f65d3ca",
+  "从容有层次": "uiMessages.m2cd1f03d05a7",
+  "紧凑利落": "uiMessages.ma986eb982c0c",
+  "急促紧张": "uiMessages.m73dafa1f6ff6",
+  "渐快": "uiMessages.m21e188b85d99",
+  "渐慢": "uiMessages.mfe588b0b69da",
+  "自然亲切": "uiMessages.m7999d7101f22",
+  "沉稳专业": "uiMessages.m23ff879876af",
+  "轻松愉悦": "uiMessages.m5e87a4cfd9b9",
+  "温柔治愈": "uiMessages.mda513cf13045",
+  "富有感染力": "uiMessages.m033e2127d1fb",
+  "略带微笑": "uiMessages.mda0113ac5415",
+  "平静真诚": "uiMessages.mc6d58940bb56",
+  "克制失落": "uiMessages.m0c9f9584c52b",
+  "忧郁伤感": "uiMessages.m101e1d21ac14",
+  "无奈叹息": "uiMessages.meb9d8ced5833",
+  "惊喜兴奋": "uiMessages.mf38b5a2742ef",
+  "紧张忐忑": "uiMessages.maeaa49c01b5b",
+  "半信半疑": "uiMessages.m82a45b82d1f1",
+  "庄重威严": "uiMessages.mf8b750a22486",
+  "愤怒不满": "uiMessages.m2819d61dc4dc",
+  "俏皮调侃": "uiMessages.m1770c430e1e2",
+  "吐字清晰": "uiMessages.m3b3be625bb28",
+  "字正腔圆": "uiMessages.md66458c52e69",
+  "咬字轻柔": "uiMessages.me3ae779a8cc9",
+  "自然连读": "uiMessages.me7aa83862d7e",
+  "口语化自然": "uiMessages.m200a14226b82",
+  "像聊天一样亲近": "uiMessages.m148dee3e31d0",
+  "像讲故事一样娓娓道来": "uiMessages.m1be344541f0c",
+  "略带含混": "uiMessages.md1719c9cb46c",
+  "慢慢咬字": "uiMessages.m21ee5b339060",
+  "接地气": "uiMessages.m38904553331f",
+  "短暂停顿": "uiMessages.m8dd27b95adad",
+  "转折处停顿": "uiMessages.m808b2e5213ee",
+  "每个短句之间留白": "uiMessages.me84570cde857",
+  "关键词轻微重读": "uiMessages.m2b1b903c5c15",
+  "数字与结论重读": "uiMessages.ma813969dfc9d",
+  "句尾稍作停留": "uiMessages.m15b9774bf1c6",
+  "句尾轻微上扬": "uiMessages.m987aab62526a",
+  "句尾收住": "uiMessages.mf4114b46d126",
+  "先轻后重": "uiMessages.m8bb0de6202cc",
+  "结尾坚定": "uiMessages.m4ef128a0a48a",
+  "轻声耳语感": "uiMessages.m7faca489a0fb",
+  "压低声音": "uiMessages.mbafb76381d27",
+  "轻柔克制": "uiMessages.m838ec9310006",
+  "温和有力": "uiMessages.m72fdf8dd00d0",
+  "饱满有力": "uiMessages.m2b1caacc8806",
+  "情绪逐步加强": "uiMessages.mb0cae3c7a692",
+  "强忍情绪": "uiMessages.m5973fab79530",
+  "爆发式表达": "uiMessages.ma47f4d7e4e85",
+  "略带喘息感": "uiMessages.m8e567ba4b44c",
+  "近距离贴耳感": "uiMessages.m3faa8ce509fd",
+  "笑声": "uiMessages.m17eea351c960",
+  "轻笑": "uiMessages.m64f89dce140a",
+  "咳嗽": "uiMessages.mdd05a455a629",
+  "清嗓子": "uiMessages.m210089954742",
+  "呻吟": "uiMessages.m67d163c409b7",
+  "正常换气": "uiMessages.md8781893b970",
+  "喘气": "uiMessages.m392a381b3797",
+  "吸气": "uiMessages.m15b19641650f",
+  "叹气": "uiMessages.m7675cc0d27a7",
+  "哼": "uiMessages.m386ebbdaf94c",
+  "打嗝": "uiMessages.m8f8333b1c7b1",
+  "咂嘴": "uiMessages.mee31b0b1f75f",
+  "哼唱": "uiMessages.m4cee31766cc9",
+  "嘶嘶声": "uiMessages.maadb0eaf8d5a",
+  "呃": "uiMessages.m6aa9c5da2dbf",
+  "喷嚏": "uiMessages.m236e3ca7c526"
+}
+function getVoiceOptionLabel(value) {
+  return voiceOptionKeys[value] ? translateUi(voiceOptionKeys[value]) : value
+}
+
 const voiceDesignStyle = computed(() => [
   voiceDialect.value,
   voiceAgeGender.value,
@@ -247,9 +374,9 @@ const voiceDesignStyle = computed(() => [
   voiceIntensity.value,
   voiceCustomDescription.value.trim()
 ].filter(Boolean).join('，'))
-const voiceStyleTriggerLabel = computed(() => voiceAgeGender.value ? `${voiceAgeGender.value}音色` : '音色')
-const voiceStylePanelTitle = computed(() => audioCapability.value === 'voice_clone' ? '声音特征' : '音色设计')
-const voicePresetTriggerLabel = computed(() => selectedVoicePreset.value?.name || '选择音色')
+const voiceStyleTriggerLabel = computed(() => voiceAgeGender.value ? translateUi('uiMessages.ma5e06f590054', { value1: (getVoiceOptionLabel(voiceAgeGender.value)) }) : translateUi('uiMessages.m6ab9d2bde92c'))
+const voiceStylePanelTitle = computed(() => audioCapability.value === 'voice_clone' ? translateUi('uiMessages.m5b3a0a448d87') : translateUi('uiMessages.mbc0a648fdf81'))
+const voicePresetTriggerLabel = computed(() => selectedVoicePreset.value?.name || translateUi('uiMessages.m74c516c07587'))
 
 // 模型下拉框状态
 const isMusicModelDropdownOpen = ref(false)
@@ -320,9 +447,9 @@ watch([isLongCatVoiceClone, inheritedAudioUrl], ([enabled, url], _, onCleanup) =
   audio.preload = 'metadata'
   audio.onloadedmetadata = () => {
     referenceAudioDuration.value = Number(audio.duration)
-    if (!Number.isFinite(audio.duration) || audio.duration <= 0) referenceAudioError.value = '无法读取参考音频时长'
+    if (!Number.isFinite(audio.duration) || audio.duration <= 0) referenceAudioError.value = translateUi('uiMessages.ma0d9c2649f33')
   }
-  audio.onerror = () => { referenceAudioError.value = '无法读取参考音频，请重新上传' }
+  audio.onerror = () => { referenceAudioError.value = translateUi('uiMessages.m541266fc1ffd') }
   audio.src = url
   onCleanup(() => {
     audio.onloadedmetadata = null
@@ -332,12 +459,12 @@ watch([isLongCatVoiceClone, inheritedAudioUrl], ([enabled, url], _, onCleanup) =
   })
 }, { immediate: true })
 const longCatVoiceInputError = computed(() => {
-  if (!musicPrompt.value.trim()) return '请输入合成文案'
-  if (musicPrompt.value.length > 500) return '合成文案不能超过 500 字符'
-  if (!inheritedAudioUrl.value) return '请连接参考音频（最长 45 秒）'
+  if (!musicPrompt.value.trim()) return translateUi('uiMessages.m11e320cc0935')
+  if (musicPrompt.value.length > 500) return translateUi('uiMessages.m070156e15609')
+  if (!inheritedAudioUrl.value) return translateUi('uiMessages.m067accae7f26')
   if (referenceAudioError.value) return referenceAudioError.value
-  if (referenceAudioDuration.value === null) return '正在读取参考音频时长'
-  if (referenceAudioDuration.value > 45) return '参考音频不能超过 45 秒'
+  if (referenceAudioDuration.value === null) return translateUi('uiMessages.m82c02a03680e')
+  if (referenceAudioDuration.value > 45) return translateUi('uiMessages.m3e574c760160')
   return ''
 })
 const inheritedVoiceId = computed(() => {
@@ -356,18 +483,18 @@ const voiceCloneReadingTexts = computed(() => {
   return texts.length ? texts : DEFAULT_VOICE_CLONE_READING_TEXTS
 })
 const audioPromptPlaceholder = computed(() => {
-  if (isRunningHubSuno6.value) return ['custom', 'wild-custom', 'mini-custom'].includes(sunoV6Params.operation) ? '输入完整歌词，支持 [Verse] [Chorus] [Bridge]（最多 5000 字符）' : sunoV6Params.operation === 'sounds' ? '描述要生成的音效（最多 3000 字符）' : '描述歌曲的风格、情绪或场景（最多 3000 字符）'
-  if (isRunningHubMusic.value) return isRunningHubCustom.value ? '输入完整歌词，支持 [Verse] [Chorus] [Bridge]（最多 5000 字符）' : '描述歌曲的风格、情绪或场景（最多 400 字符）'
-  if (isRunningHubAudio.value && audioCapability.value === 'voice_design') return '输入试听文案（不超过 500 字）'
-  if (isRunningHubAudio.value && (audioCapability.value === 'voice_clone' || audioCapability.value === 'tts')) return '输入需要合成的文案'
-  if (isMiniMaxAudio.value && audioCapability.value === 'voice_design') return '输入试听文案（不超过 500 字）'
-  if (isMiniMaxAudio.value && audioCapability.value === 'tts') return '输入需要合成的文案（最多 50000 字）'
-  if (isFishAudio.value && audioCapability.value === 'voice_design') return '输入试听文案（不超过 150 字，可选）'
-  if (isFishAudio.value && audioCapability.value === 'tts') return '输入需要合成的文案（最多 50000 字）'
-  if (audioCapability.value === 'voice_design') return '说话的文本内容，描述希望角色说出的内容'
-  if (audioCapability.value === 'tts') return '输入需要合成的文案。'
-  if (audioCapability.value === 'voice_clone') return '说话的文本内容，描述你需要克隆的文本内容'
-  return '描述您想要的音乐。'
+  if (isRunningHubSuno6.value) return ['custom', 'wild-custom', 'mini-custom'].includes(sunoV6Params.operation) ? translateUi('uiMessages.m7654b6bbc6a1') : sunoV6Params.operation === 'sounds' ? translateUi('uiMessages.m828c651e9461') : translateUi('uiMessages.m010ee4edf33b')
+  if (isRunningHubMusic.value) return isRunningHubCustom.value ? translateUi('uiMessages.m7654b6bbc6a1') : translateUi('uiMessages.m868644a5a08a')
+  if (isRunningHubAudio.value && audioCapability.value === 'voice_design') return translateUi('uiMessages.m9ba4b1cd90a2')
+  if (isRunningHubAudio.value && (audioCapability.value === 'voice_clone' || audioCapability.value === 'tts')) return translateUi('uiMessages.m68947f8c4155')
+  if (isMiniMaxAudio.value && audioCapability.value === 'voice_design') return translateUi('uiMessages.m9ba4b1cd90a2')
+  if (isMiniMaxAudio.value && audioCapability.value === 'tts') return translateUi('uiMessages.m33b38f169f10')
+  if (isFishAudio.value && audioCapability.value === 'voice_design') return translateUi('uiMessages.me7467cec92d9')
+  if (isFishAudio.value && audioCapability.value === 'tts') return translateUi('uiMessages.m33b38f169f10')
+  if (audioCapability.value === 'voice_design') return translateUi('uiMessages.m940e90c0974a')
+  if (audioCapability.value === 'tts') return translateUi('uiMessages.m5cba13c2eb11')
+  if (audioCapability.value === 'voice_clone') return translateUi('uiMessages.ma7736d40a5ec')
+  return translateUi('uiMessages.m88eb171e3932')
 })
 const audioPromptLimit = computed(() => {
   if (isRunningHubSuno6.value) return ['custom', 'wild-custom', 'mini-custom'].includes(sunoV6Params.operation) ? 5000 : 3000
@@ -448,7 +575,7 @@ const musicPointsCost = computed(() => {
 })
 
 function formatAudioErrorMessage(message) {
-  return formatVideoNodeErrorMessage(message || '生成失败')
+  return formatVideoNodeErrorMessage(message || translateUi('canvas.audioNode.generateFailed'))
 }
 
 function getAudioProcessingTimingData(data = props.data) {
@@ -494,7 +621,7 @@ const highlightedMusicPromptSegments = computed(() => {
       end: regex.lastIndex,
       isTag: true,
       media: index === 1 && inheritedAudioUrl.value
-        ? { type: 'audio', index, label: `音频${index}`, url: inheritedAudioUrl.value }
+        ? { type: 'audio', index, get label() { return translateUi('uiMessages.m01182cf2cda3', { value1: (index) }) }, url: inheritedAudioUrl.value }
         : null
     })
     lastIndex = regex.lastIndex
@@ -671,7 +798,7 @@ function getCurrentVoiceDesignStyle() {
 
 function saveVoiceDesignStyle() {
   if (!voiceDesignStyle.value || savedVoiceStyles.value.length >= 10) return
-  const name = voiceStyleSaveName.value.trim() || `音色方案 ${savedVoiceStyles.value.length + 1}`
+  const name = voiceStyleSaveName.value.trim() || translateUi('uiMessages.mc0fdb0b3bb58', { value1: (savedVoiceStyles.value.length + 1) })
   savedVoiceStyles.value = [
     ...savedVoiceStyles.value,
     { id: `voice-style-${Date.now()}`, name, ...getCurrentVoiceDesignStyle() }
@@ -695,9 +822,9 @@ function applySavedVoiceDesignStyle(style) {
 async function removeSavedVoiceDesignStyle(style) {
   isVoiceStyleConfirmOpen.value = true
   try {
-    const confirmed = await showConfirm(`确定删除“${style.name}”吗？`, '删除保存的音色', {
-      detail: '删除后无法恢复。',
-      confirmText: '删除'
+    const confirmed = await showConfirm(translateUi('uiMessages.m8247577603bd', { value1: (style.name) }), translateUi('uiMessages.m99002fa57bf4'), {
+      detail: translateUi('uiMessages.m0e31f4514beb'),
+      confirmText: translateUi('canvas.delete')
     })
     if (confirmed) savedVoiceStyles.value = savedVoiceStyles.value.filter(item => item.id !== style.id)
   } finally {
@@ -755,13 +882,13 @@ async function handleGenerateMusic() {
 
   // 检查输入
   if (!musicPrompt.value.trim()) {
-    await showAlert('请输入音乐描述或歌词', '提示')
+    await showAlert(translateUi('uiMessages.me5b153b9448b'), translateUi('common.info'))
     return
   }
 
   // 自定义模式下必须填写歌名
   if (customMode.value && !title.value.trim()) {
-    await showAlert('自定义模式需要填写歌名', '提示')
+    await showAlert(translateUi('uiMessages.m1bdcd2f5cb56'), translateUi('common.info'))
     return
   }
 
@@ -778,7 +905,7 @@ async function handleGenerateMusic() {
   })
   const duplicateResult = duplicateSubmitGuard.check(submitFingerprint)
   if (duplicateResult.blocked) {
-    await showAlert(duplicateResult.message, '重复提交')
+    await showAlert(duplicateResult.message, translateUi('uiMessages.m5f0dcd88953e'))
     return
   }
 
@@ -875,7 +1002,7 @@ async function handleGenerateMusic() {
     }
     canvasStore.updateNodeData(targetNodeId, {
       status: 'error',
-      error: formatAudioErrorMessage(error.response?.data?.message || error.response?.data?.error || error.message || '生成失败')
+      error: formatAudioErrorMessage(error.response?.data?.message || error.response?.data?.error || error.message || translateUi('canvas.audioNode.generateFailed'))
     })
     isGeneratingMusic.value = false
   }
@@ -886,17 +1013,17 @@ async function handleGenerateCozeAudio() {
     const message = isLongCatVoiceClone.value ? longCatVoiceInputError.value
       : isRunningHubMusic.value ? runninghubInputError.value
       : isMiniMaxAudio.value && audioCapability.value === 'voice_design'
-      ? '请填写音色描述和试听文案'
+      ? translateUi('uiMessages.me71bdcb4a01c')
       : isFishAudio.value && audioCapability.value === 'voice_design'
-        ? '请填写音色描述'
+        ? translateUi('uiMessages.mebd3596d060f')
       : isMiniMaxAudio.value && audioCapability.value === 'tts'
-        ? '请输入文案并选择官方音色或我的音色'
+        ? translateUi('uiMessages.m992f10df173a')
         : audioCapability.value === 'voice_clone'
-      ? '请连接或上传参考音频'
+      ? translateUi('uiMessages.m0c54a52dcca9')
       : audioCapability.value === 'tts'
-        ? '请输入文案，并且只连接一种音色来源'
-        : '请输入音色描述'
-    await showAlert(message, '提示')
+        ? translateUi('uiMessages.md95193ea7c82')
+        : translateUi('uiMessages.m2c47ab5d1cbc')
+    await showAlert(message, translateUi('common.info'))
     return
   }
   if (userPoints.value < musicPointsCost.value) {
@@ -991,7 +1118,7 @@ async function pollCozeAudioStatus(nodeId, taskId) {
     const response = await apiClient.get(`/api/audio/query/${taskId}`)
     if (canvasStore.nodes.find(node => node.id === nodeId)?.data?.taskId !== taskId) return
     if (response.status === 'failed') {
-      canvasStore.updateNodeData(nodeId, { status: 'error', error: response.data?.error_message || '音频生成失败' })
+      canvasStore.updateNodeData(nodeId, { status: 'error', error: response.data?.error_message || translateUi('uiMessages.mda11b5d15a13') })
       return
     }
     if (response.status !== 'completed') {
@@ -1041,9 +1168,9 @@ async function saveDesignedVoice() {
   try {
     await apiClient.post('/api/audio/user-voices/from-design', { task_id: props.data.taskId })
     canvasStore.updateNodeData(props.id, { designedVoiceSaved: true })
-    await showAlert('音色已保存到“我的音色”', '保存成功')
+    await showAlert(translateUi('uiMessages.mf7fc9cb292d5'), translateUi('uiMessages.me05ddf992cc5'))
   } catch (error) {
-    await showAlert(error.response?.data?.error || error.message || '保存音色失败', '保存失败')
+    await showAlert(error.response?.data?.error || error.message || translateUi('uiMessages.mc1f700188fa8'), translateUi('errors.saveFailed'))
   } finally {
     isSavingDesignedVoice.value = false
   }
@@ -1064,7 +1191,7 @@ async function pollMusicStatus(nodeId, taskIds) {
     if (elapsed >= maxDuration) {
       canvasStore.updateNodeData(nodeId, {
         status: 'timeout',
-        error: '生成超时（超过15分钟），请稍后查看历史记录'
+        error: translateUi('uiMessages.maf3f083e5169')
       })
       console.log('[AudioNode] 音乐生成超时')
       return
@@ -1072,7 +1199,7 @@ async function pollMusicStatus(nodeId, taskIds) {
     
     // 更新进度显示
     canvasStore.updateNodeData(nodeId, {
-      progress: `已等待 ${elapsedMinutes}:${elapsedSeconds.toString().padStart(2, '0')}`
+      progress: translateUi('uiMessages.m69271567c051', { value1: (elapsedMinutes), value2: (elapsedSeconds.toString().padStart(2, '0')) })
     })
     
     try {
@@ -1094,7 +1221,7 @@ async function pollMusicStatus(nodeId, taskIds) {
         const failedResult = results.find(r => r.status === 'failed')
         canvasStore.updateNodeData(nodeId, {
           status: 'error',
-          error: formatAudioErrorMessage(failedResult.data?.error_message || failedResult.data?.message || '生成失败'),
+          error: formatAudioErrorMessage(failedResult.data?.error_message || failedResult.data?.message || translateUi('canvas.audioNode.generateFailed')),
           progress: null
         })
         console.log('[AudioNode] 音乐生成失败')
@@ -1102,7 +1229,7 @@ async function pollMusicStatus(nodeId, taskIds) {
         // 完成后更新节点数据
         const firstResult = results[0]
         const songData = firstResult.data
-        const songTitle = songData.title || '生成的音乐'
+        const songTitle = songData.title || translateUi('uiMessages.m69ca6cf2003b')
         canvasStore.updateNodeData(nodeId, {
           status: 'success',
           musicHistory: results.map(r => r.data),
@@ -1530,7 +1657,7 @@ const hasAudio = computed(() => {
 
 // 是否有数据丢失（旧格式迁移时 blob URL 失效）
 const hasDataLost = computed(() => props.data._dataLost === true)
-const dataLostReason = computed(() => props.data._lostReason || '本地临时文件已失效')
+const dataLostReason = computed(() => props.data._lostReason || translateUi('uiMessages.m8010d249bd5b'))
 
 // 是否正在上传中
 const isUploading = computed(() => props.data.isUploading === true)
@@ -1550,13 +1677,13 @@ const generatingStatus = computed(() => {
   const progress = props.data?.progress
   
   if (status === 'processing' || status === 'queued') {
-    return { text: '生成中...', icon: '🎵', progress }
+    return { get text() { return translateUi('canvas.audioNode.generating') }, icon: '🎵', progress }
   } else if (status === 'streaming') {
-    return { text: '流式预览就绪', icon: '🎶', progress }
+    return { get text() { return translateUi('uiMessages.mef7d5dcca185') }, icon: '🎶', progress }
   } else if (status === 'timeout') {
-    return { text: '生成超时', icon: '⏰', progress: null }
+    return { get text() { return translateUi('uiMessages.mb60976e35087') }, icon: '⏰', progress: null }
   } else if (status === 'error') {
-    return { text: props.data?.error || '生成失败', icon: '❌', progress: null }
+    return { text: props.data?.error || translateUi('canvas.audioNode.generateFailed'), icon: '❌', progress: null }
   }
   return null
 })
@@ -1568,17 +1695,17 @@ const audioUrl = computed(() => {
 
 // 音频标题
 const audioTitle = computed(() => {
-  return props.data?.title || props.data?.fileName || '音频'
+  return props.data?.title || props.data?.fileName || translateUi('canvas.nodeConfig.audioInput.label')
 })
 
 function openAudioEditor(event) {
   event?.stopPropagation()
   if (isUploading.value) {
-    showAlert('音频仍在上传中，请稍后再编辑', '提示')
+    showAlert(translateUi('uiMessages.m8448bc4a2395'), translateUi('common.info'))
     return
   }
   if (!audioUrl.value) {
-    showAlert('当前节点没有可编辑的音频', '提示')
+    showAlert(translateUi('uiMessages.m643c77b8a9ea'), translateUi('common.info'))
     return
   }
   showAudioEditor.value = true
@@ -1589,7 +1716,7 @@ function createAudioEditProcessingNode(taskId, editOptions) {
   if (!currentNode) return null
 
   const newNodeId = `audio_edit_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
-  const label = editOptions.mode === 'trim' ? '音频裁剪' : '音频编辑'
+  const label = editOptions.mode === 'trim' ? translateUi('uiMessages.m0d1ae83d1b67') : translateUi('uiMessages.m255ac986c171')
 
   canvasStore.addNode({
     id: newNodeId,
@@ -1603,7 +1730,7 @@ function createAudioEditProcessingNode(taskId, editOptions) {
       title: label,
       status: 'processing',
       processingStartedAt: Date.now(),
-      progress: editOptions.mode === 'trim' ? '裁剪中...' : '编辑中...',
+      progress: editOptions.mode === 'trim' ? translateUi('uiMessages.m7b082a4d2326') : translateUi('uiMessages.m638aa63d147e'),
       taskId,
       taskType: 'audio-edit',
       sourceNodeId: props.id,
@@ -1634,7 +1761,7 @@ async function handleAudioEditorSubmit(editOptions) {
       ...editOptions
     })
     const taskId = result.taskId || result.task_id
-    if (!taskId) throw new Error('未获取到音频处理任务ID')
+    if (!taskId) throw new Error(translateUi('uiMessages.m57bdbe7ddeeb'))
 
     const resultNodeId = createAudioEditProcessingNode(taskId, editOptions)
     const currentTab = canvasStore.getCurrentTab()
@@ -1656,7 +1783,7 @@ async function handleAudioEditorSubmit(editOptions) {
       await showAlert(dialog.message, dialog.title, dialog.detail)
       return
     }
-    await showAlert(formatAudioErrorMessage(error.message || '音频处理任务提交失败'), '错误')
+    await showAlert(formatAudioErrorMessage(error.message || translateUi('uiMessages.mc1f5c2418b17')), translateUi('common.error'))
   }
 }
 
@@ -1695,7 +1822,7 @@ function handleBackgroundTaskComplete(event) {
     canvasStore.updateNodeData(props.id, {
       status: 'error',
       progress: null,
-      error: '音频处理完成但未返回音频地址'
+      error: translateUi('uiMessages.mb3ff9243a4f4')
     })
   }
   removeCompletedTask(taskId)
@@ -1714,7 +1841,7 @@ function handleBackgroundTaskFailed(event) {
     status: 'error',
     progress: null,
     ...(task.metadata?.operation === 'speed' ? { playbackRate: 1 } : {}),
-    error: formatAudioErrorMessage(task.error || '音频处理失败')
+    error: formatAudioErrorMessage(task.error || translateUi('uiMessages.ma035554b9e3a'))
   })
   if (task.metadata?.operation === 'speed' && audioRef.value) {
     audioRef.value.playbackRate = 1
@@ -1729,7 +1856,7 @@ function handleBackgroundTaskProgress(event) {
   canvasStore.updateNodeData(props.id, {
     status: 'processing',
     processingStartedAt: Date.now(),
-    progress: task.result?.progress || task.progress || '编辑中...'
+    progress: task.result?.progress || task.progress || translateUi('uiMessages.m638aa63d147e')
   })
 }
 
@@ -1744,7 +1871,7 @@ function checkAndRestoreAudioEditTasks() {
     } else if (task.status === 'processing' || task.status === 'pending') {
       canvasStore.updateNodeData(props.id, {
         status: 'processing',
-        progress: task.progress || '编辑中...'
+        progress: task.progress || translateUi('uiMessages.m638aa63d147e')
       })
     }
   }
@@ -1832,7 +1959,7 @@ function triggerUpload() {
 const quickActions = [
   {
     icon: Upload,
-    label: '上传音频',
+    get label() { return translateUi('canvas.audioNode.upload') },
     action: () => triggerUpload()
   }
 ]
@@ -1844,7 +1971,7 @@ async function handleFileUpload(event) {
   
   const file = files[0]
   if (!file.type.startsWith('audio/')) {
-    alert('请上传音频文件')
+    alert(translateUi('uiMessages.md11f17c07161'))
     return
   }
   
@@ -1877,7 +2004,7 @@ async function handleFileUpload(event) {
     
   } catch (error) {
     console.error('[AudioNode] 上传失败:', error)
-    await showAlert('音频文件处理失败，请重试', '错误')
+    await showAlert(translateUi('uiMessages.m05e29f2ccb16'), translateUi('common.error'))
   }
   
   // 清空文件选择
@@ -2244,7 +2371,7 @@ async function handleToolbarDownload() {
     return
   }
   if (props.data?.status === 'processing' && props.data?.taskType === 'audio-edit') {
-    await showAlert('音频处理尚未完成，请稍后下载', '提示')
+    await showAlert(translateUi('uiMessages.mf1252f2e96b8'), translateUi('common.info'))
     return
   }
   if (normalizePlaybackRate(playbackRate.value, 1) !== 1) {
@@ -2356,12 +2483,12 @@ async function applyPlaybackRate(downloadOnComplete = false) {
   const sourceDuration = Number(duration.value || props.data?.audioDuration)
   if (!sourceUrl || sourceUrl.startsWith('blob:')) {
     updatePlaybackRate(1)
-    await showAlert('音频仍在上传中，请稍后再应用变速', '提示')
+    await showAlert(translateUi('uiMessages.m20b6a33bc542'), translateUi('common.info'))
     return
   }
   if (!Number.isFinite(sourceDuration) || sourceDuration <= 0) {
     updatePlaybackRate(1)
-    await showAlert('音频时长尚未读取完成，请稍后再试', '提示')
+    await showAlert(translateUi('uiMessages.m02b32cd3f9a8'), translateUi('common.info'))
     return
   }
 
@@ -2374,11 +2501,11 @@ async function applyPlaybackRate(downloadOnComplete = false) {
       format: 'mp3'
     })
     const taskId = result.taskId || result.task_id
-    if (!taskId) throw new Error('未获取到音频变速任务ID')
+    if (!taskId) throw new Error(translateUi('uiMessages.m3c5097f7bdce'))
     if (downloadOnComplete) downloadAfterSpeedTask.value = taskId
     canvasStore.updateNodeData(props.id, {
       status: 'processing',
-      progress: '变速处理中...',
+      progress: translateUi('uiMessages.mba4b93a0eade'),
       taskId,
       taskType: 'audio-edit'
     })
@@ -2398,7 +2525,7 @@ async function applyPlaybackRate(downloadOnComplete = false) {
     console.error('[AudioNode] 音频变速提交失败:', error)
     downloadAfterSpeedTask.value = null
     updatePlaybackRate(1)
-    await showAlert(formatAudioErrorMessage(error.message || '音频变速任务提交失败'), '错误')
+    await showAlert(formatAudioErrorMessage(error.message || translateUi('uiMessages.me735bb8a122e')), translateUi('common.error'))
   }
 }
 
@@ -2432,33 +2559,33 @@ function handleSpeedEditorClickOutside(event) {
     <!-- 音频工具栏（选中且有音频时显示）- 与 ImageNode 保持一致 -->
     <div v-show="showToolbar && !props.data?.readonly" class="audio-toolbar">
       <SeedanceReviewButton :node-id="id" :data="data" asset-type="Audio" />
-      <button class="toolbar-btn" title="截取音频" @mousedown.stop.prevent="openAudioEditor" @click.stop.prevent>
+      <button class="toolbar-btn" :title="translateUi('uiMessages.mb32222d6ea20')" @mousedown.stop.prevent="openAudioEditor" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M4 7h3a3 3 0 013 3v4a3 3 0 003 3h7" stroke-linecap="round"/>
           <path d="M4 17h3a3 3 0 003-3v-4a3 3 0 013-3h7M16 5l4 4m0-4l-4 4M16 15l4 4m0-4l-4 4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <span>截取</span>
+        <span>{{ translateUi('uiMessages.m043a57f12fb2') }}</span>
       </button>
 
       <div class="toolbar-divider"></div>
 
-      <button class="toolbar-btn speed-toolbar-btn" title="变速" @mousedown.stop.prevent="toggleSpeedEditor" @click.stop.prevent>
+      <button class="toolbar-btn speed-toolbar-btn" :title="translateUi('uiMessages.m1eede67ef0f6')" @mousedown.stop.prevent="toggleSpeedEditor" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M12 7V3l-4 4 4 4V7a5 5 0 11-4.8 6.4" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M15.5 12.5l-3 2v-4z" stroke-linejoin="round"/>
         </svg>
-        <span>变速</span>
+        <span>{{ translateUi('uiMessages.m1eede67ef0f6') }}</span>
       </button>
 
       <div class="toolbar-divider"></div>
       
       <!-- 下载按钮 -->
-      <button class="toolbar-btn icon-only" :title="downloadAfterSpeedTask || speedDownloadStarting ? '正在处理音频，完成后自动下载' : '下载'" :disabled="!!downloadAfterSpeedTask || speedDownloadStarting" @mousedown.stop.prevent="handleToolbarDownload" @click.stop.prevent>
+      <button class="toolbar-btn icon-only" :title="downloadAfterSpeedTask || speedDownloadStarting ? translateUi('uiMessages.m93c6003e5daf') : translateUi('canvas.assetPanel.directory.download')" :disabled="!!downloadAfterSpeedTask || speedDownloadStarting" @mousedown.stop.prevent="handleToolbarDownload" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
-      <button class="toolbar-btn icon-only" title="全屏预览" @mousedown.stop.prevent="handleToolbarPreview" @click.stop.prevent>
+      <button class="toolbar-btn icon-only" :title="translateUi('canvas.contextMenu.fullscreenPreview')" @mousedown.stop.prevent="handleToolbarPreview" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
@@ -2466,12 +2593,12 @@ function handleSpeedEditorClickOutside(event) {
     </div>
 
     <div v-if="showToolbar && showSpeedEditor && !props.data?.readonly" class="speed-editor nodrag" @mousedown.stop @pointerdown.stop @click.stop>
-      <button class="speed-editor-cancel" @click="showSpeedEditor = false">×　变速</button>
+      <button class="speed-editor-cancel" @click="showSpeedEditor = false">{{ translateUi('uiMessages.m6ebd0a3bb2f9') }}</button>
       <span class="speed-boundary">0.5x</span>
-      <input v-model.number="pendingPlaybackRate" class="speed-slider" type="range" min="0.5" max="2" step="0.05" aria-label="播放速度" @input="handlePlaybackRateInput" />
+      <input v-model.number="pendingPlaybackRate" class="speed-slider" type="range" min="0.5" max="2" step="0.05" :aria-label="translateUi('uiMessages.mc114a632b201')" @input="handlePlaybackRateInput" />
       <span class="speed-boundary">2.0x</span>
-      <input v-model.number="pendingPlaybackRate" class="speed-number" type="number" min="0.5" max="2" step="0.05" aria-label="播放速度数值" @input="handlePlaybackRateInput" />
-      <button class="speed-editor-apply" title="应用变速" @click="applyPlaybackRate()">
+      <input v-model.number="pendingPlaybackRate" class="speed-number" type="number" min="0.5" max="2" step="0.05" :aria-label="translateUi('uiMessages.m25eb0554b839')" @input="handlePlaybackRateInput" />
+      <button class="speed-editor-apply" :title="translateUi('uiMessages.m753da98c781e')" @click="applyPlaybackRate()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 20V4m0 0L5 11m7-7l7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
     </div>
@@ -2513,7 +2640,7 @@ function handleSpeedEditorClickOutside(event) {
         ref="addLeftBtnRef"
         class="node-add-btn node-add-btn-left nodrag"
         @mousedown.stop="handleAddLeftMouseDown"
-        title="添加输入节点"
+        :title="translateUi('uiMessages.m326a1923db7e')"
         @click="handleAddLeftClick"
       >
         +
@@ -2577,9 +2704,9 @@ function handleSpeedEditorClickOutside(event) {
         <!-- 生成中状态（与视频/图像节点统一） -->
         <div v-if="props.data?.status === 'processing'" class="node-content preview-loading">
           <div class="loading-spinner"></div>
-          <span class="loading-title">音频生成中...</span>
+          <span class="loading-title">{{ translateUi('uiMessages.m85c8e755a5bf') }}</span>
           <span class="processing-duration-text">{{ audioProcessingElapsedText(props.data) }}</span>
-          <span class="loading-hint">音频生成需要一定时间，请耐心等待</span>
+          <span class="loading-hint">{{ translateUi('uiMessages.meb2dead15d17') }}</span>
         </div>
 
         <!-- 有音频时显示播放器 -->
@@ -2612,7 +2739,7 @@ function handleSpeedEditorClickOutside(event) {
           </div>
 
           <!-- 音频可视化区域 -->
-          <div class="audio-visual" title="点击跳转播放进度" @click="handleProgressClick">
+          <div class="audio-visual" :title="translateUi('uiMessages.m8e1d4188d82a')" @click="handleProgressClick">
             <div class="audio-wave">
               <template v-if="data.breakdown?.waveform?.length"><span v-for="(peak, i) in data.breakdown.waveform" :key="i" :style="{ height: Math.max(3, peak * 86) + 'px' }"></span></template>
               <template v-else><span v-for="i in 43" :key="i" :class="{ active: isPlaying }"></span></template>
@@ -2646,9 +2773,9 @@ function handleSpeedEditorClickOutside(event) {
             :disabled="isSavingDesignedVoice"
             @click.stop="saveDesignedVoice"
           >
-            {{ isSavingDesignedVoice ? '保存中…' : '保存到我的音色' }}
+            {{ isSavingDesignedVoice ? translateUi('uiMessages.mff509c9ba052') : translateUi('uiMessages.mcc7df7dd40af') }}
           </button>
-          <p v-else-if="props.data?.canSaveDesignedVoice" class="designed-voice-saved">已保存到我的音色</p>
+          <p v-else-if="props.data?.canSaveDesignedVoice" class="designed-voice-saved">{{ translateUi('uiMessages.m684451335278') }}</p>
 
         </div>
         
@@ -2658,7 +2785,7 @@ function handleSpeedEditorClickOutside(event) {
             <div class="generating-icon" :class="{ spinning: isGenerating }">
               {{ generatingStatus?.icon || '🎵' }}
             </div>
-            <div class="generating-text">{{ generatingStatus?.text || '处理中...' }}</div>
+            <div class="generating-text">{{ generatingStatus?.text || translateUi('tips.processing') }}</div>
             <div v-if="generatingStatus?.progress" class="generating-progress">
               {{ generatingStatus.progress }}
             </div>
@@ -2674,14 +2801,14 @@ function handleSpeedEditorClickOutside(event) {
           <div class="error-state data-lost">
             <div class="error-icon">⚠️</div>
             <div class="error-text">{{ dataLostReason }}</div>
-            <button class="retry-btn" @click="triggerUpload">重新上传</button>
+            <button class="retry-btn" @click="triggerUpload">{{ translateUi('uiMessages.m11b7c7173da2') }}</button>
           </div>
         </div>
         
         <!-- 上传中状态 -->
         <div v-else-if="isUploading" class="node-content">
           <div class="upload-progress">
-            <span class="processing-text">上传中...</span>
+            <span class="processing-text">{{ translateUi('tips.uploading') }}</span>
           </div>
         </div>
         
@@ -2689,15 +2816,15 @@ function handleSpeedEditorClickOutside(event) {
         <div v-else-if="uploadFailed" class="node-content">
           <div class="error-state upload-failed">
             <div class="error-icon">⚠️</div>
-            <div class="error-text">文件上传失败，保存时数据可能丢失</div>
-            <button class="retry-btn" @click="triggerUpload">重新上传</button>
+            <div class="error-text">{{ translateUi('uiMessages.m34baf7a48a63') }}</div>
+            <button class="retry-btn" @click="triggerUpload">{{ translateUi('uiMessages.m11b7c7173da2') }}</button>
           </div>
         </div>
         
         <!-- 无音频时显示空状态 -->
         <div v-else class="node-content">
           <div class="empty-state node-quick-start">
-            <div class="quick-start-heading">从这里开始</div>
+            <div class="quick-start-heading">{{ translateUi('canvas.textNode.try') }}</div>
             <button
               v-for="action in quickActions"
               type="button"
@@ -2714,13 +2841,13 @@ function handleSpeedEditorClickOutside(event) {
               <span class="quick-start-label">{{ action.label }}</span>
               <ChevronRight class="quick-start-arrow" aria-hidden="true" />
             </button>
-            <p class="quick-start-note">从本地选择音频文件</p>
+            <p class="quick-start-note">{{ translateUi('uiMessages.m8b9be18c0738') }}</p>
           </div>
         </div>
         
         <!-- 拖拽覆盖层 -->
         <div v-if="isDragOver" class="drag-overlay">
-          <div class="drag-hint">释放以上传音频</div>
+          <div class="drag-hint">{{ translateUi('uiMessages.m49f5afdbd93a') }}</div>
         </div>
         
         <!-- Resize Handles -->
@@ -2751,7 +2878,7 @@ function handleSpeedEditorClickOutside(event) {
       <button 
         ref="addRightBtnRef"
         class="node-add-btn node-add-btn-right nodrag"
-        title="单击：添加节点 | 长按/拖拽：连接到其他节点"
+        :title="translateUi('canvas.imageNode.clickAddLongDrag')"
         @mousedown="handleAddRightMouseDown"
       >
         +
@@ -2775,8 +2902,8 @@ function handleSpeedEditorClickOutside(event) {
       <button
         class="config-expand-btn"
         type="button"
-        :title="isConfigPanelExpanded ? '缩小输入面板' : '放大输入面板'"
-        :aria-label="isConfigPanelExpanded ? '缩小输入面板' : '放大输入面板'"
+        :title="isConfigPanelExpanded ? translateUi('uiMessages.m49a90c53c3d5') : translateUi('uiMessages.mbe61c8937aa2')"
+        :aria-label="isConfigPanelExpanded ? translateUi('uiMessages.m49a90c53c3d5') : translateUi('uiMessages.mbe61c8937aa2')"
         @click.stop="toggleConfigPanelExpanded"
       >
         <svg v-if="!isConfigPanelExpanded" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2800,7 +2927,7 @@ function handleSpeedEditorClickOutside(event) {
             class="speech-tone-trigger"
             :aria-expanded="isSpeechToneMenuOpen"
             @click.stop="isSpeechToneMenuOpen = !isSpeechToneMenuOpen; isSpeechPauseMenuOpen = false; isParalinguisticMenuOpen = false"
-          >语气插入</button>
+          >{{ translateUi('uiMessages.m211dc694fccb') }}</button>
           <div v-if="isSpeechToneMenuOpen" class="speech-tone-menu" @mousedown.prevent @click.stop>
             <section v-for="group in speechToneGroups" :key="group.label" class="speech-tone-group">
               <div class="speech-tone-group-label">{{ group.label }}</div>
@@ -2822,9 +2949,9 @@ function handleSpeedEditorClickOutside(event) {
                 class="speech-tone-trigger"
                 :aria-expanded="isSpeechPauseMenuOpen"
                 @click.stop="isSpeechPauseMenuOpen = !isSpeechPauseMenuOpen; isSpeechToneMenuOpen = false; isParalinguisticMenuOpen = false"
-              >停顿插入</button>
+              >{{ translateUi('uiMessages.mcaf373c78e6e') }}</button>
               <div v-if="isSpeechPauseMenuOpen" class="speech-tone-menu speech-pause-menu" @mousedown.prevent @click.stop>
-                <div class="speech-tone-group-label">选择停顿时长</div>
+                <div class="speech-tone-group-label">{{ translateUi('uiMessages.ma0e056b019d8') }}</div>
                 <div class="speech-tone-options">
                   <button
                     v-for="seconds in speechPauseOptions"
@@ -2840,13 +2967,13 @@ function handleSpeedEditorClickOutside(event) {
                     type="number"
                     min="0.01"
                     step="0.01"
-                    placeholder="自定义停顿"
-                    aria-label="自定义停顿秒数"
+                    :placeholder="translateUi('uiMessages.m46a019884515')"
+                    :aria-label="translateUi('uiMessages.m60f3b0953420')"
                     @mousedown.stop
                     @keydown.enter.prevent="insertSpeechPause(customSpeechPauseSeconds)"
                   />
-                  <span>秒</span>
-                  <button type="button" :disabled="!formatSpeechPauseToken(customSpeechPauseSeconds)" @click="insertSpeechPause(customSpeechPauseSeconds)">插入</button>
+                  <span>{{ translateUi('time.seconds') }}</span>
+                  <button type="button" :disabled="!formatSpeechPauseToken(customSpeechPauseSeconds)" @click="insertSpeechPause(customSpeechPauseSeconds)">{{ translateUi('uiMessages.m4268493cd34f') }}</button>
                 </div>
               </div>
             </div>
@@ -2856,17 +2983,17 @@ function handleSpeedEditorClickOutside(event) {
                 class="speech-tone-trigger"
                 :aria-expanded="isParalinguisticMenuOpen"
                 @click.stop="isParalinguisticMenuOpen = !isParalinguisticMenuOpen; isSpeechToneMenuOpen = false; isSpeechPauseMenuOpen = false"
-              >语气词插入</button>
+              >{{ translateUi('uiMessages.m294d754f0e6e') }}</button>
               <div v-if="isParalinguisticMenuOpen" class="speech-tone-menu paralinguistic-menu" @mousedown.prevent @click.stop>
-                <div class="speech-tone-group-label">以“（中文描述）”插入</div>
+                <div class="speech-tone-group-label">{{ translateUi('uiMessages.mb5613194f4ca') }}</div>
                 <div class="speech-tone-options paralinguistic-options">
                   <button
                     v-for="cue in paralinguisticCues"
                     :key="cue"
                     type="button"
-                    :title="`（${cue}）`"
+                    :title="getVoiceOptionLabel(cue)"
                     @click="insertParalinguisticCue(cue)"
-                  >{{ cue }}</button>
+                  >{{ getVoiceOptionLabel(cue) }}</button>
                 </div>
               </div>
             </div>
@@ -2876,14 +3003,14 @@ function handleSpeedEditorClickOutside(event) {
         <!-- 参考音频，与视频节点参考素材区保持相同层级 -->
         <div class="audio-reference-section">
           <div class="audio-reference-header">
-            <span class="audio-reference-label">参考音频</span>
-            <span class="audio-reference-hint">连接音频节点作为音色来源</span>
+            <span class="audio-reference-label">{{ translateUi('canvas.audioNode.refAudio') }}</span>
+            <span class="audio-reference-hint">{{ translateUi('uiMessages.m7efb5eb0dd74') }}</span>
           </div>
           <div class="audio-reference-list">
             <div
               v-if="inheritedAudioUrl"
               class="audio-reference-item nodrag"
-              title="点击插入 @音频1"
+              :title="translateUi('uiMessages.mdc1c65e31609')"
               role="button"
               tabindex="0"
               @mousedown.stop
@@ -2893,12 +3020,12 @@ function handleSpeedEditorClickOutside(event) {
               @mouseleave="onHoverEnd"
             >
               <span class="audio-reference-icon">♪</span>
-              <span class="audio-reference-tag">@音频1</span>
-              <button class="audio-reference-remove" type="button" title="移除参考音频" aria-label="移除参考音频" @click.stop="removeReferenceAudio">×</button>
+              <span class="audio-reference-tag">{{ translateUi('uiMessages.m81b965e4412c') }}</span>
+              <button class="audio-reference-remove" type="button" :title="translateUi('uiMessages.mf4a9db54fe54')" :aria-label="translateUi('uiMessages.mf4a9db54fe54')" @click.stop="removeReferenceAudio">×</button>
             </div>
             <button class="audio-reference-add nodrag" type="button" @click="handleAddLeftClick">
               <span class="audio-reference-add-icon">+</span>
-              <span>添加</span>
+              <span>{{ translateUi('common.add') }}</span>
             </button>
           </div>
         </div>
@@ -3020,39 +3147,39 @@ function handleSpeedEditorClickOutside(event) {
               >
                 <div class="voice-style-dropdown-title">
                   <span>{{ voiceStylePanelTitle }}</span>
-                  <button type="button" class="voice-style-reset-all" @click="resetVoiceDesignStyle">重置全部</button>
+                  <button type="button" class="voice-style-reset-all" @click="resetVoiceDesignStyle">{{ translateUi('uiMessages.md65660b3f442') }}</button>
                 </div>
                 <div class="voice-style-flat-grid">
                   <section v-for="field in voiceDesignFields" :key="field.key" class="voice-style-flat-section">
-                    <div class="voice-style-flat-heading"><span>{{ field.label }}</span><button type="button" class="voice-style-reset" :disabled="!getVoiceStyleFieldValue(field.key)" @click="resetVoiceDesignField(field.key)">重置</button></div>
+                    <div class="voice-style-flat-heading"><span>{{ field.label }}</span><button type="button" class="voice-style-reset" :disabled="!getVoiceStyleFieldValue(field.key)" @click="resetVoiceDesignField(field.key)">{{ translateUi('common.reset') }}</button></div>
                     <button type="button" class="voice-style-field-trigger" @click="toggleVoiceStyleFieldDropdown(field.key, $event)">
-                      <span>{{ getVoiceStyleFieldValue(field.key) || '请选择' }}</span>
+                      <span>{{ getVoiceOptionLabel(getVoiceStyleFieldValue(field.key)) || translateUi('uiMessages.mda590a8fe3ce') }}</span>
                       <span class="voice-style-field-arrow" :class="{ 'arrow-up': openVoiceStyleField === field.key }">⌃</span>
                     </button>
                     <Transition name="dropdown-fade">
                       <div v-if="openVoiceStyleField === field.key" class="voice-style-field-dropdown" :class="{ 'dropdown-up': voiceStyleFieldDropdownDirection === 'up' }" @wheel.stop>
                         <div class="voice-style-field-dropdown-title">{{ field.label }}</div>
-                        <button v-for="option in field.options" :key="option" type="button" class="voice-style-field-dropdown-item" :class="{ active: getVoiceStyleFieldValue(field.key) === option }" @click="selectVoiceStyleField(field.key, option)">{{ option }}</button>
+                        <button v-for="option in field.options" :key="option" type="button" class="voice-style-field-dropdown-item" :class="{ active: getVoiceStyleFieldValue(field.key) === option }" @click="selectVoiceStyleField(field.key, option)">{{ getVoiceOptionLabel(option) }}</button>
                       </div>
                     </Transition>
                   </section>
                 </div>
 
                 <div class="voice-style-custom-input">
-                  <span>自定义描述 <button type="button" class="voice-style-reset" :disabled="!voiceCustomDescription" @click.prevent="voiceCustomDescription = ''">重置</button></span>
-                  <textarea v-model="voiceCustomDescription" rows="4" placeholder="威严深沉的恶魔男声，语速缓慢，自带回音感和极强的压迫力，仿佛高高在上的神明。"></textarea>
+                  <span>{{ translateUi('uiMessages.m798e6dbde7b2') }} <button type="button" class="voice-style-reset" :disabled="!voiceCustomDescription" @click.prevent="voiceCustomDescription = ''">{{ translateUi('common.reset') }}</button></span>
+                  <textarea v-model="voiceCustomDescription" rows="4" :placeholder="translateUi('uiMessages.mc33b30fa2895')"></textarea>
                 </div>
                 <div class="saved-voice-style-section">
-                  <div class="saved-voice-style-heading"><span>已保存音色</span><small>{{ savedVoiceStyles.length }}/10</small></div>
+                  <div class="saved-voice-style-heading"><span>{{ translateUi('uiMessages.m2ce57553d6f8') }}</span><small>{{ savedVoiceStyles.length }}/10</small></div>
                   <div class="saved-voice-style-save-row">
-                    <input v-model="voiceStyleSaveName" type="text" maxlength="24" placeholder="方案名称（可选）" @keyup.enter="saveVoiceDesignStyle">
-                    <button type="button" :disabled="!voiceDesignStyle || savedVoiceStyles.length >= 10" @click="saveVoiceDesignStyle">保存当前</button>
+                    <input v-model="voiceStyleSaveName" type="text" maxlength="24" :placeholder="translateUi('uiMessages.m7bb12d8f8632')" @keyup.enter="saveVoiceDesignStyle">
+                    <button type="button" :disabled="!voiceDesignStyle || savedVoiceStyles.length >= 10" @click="saveVoiceDesignStyle">{{ translateUi('uiMessages.m1774adc04c7c') }}</button>
                   </div>
-                  <p class="saved-voice-style-limit">最多保存 10 组</p>
+                  <p class="saved-voice-style-limit">{{ translateUi('uiMessages.m794f92d01437') }}</p>
                   <div v-if="savedVoiceStyles.length" class="saved-voice-style-list">
                     <div v-for="style in savedVoiceStyles" :key="style.id" class="saved-voice-style-item">
                       <button type="button" class="saved-voice-style-apply" :title="[style.ageGender, style.texture, style.mood].filter(Boolean).join('，')" @click="applySavedVoiceDesignStyle(style)">{{ style.name }}</button>
-                      <button type="button" class="saved-voice-style-remove" :aria-label="`删除${style.name}`" @click="removeSavedVoiceDesignStyle(style)">×</button>
+                      <button type="button" class="saved-voice-style-remove" :aria-label="translateUi('uiMessages.md744d0a49097', { value1: (style.name) })" @click="removeSavedVoiceDesignStyle(style)">×</button>
                     </div>
                   </div>
                 </div>
@@ -3064,11 +3191,11 @@ function handleSpeedEditorClickOutside(event) {
             v-if="audioCapability === 'tts'"
             type="button"
             class="voice-preset-trigger"
-            :title="isMiniMaxAudio ? '选择官方音色或我的音色' : (inheritedAudioUrl ? '已连接参考音频，生成时将优先使用参考音频' : '选择预设音色')"
+            :title="isMiniMaxAudio ? translateUi('uiMessages.mefe5bd71ca4c') : (inheritedAudioUrl ? translateUi('uiMessages.m68efb4c6e563') : translateUi('uiMessages.m316a68378d2a'))"
             @click="showVoicePresetPicker = true"
           >
             <span class="voice-preset-icon">♬</span>
-            <span>{{ !isMiniMaxAudio && inheritedAudioUrl ? '参考音频优先' : voicePresetTriggerLabel }}</span>
+            <span>{{ !isMiniMaxAudio && inheritedAudioUrl ? translateUi('uiMessages.mfa2623f65834') : voicePresetTriggerLabel }}</span>
             <span class="voice-preset-arrow">▾</span>
           </button>
           
@@ -3079,7 +3206,7 @@ function handleSpeedEditorClickOutside(event) {
           
           <!-- 积分显示 -->
           <div class="points-badge">
-            <span class="points-value">{{ formatPoints(musicPointsCost) }}{{ isLongCatVoiceClone ? '' : '积分' }}</span>
+            <span class="points-value">{{ formatPoints(musicPointsCost) }}{{ isLongCatVoiceClone ? '' : translateUi('user.points') }}</span>
           </div>
           
           <!-- 生成按钮 -->
@@ -3097,77 +3224,77 @@ function handleSpeedEditorClickOutside(event) {
         
         <div v-if="isRunningHubSuno6" class="advanced-options">
           <div class="option-row vertical">
-            <span class="option-label">Suno v6 功能</span>
+            <span class="option-label">{{ translateUi('uiMessages.mcd2914ce0f5a') }}</span>
             <select v-model="sunoV6Params.operation" class="option-input">
               <option v-for="operation in RUNNINGHUB_SUNO6_OPERATIONS" :key="operation.id" :value="operation.id">{{ operation.label }}</option>
             </select>
-            <span class="option-hint">{{ sunoV6Operation.id === 'sounds' ? '生成音效' : '生成音乐或处理已有音乐' }}</span>
+            <span class="option-hint">{{ sunoV6Operation.id === 'sounds' ? translateUi('uiMessages.mdb68c7974bfe') : translateUi('uiMessages.m3649a3807d26') }}</span>
           </div>
           <div v-if="['custom', 'wild-custom', 'mini-custom'].includes(sunoV6Params.operation)" class="option-row vertical">
-            <span class="option-label">歌曲标题与音乐风格</span>
-            <input v-model="title" type="text" maxlength="80" class="option-input" placeholder="歌曲标题（最多 80 字符）" />
-            <input v-model="tags" type="text" maxlength="1000" class="option-input" placeholder="音乐风格（最多 1000 字符）" />
+            <span class="option-label">{{ translateUi('uiMessages.mb790dd783b17') }}</span>
+            <input v-model="title" type="text" maxlength="80" class="option-input" :placeholder="translateUi('uiMessages.m05ccb0a0013e')" />
+            <input v-model="tags" type="text" maxlength="1000" class="option-input" :placeholder="translateUi('uiMessages.ma8b94eff55a1')" />
           </div>
-          <div v-if="['inspo'].includes(sunoV6Params.operation)" class="option-row vertical"><span class="option-label">参考音频 URL（1–4 个，逗号分隔）</span><input v-model="sunoV6Params.audioUrls" class="option-input" placeholder="https://...mp3, https://...wav" /></div>
-          <div v-if="['upload', 'upload-cover', 'upload-extend'].includes(sunoV6Params.operation)" class="option-row vertical"><span class="option-label">源音频 URL</span><input v-model="sunoV6Params.audioUrl" class="option-input" placeholder="https://...mp3" /></div>
-          <div v-if="['extend', 'cover', 'add-instrumental', 'add-vocals', 'add-stem', 'replace-section', 'sample'].includes(sunoV6Params.operation)" class="option-row vertical"><span class="option-label">源任务 ID</span><input v-model="sunoV6Params.sourceTaskId" class="option-input" placeholder="RunningHub taskId" /></div>
-          <div v-if="['extend', 'cover', 'add-instrumental', 'add-vocals', 'add-stem', 'replace-section', 'sample'].includes(sunoV6Params.operation)" class="option-row"><input v-model="sunoV6Params.audioIndex" type="number" min="1" max="20" class="option-input" placeholder="曲目序号（默认 1）" /></div>
-          <div v-if="['mashup'].includes(sunoV6Params.operation)" class="option-row vertical"><span class="option-label">两个源任务 ID（逗号分隔）</span><input v-model="sunoV6Params.sourceTaskIds" class="option-input" placeholder="taskId1, taskId2" /></div>
-          <div v-if="sunoV6Params.operation === 'mashup'" class="option-row"><input v-model="sunoV6Params.audioIndexes" class="option-input" placeholder="曲目序号（如 1,1，可选）" /><label class="toggle-switch"><input type="checkbox" v-model="sunoV6Params.instrumental" /><span class="toggle-slider"></span></label><span class="option-label">纯音乐</span></div>
-          <div v-if="['replace-section', 'sample'].includes(sunoV6Params.operation)" class="option-row"><input v-model="sunoV6Params.startS" class="option-input" placeholder="起点秒数" /><input v-model="sunoV6Params.endS" class="option-input" placeholder="终点秒数" /></div>
-          <div v-if="sunoV6Params.operation === 'replace-section'" class="option-row vertical"><span class="option-label">替换歌词（可选，最多 5000 字符）</span><textarea v-model="sunoV6Params.infillLyrics" maxlength="5000" class="option-input" rows="3" placeholder="输入要替换分区的新歌词"></textarea></div>
-          <div v-if="['upload-extend', 'extend'].includes(sunoV6Params.operation)" class="option-row vertical"><span class="option-label">续写起点（秒）</span><input v-model="sunoV6Params.continueAt" type="number" min="1" :max="sunoV6Params.operation === 'extend' ? 3600 : 479" class="option-input" /></div>
-          <div v-if="sunoV6Params.operation === 'upload-cover'" class="option-row"><select v-model="sunoV6Params.custom" class="option-input"><option value="">翻唱模式（自动判断）</option><option value="true">自定义歌词</option><option value="false">灵感描述</option></select><label class="toggle-switch"><input type="checkbox" v-model="sunoV6Params.instrumental" /><span class="toggle-slider"></span></label><span class="option-label">纯音乐</span></div>
-          <div v-if="['upload-cover', 'extend', 'cover', 'add-instrumental', 'add-vocals', 'add-stem', 'mashup', 'sample'].includes(sunoV6Params.operation)" class="option-row vertical"><span class="option-label">灵感描述（可选；灵感模式使用）</span><input v-model="sunoV6Params.gptDescription" maxlength="3000" class="option-input" placeholder="描述希望的编曲、人声和情绪" /></div>
-          <div v-if="sunoV6Params.operation === 'sounds'" class="option-row"><input v-model="sunoV6Params.bpm" type="number" min="1" max="300" class="option-input" placeholder="BPM（可选）" /><select v-model="sunoV6Params.soundType" class="option-input"><option value="">音效类型</option><option value="one-shot">单次</option><option value="loop">循环</option></select><input v-model="sunoV6Params.musicalKey" class="option-input" placeholder="调式（如 C#m）" /></div>
-          <div v-if="sunoV6Params.operation !== 'upload'" class="option-row"><select v-model="sunoV6Params.version" class="option-input"><option value="">版本（默认 v6）</option><option value="v6">v6</option><option value="v6-wild">v6-wild</option><option value="v6-mini">v6-mini</option></select><select v-model="sunoV6Params.audioFormat" class="option-input"><option value="">格式（默认 mp3）</option><option value="mp3">mp3</option><option value="m4a">m4a</option><option value="wav">wav</option></select><select v-if="sunoV6Params.operation !== 'sounds'" v-model="sunoV6Params.variety" class="option-input"><option value="">变化幅度</option><option value="off">off</option><option value="normal">normal</option><option value="high">high</option><option value="extra">extra</option><option value="max">max</option></select></div>
-          <div v-if="['custom', 'wild-custom', 'mini-custom', 'inspo', 'upload-cover', 'extend', 'cover', 'add-instrumental', 'add-vocals', 'add-stem', 'mashup', 'upload-extend', 'sample'].includes(sunoV6Params.operation)" class="option-row"><input v-model="sunoV6Params.styleWeight" type="number" min="0" max="1" step="0.01" class="option-input" placeholder="风格权重 0–1" /><input v-model="sunoV6Params.weirdness" type="number" min="0" max="1" step="0.01" class="option-input" placeholder="创意权重 0–1" /><input v-model="sunoV6Params.audioWeight" type="number" min="0" max="1" step="0.01" class="option-input" placeholder="音频权重 0–1" /></div>
-          <div v-if="['custom', 'wild-custom', 'mini-custom', 'upload-cover', 'extend', 'cover', 'upload-extend', 'sample'].includes(sunoV6Params.operation)" class="option-row"><input v-model="sunoV6Params.customModelId" class="option-input" placeholder="自定义模型 ID（与版本/Persona 互斥）" /><input v-model="sunoV6Params.personaId" class="option-input" placeholder="Persona ID" /><input v-model="sunoV6Params.duration" type="number" min="10" max="360" class="option-input" placeholder="目标时长（秒）" /></div>
-          <div v-if="['custom', 'wild-custom', 'mini-custom', 'upload-cover', 'extend', 'cover', 'add-instrumental', 'add-vocals', 'add-stem', 'mashup', 'sample'].includes(sunoV6Params.operation)" class="option-row"><label class="toggle-switch"><input type="checkbox" v-model="sunoV6Params.autoLyrics" /><span class="toggle-slider"></span></label><span class="option-label">创意改写歌词</span><select v-model="sunoV6Params.vocalGender" class="option-input"><option value="">人声性别</option><option value="m">男声</option><option value="f">女声</option><option value="Male">Male</option><option value="Female">Female</option></select></div>
-          <div v-if="['custom', 'wild-custom', 'mini-custom', 'inspo', 'upload-cover', 'extend', 'cover', 'upload-extend', 'add-instrumental', 'add-vocals', 'replace-section', 'add-stem', 'mashup', 'sample'].includes(sunoV6Params.operation)" class="option-row"><label v-if="['custom', 'wild-custom', 'mini-custom'].includes(sunoV6Params.operation)" class="toggle-switch"><input type="checkbox" v-model="makeInstrumental" /><span class="toggle-slider"></span></label><span v-if="['custom', 'wild-custom', 'mini-custom'].includes(sunoV6Params.operation)" class="option-label">纯音乐</span><label class="toggle-switch"><input type="checkbox" v-model="sunoV6Params.maxMode" /><span class="toggle-slider"></span></label><span class="option-label">Max 模式（双倍积分）</span></div>
-          <div v-if="props.data.runninghubMusicResults?.length > 1" class="option-row vertical"><span class="option-label">返回曲目</span><div class="mode-tabs"><button v-for="(result, resultIndex) in props.data.runninghubMusicResults" :key="result.task_id" type="button" :title="result.title" :class="['mode-tab', { active: props.data.audioUrl === result.audio_url }]" @click="selectRunningHubMusicResult(result)">曲目 {{ resultIndex + 1 }}</button></div></div>
+          <div v-if="['inspo'].includes(sunoV6Params.operation)" class="option-row vertical"><span class="option-label">{{ translateUi('uiMessages.m0f6ed399df28') }}</span><input v-model="sunoV6Params.audioUrls" class="option-input" placeholder="https://...mp3, https://...wav" /></div>
+          <div v-if="['upload', 'upload-cover', 'upload-extend'].includes(sunoV6Params.operation)" class="option-row vertical"><span class="option-label">{{ translateUi('uiMessages.me4eeff97fedf') }}</span><input v-model="sunoV6Params.audioUrl" class="option-input" placeholder="https://...mp3" /></div>
+          <div v-if="['extend', 'cover', 'add-instrumental', 'add-vocals', 'add-stem', 'replace-section', 'sample'].includes(sunoV6Params.operation)" class="option-row vertical"><span class="option-label">{{ translateUi('uiMessages.mdfbf9724f7ce') }}</span><input v-model="sunoV6Params.sourceTaskId" class="option-input" placeholder="RunningHub taskId" /></div>
+          <div v-if="['extend', 'cover', 'add-instrumental', 'add-vocals', 'add-stem', 'replace-section', 'sample'].includes(sunoV6Params.operation)" class="option-row"><input v-model="sunoV6Params.audioIndex" type="number" min="1" max="20" class="option-input" :placeholder="translateUi('uiMessages.m9d184718ab62')" /></div>
+          <div v-if="['mashup'].includes(sunoV6Params.operation)" class="option-row vertical"><span class="option-label">{{ translateUi('uiMessages.m2d03322e7af4') }}</span><input v-model="sunoV6Params.sourceTaskIds" class="option-input" placeholder="taskId1, taskId2" /></div>
+          <div v-if="sunoV6Params.operation === 'mashup'" class="option-row"><input v-model="sunoV6Params.audioIndexes" class="option-input" :placeholder="translateUi('uiMessages.mc9a3ef407adc')" /><label class="toggle-switch"><input type="checkbox" v-model="sunoV6Params.instrumental" /><span class="toggle-slider"></span></label><span class="option-label">{{ translateUi('uiMessages.m7fd91a209fd4') }}</span></div>
+          <div v-if="['replace-section', 'sample'].includes(sunoV6Params.operation)" class="option-row"><input v-model="sunoV6Params.startS" class="option-input" :placeholder="translateUi('uiMessages.mded68044615c')" /><input v-model="sunoV6Params.endS" class="option-input" :placeholder="translateUi('uiMessages.mfb51ab46a2e9')" /></div>
+          <div v-if="sunoV6Params.operation === 'replace-section'" class="option-row vertical"><span class="option-label">{{ translateUi('uiMessages.mfa74a928e7ef') }}</span><textarea v-model="sunoV6Params.infillLyrics" maxlength="5000" class="option-input" rows="3" :placeholder="translateUi('uiMessages.m342ddc80ac79')"></textarea></div>
+          <div v-if="['upload-extend', 'extend'].includes(sunoV6Params.operation)" class="option-row vertical"><span class="option-label">{{ translateUi('uiMessages.m8d7e54ea4224') }}</span><input v-model="sunoV6Params.continueAt" type="number" min="1" :max="sunoV6Params.operation === 'extend' ? 3600 : 479" class="option-input" /></div>
+          <div v-if="sunoV6Params.operation === 'upload-cover'" class="option-row"><select v-model="sunoV6Params.custom" class="option-input"><option value="">{{ translateUi('uiMessages.maa76f7cbb9cc') }}</option><option value="true">{{ translateUi('uiMessages.m08e541f2d681') }}</option><option value="false">{{ translateUi('uiMessages.m41aecd3b50b7') }}</option></select><label class="toggle-switch"><input type="checkbox" v-model="sunoV6Params.instrumental" /><span class="toggle-slider"></span></label><span class="option-label">{{ translateUi('uiMessages.m7fd91a209fd4') }}</span></div>
+          <div v-if="['upload-cover', 'extend', 'cover', 'add-instrumental', 'add-vocals', 'add-stem', 'mashup', 'sample'].includes(sunoV6Params.operation)" class="option-row vertical"><span class="option-label">{{ translateUi('uiMessages.ma37455390046') }}</span><input v-model="sunoV6Params.gptDescription" maxlength="3000" class="option-input" :placeholder="translateUi('uiMessages.m2aaf4cd5348b')" /></div>
+          <div v-if="sunoV6Params.operation === 'sounds'" class="option-row"><input v-model="sunoV6Params.bpm" type="number" min="1" max="300" class="option-input" :placeholder="translateUi('uiMessages.m2b8fe88c35fd')" /><select v-model="sunoV6Params.soundType" class="option-input"><option value="">{{ translateUi('uiMessages.mcebc6c915f14') }}</option><option value="one-shot">{{ translateUi('uiMessages.m3de42d7c68d4') }}</option><option value="loop">{{ translateUi('uiMessages.mad3221dd6681') }}</option></select><input v-model="sunoV6Params.musicalKey" class="option-input" :placeholder="translateUi('uiMessages.mcd8cbedbffbc')" /></div>
+          <div v-if="sunoV6Params.operation !== 'upload'" class="option-row"><select v-model="sunoV6Params.version" class="option-input"><option value="">{{ translateUi('uiMessages.mda4551aa7e3a') }}</option><option value="v6">v6</option><option value="v6-wild">v6-wild</option><option value="v6-mini">v6-mini</option></select><select v-model="sunoV6Params.audioFormat" class="option-input"><option value="">{{ translateUi('uiMessages.mc470569b98a9') }}</option><option value="mp3">mp3</option><option value="m4a">m4a</option><option value="wav">wav</option></select><select v-if="sunoV6Params.operation !== 'sounds'" v-model="sunoV6Params.variety" class="option-input"><option value="">{{ translateUi('uiMessages.me8544ca64755') }}</option><option value="off">off</option><option value="normal">normal</option><option value="high">high</option><option value="extra">extra</option><option value="max">max</option></select></div>
+          <div v-if="['custom', 'wild-custom', 'mini-custom', 'inspo', 'upload-cover', 'extend', 'cover', 'add-instrumental', 'add-vocals', 'add-stem', 'mashup', 'upload-extend', 'sample'].includes(sunoV6Params.operation)" class="option-row"><input v-model="sunoV6Params.styleWeight" type="number" min="0" max="1" step="0.01" class="option-input" :placeholder="translateUi('uiMessages.m9d368d64bf32')" /><input v-model="sunoV6Params.weirdness" type="number" min="0" max="1" step="0.01" class="option-input" :placeholder="translateUi('uiMessages.m9fc7f76fac0d')" /><input v-model="sunoV6Params.audioWeight" type="number" min="0" max="1" step="0.01" class="option-input" :placeholder="translateUi('uiMessages.m95c042475ce3')" /></div>
+          <div v-if="['custom', 'wild-custom', 'mini-custom', 'upload-cover', 'extend', 'cover', 'upload-extend', 'sample'].includes(sunoV6Params.operation)" class="option-row"><input v-model="sunoV6Params.customModelId" class="option-input" :placeholder="translateUi('uiMessages.mb5879f4251a8')" /><input v-model="sunoV6Params.personaId" class="option-input" placeholder="Persona ID" /><input v-model="sunoV6Params.duration" type="number" min="10" max="360" class="option-input" :placeholder="translateUi('uiMessages.m122d0224f426')" /></div>
+          <div v-if="['custom', 'wild-custom', 'mini-custom', 'upload-cover', 'extend', 'cover', 'add-instrumental', 'add-vocals', 'add-stem', 'mashup', 'sample'].includes(sunoV6Params.operation)" class="option-row"><label class="toggle-switch"><input type="checkbox" v-model="sunoV6Params.autoLyrics" /><span class="toggle-slider"></span></label><span class="option-label">{{ translateUi('uiMessages.m2629c27ebf51') }}</span><select v-model="sunoV6Params.vocalGender" class="option-input"><option value="">{{ translateUi('uiMessages.mbaf81c80b04d') }}</option><option value="m">{{ translateUi('uiMessages.m221a8fbb1cc2') }}</option><option value="f">{{ translateUi('uiMessages.m12a25ecd3917') }}</option><option value="Male">Male</option><option value="Female">Female</option></select></div>
+          <div v-if="['custom', 'wild-custom', 'mini-custom', 'inspo', 'upload-cover', 'extend', 'cover', 'upload-extend', 'add-instrumental', 'add-vocals', 'replace-section', 'add-stem', 'mashup', 'sample'].includes(sunoV6Params.operation)" class="option-row"><label v-if="['custom', 'wild-custom', 'mini-custom'].includes(sunoV6Params.operation)" class="toggle-switch"><input type="checkbox" v-model="makeInstrumental" /><span class="toggle-slider"></span></label><span v-if="['custom', 'wild-custom', 'mini-custom'].includes(sunoV6Params.operation)" class="option-label">{{ translateUi('uiMessages.m7fd91a209fd4') }}</span><label class="toggle-switch"><input type="checkbox" v-model="sunoV6Params.maxMode" /><span class="toggle-slider"></span></label><span class="option-label">{{ translateUi('uiMessages.me1f92093fa68') }}</span></div>
+          <div v-if="props.data.runninghubMusicResults?.length > 1" class="option-row vertical"><span class="option-label">{{ translateUi('uiMessages.me6a13ba0d7d5') }}</span><div class="mode-tabs"><button v-for="(result, resultIndex) in props.data.runninghubMusicResults" :key="result.task_id" type="button" :title="result.title" :class="['mode-tab', { active: props.data.audioUrl === result.audio_url }]" @click="selectRunningHubMusicResult(result)">{{ translateUi('uiMessages.m51f94c574f13', { value1: (resultIndex + 1) }) }}</button></div></div>
         </div>
 
         <div v-else-if="isRunningHubMusic" class="advanced-options">
           <div class="option-row vertical">
-            <span class="option-label">歌曲标题{{ isRunningHubCustom ? '（必填）' : '（选填）' }}</span>
-            <input v-model="title" type="text" maxlength="80" class="option-input" :placeholder="isRunningHubCustom ? '输入歌曲标题，最多 80 字符' : '留空自动生成标题'" />
+            <span class="option-label">{{ translateUi('uiMessages.m1df469d3026a', { value1: (isRunningHubCustom ? translateUi('uiMessages.m94b33f6aadc1') : translateUi('uiMessages.m968333deb095')) }) }}</span>
+            <input v-model="title" type="text" maxlength="80" class="option-input" :placeholder="isRunningHubCustom ? translateUi('uiMessages.m1d73dfcf92e3') : translateUi('uiMessages.ma5ac09ebd7a9')" />
           </div>
           <div v-if="isRunningHubCustom" class="option-row vertical">
-            <span class="option-label">音乐风格（必填，最多 1000 字符）</span>
+            <span class="option-label">{{ translateUi('uiMessages.m911b6fa78f76') }}</span>
             <input v-model="tags" type="text" maxlength="1000" class="option-input" placeholder="pop, acoustic, cinematic, female vocal" />
           </div>
           <div v-else class="option-row">
-            <span class="option-label">纯音乐（不含人声）</span>
+            <span class="option-label">{{ translateUi('uiMessages.m6349749823c9') }}</span>
             <label class="toggle-switch"><input type="checkbox" v-model="makeInstrumental" /><span class="toggle-slider"></span></label>
           </div>
           <div v-if="props.data.runninghubMusicResults?.length > 1" class="option-row vertical">
-            <span class="option-label">返回曲目</span>
+            <span class="option-label">{{ translateUi('uiMessages.me6a13ba0d7d5') }}</span>
             <div class="mode-tabs">
-              <button v-for="(result, resultIndex) in props.data.runninghubMusicResults" :key="result.task_id" type="button" :title="result.title" :class="['mode-tab', { active: props.data.audioUrl === result.audio_url }]" @click="selectRunningHubMusicResult(result)">曲目 {{ resultIndex + 1 }}</button>
+              <button v-for="(result, resultIndex) in props.data.runninghubMusicResults" :key="result.task_id" type="button" :title="result.title" :class="['mode-tab', { active: props.data.audioUrl === result.audio_url }]" @click="selectRunningHubMusicResult(result)">{{ translateUi('uiMessages.m51f94c574f13', { value1: (resultIndex + 1) }) }}</button>
             </div>
           </div>
         </div>
 
         <!-- 展开/收起按钮 -->
-        <div v-if="isLongCatVoiceClone" class="option-hint">{{ longCatVoiceInputError || `参考音频 ${referenceAudioDuration.toFixed(2)} 秒 · 最长 45 秒` }}</div>
+        <div v-if="isLongCatVoiceClone" class="option-hint">{{ longCatVoiceInputError || translateUi('uiMessages.m95c833c6f30d', { value1: (referenceAudioDuration.toFixed(2)) }) }}</div>
         <button v-else class="collapse-trigger" @click="showAdvancedOptions = !showAdvancedOptions">
           <span class="collapse-icon" :class="{ 'expanded': showAdvancedOptions }">∧</span>
-          <span>{{ showAdvancedOptions ? '收起' : '展开' }}</span>
+          <span>{{ showAdvancedOptions ? translateUi('common.collapse') : translateUi('common.expand') }}</span>
         </button>
         
         <!-- 高级选项 -->
         <Transition name="slide-down">
           <div v-if="showAdvancedOptions && isRunningHubMusic" class="advanced-options">
             <div class="option-row vertical">
-              <span class="option-label">Webhook 回调地址（选填）</span>
+              <span class="option-label">{{ translateUi('uiMessages.m97cb7a5ad576') }}</span>
               <input v-model="runninghubWebhookUrl" type="url" class="option-input" placeholder="https://example.com/webhook" />
             </div>
           </div>
           <div v-else-if="showAdvancedOptions && !audioCapability" class="advanced-options">
             <!-- 纯音乐开关 -->
             <div class="option-row">
-              <span class="option-label">纯音乐</span>
+              <span class="option-label">{{ translateUi('uiMessages.m7fd91a209fd4') }}</span>
               <label class="toggle-switch">
                 <input type="checkbox" v-model="makeInstrumental" />
                 <span class="toggle-slider"></span>
@@ -3176,35 +3303,35 @@ function handleSpeedEditorClickOutside(event) {
             
             <!-- 生成模式 -->
             <div class="option-row">
-              <span class="option-label">生成模式</span>
+              <span class="option-label">{{ translateUi('uiMessages.m29ccb4125180') }}</span>
               <div class="mode-tabs">
-                <button :class="['mode-tab', { active: !customMode }]" @click="customMode = false">灵感</button>
-                <button :class="['mode-tab', { active: customMode }]" @click="customMode = true">自定义</button>
+                <button :class="['mode-tab', { active: !customMode }]" @click="customMode = false">{{ translateUi('uiMessages.m674a5c6c5653') }}</button>
+                <button :class="['mode-tab', { active: customMode }]" @click="customMode = true">{{ translateUi('uiMessages.m4eafa9e925b3') }}</button>
               </div>
             </div>
             
             <!-- 歌名（仅自定义模式） -->
             <div v-if="customMode" class="option-row vertical">
-              <span class="option-label">歌名</span>
-              <input v-model="title" type="text" class="option-input" placeholder="输入歌名" />
+              <span class="option-label">{{ translateUi('uiMessages.ma01594f78908') }}</span>
+              <input v-model="title" type="text" class="option-input" :placeholder="translateUi('uiMessages.m2ab32f08a7a0')" />
             </div>
             
             <!-- 风格标签 -->
             <div class="option-row vertical">
-              <span class="option-label">风格标签</span>
+              <span class="option-label">{{ translateUi('uiMessages.md9f346832c6f') }}</span>
               <MusicTagsSelector v-model="tags" />
             </div>
             
             <!-- 排除标签 -->
             <div class="option-row vertical">
-              <span class="option-label">排除标签</span>
-              <input v-model="negativeTags" type="text" class="option-input" placeholder="逗号分隔" />
+              <span class="option-label">{{ translateUi('uiMessages.m323733c668f3') }}</span>
+              <input v-model="negativeTags" type="text" class="option-input" :placeholder="translateUi('uiMessages.m07a7f1dd375a')" />
             </div>
           </div>
           <div v-else-if="!isLongCatVoiceClone && showAdvancedOptions && (audioCapability === 'voice_clone' || audioCapability === 'tts')" class="advanced-options">
             <div class="option-row vertical">
-              <span class="option-label">音色来源</span>
-              <span class="option-hint">{{ inheritedVoiceId ? `已连接音色 ${inheritedVoiceId}` : inheritedAudioUrl ? '已连接参考音频' : '请连接上游音频节点' }}</span>
+              <span class="option-label">{{ translateUi('uiMessages.m3cc6ae6e9c83') }}</span>
+              <span class="option-hint">{{ inheritedVoiceId ? translateUi('uiMessages.mb2ee431ae57f', { value1: (inheritedVoiceId) }) : inheritedAudioUrl ? translateUi('uiMessages.m1591c33f33bb') : translateUi('uiMessages.m075c372dbf07') }}</span>
             </div>
           </div>
         </Transition>
@@ -3217,7 +3344,7 @@ function handleSpeedEditorClickOutside(event) {
         <div class="audio-fullscreen-preview-container" @click.stop>
           <span class="audio-fullscreen-preview-title">{{ audioTitle }}</span>
           <audio :src="audioUrl" controls autoplay class="audio-fullscreen-preview-player"></audio>
-          <button class="audio-fullscreen-preview-close" title="关闭预览" @click="closeFullscreenPreview">✕</button>
+          <button class="audio-fullscreen-preview-close" :title="translateUi('uiMessages.m1eb05d311508')" @click="closeFullscreenPreview">✕</button>
         </div>
       </div>
       <AudioEditorModal

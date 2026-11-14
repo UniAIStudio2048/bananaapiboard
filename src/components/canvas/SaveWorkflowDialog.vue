@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * SaveWorkflowDialog.vue - 保存工作流对话框
  * 
@@ -218,7 +220,7 @@ function inferUploadType(blob, fallbackType = 'image') {
 async function uploadLocalWorkflowMediaUrl(url, fallbackType, uploadCanvasMedia) {
   const response = await fetch(url)
   if (!response.ok) {
-    throw new Error(`读取本地文件失败 (${response.status})`)
+    throw new Error(translateUi('uiMessages.m57a3605f13bc', { value1: (response.status) }))
   }
 
   const blob = await response.blob()
@@ -229,7 +231,7 @@ async function uploadLocalWorkflowMediaUrl(url, fallbackType, uploadCanvasMedia)
   const result = await uploadCanvasMedia(file, uploadType)
 
   if (!result?.url) {
-    throw new Error('上传成功但未返回URL')
+    throw new Error(translateUi('uiMessages.m903056f82814'))
   }
 
   return result.url
@@ -312,7 +314,7 @@ async function retryFailedUploads(failedNodes) {
     for (const localUrl of localImageUrls) {
       try {
         const fileResponse = await fetch(localUrl)
-        if (!fileResponse.ok) throw new Error(`读取本地文件失败 (${fileResponse.status})`)
+        if (!fileResponse.ok) throw new Error(translateUi('uiMessages.m57a3605f13bc', { value1: (fileResponse.status) }))
         const blob = await fileResponse.blob()
         const file = new File([blob], `workflow-image-${Date.now()}.${getMediaExtension(blob.type || 'image/jpeg', 'image')}`, { type: blob.type || 'image/jpeg' })
         const result = await uploadCanvasMedia(file, 'image')
@@ -332,7 +334,7 @@ async function retryFailedUploads(failedNodes) {
         }
       } catch (err) {
         console.warn('[SaveDialog] 重试上传失败:', err.message)
-        throw new Error(`节点 "${nodeInfo.title}" 的文件重新上传失败，请删除该节点后重新上传`)
+        throw new Error(translateUi('uiMessages.mfd104632a35a', { value1: (nodeInfo.title) }))
       }
     }
 
@@ -346,7 +348,7 @@ async function retryFailedUploads(failedNodes) {
           uploadError: null
         })
       } catch (err) {
-        throw new Error(`节点 "${nodeInfo.title}" 的视频重新上传失败`)
+        throw new Error(translateUi('uiMessages.m7c7fc158233d', { value1: (nodeInfo.title) }))
       }
     }
 
@@ -361,7 +363,7 @@ async function retryFailedUploads(failedNodes) {
           uploadError: null
         })
       } catch (err) {
-        throw new Error(`节点 "${nodeInfo.title}" 的音频重新上传失败`)
+        throw new Error(translateUi('uiMessages.mdd3d2b1ed58e', { value1: (nodeInfo.title) }))
       }
     }
 
@@ -388,7 +390,7 @@ async function retryFailedUploads(failedNodes) {
             }
           }
         } catch (err) {
-          throw new Error(`节点 "${nodeInfo.title}" 的文件重新上传失败`)
+          throw new Error(translateUi('uiMessages.m10c897b2bdae', { value1: (nodeInfo.title) }))
         }
       }
     }
@@ -439,7 +441,7 @@ async function handleSave() {
   }
 
   if (findBlockingCanvasUploads(canvasStore.nodes, canvasStore.edges).length > 0) {
-    saveError.value = '素材仍在上传，请等待完成后重试'
+    saveError.value = translateUi('uiMessages.m97f1343b0c9b')
     return
   }
 
@@ -448,7 +450,7 @@ async function handleSave() {
   
   // 如果有正在上传的文件，提示等待
   if (fileIssues.uploading.length > 0) {
-    saveError.value = `有 ${fileIssues.uploading.length} 个文件正在上传中，请稍等片刻后再保存`
+    saveError.value = translateUi('uiMessages.m48d1367b8c91', { value1: (fileIssues.uploading.length) })
     return
   }
   
@@ -475,7 +477,7 @@ async function handleSave() {
     } catch (err) {
       retryingUpload.value = false
       isSaving.value = false
-      saveError.value = err.message || '部分图片重新上传失败，请删除相关节点后重新上传'
+      saveError.value = err.message || translateUi('uiMessages.m2c6da2ab85b2')
       return
     }
   }
@@ -491,13 +493,13 @@ async function handleSave() {
   console.log(`[SaveDialog] 工作流数据: ${formatDataSize(dataSize)}, 节点数: ${nodeCount}`)
   
   if (dataSize > MAX_SIZE) {
-    saveError.value = `工作流数据过大 (${formatDataSize(dataSize)})，超过 400MB 限制。请删除一些节点或清理节点中的大图片。`
+    saveError.value = translateUi('uiMessages.me62bfcc58e9f', { value1: (formatDataSize(dataSize)) })
     return
   }
   
   // 100MB以上给出警告但允许保存
   if (dataSize > WARN_SIZE && saveError.value !== lastSaveError.value) {
-    saveError.value = `⚠️ 工作流数据较大 (${formatDataSize(dataSize)}, ${nodeCount}个节点)，保存可能需要较长时间。再次点击确认保存。`
+    saveError.value = translateUi('uiMessages.m2e0d77d2fe37', { value1: (formatDataSize(dataSize)), value2: (nodeCount) })
     lastSaveError.value = saveError.value
     return
   }
@@ -582,11 +584,11 @@ async function handleSave() {
     console.error('[SaveDialog] 保存失败:', error)
 
     // 🔧 通知父组件：保存失败
-    let errorMessage = error.message || '保存失败，请稍后重试'
+    let errorMessage = error.message || translateUi('uiMessages.m386cb2011f61')
     if (error.message.includes('过大') || error.message.includes('too large') || error.message.includes('413')) {
-      errorMessage = '工作流数据过大，请减少节点或清理大图片后重试'
+      errorMessage = translateUi('uiMessages.mcd3687818de3')
     } else if (error.message.includes('database') || error.message.includes('数据库')) {
-      errorMessage = '数据库错误，请稍后重试'
+      errorMessage = translateUi('uiMessages.m72cfc88b3283')
     }
 
     emit('error', {
@@ -672,22 +674,22 @@ function handlePublishToCommunity() {
             </div>
 
             <div class="form-group">
-              <label class="form-label">所属项目</label>
+              <label class="form-label">{{ translateUi('uiMessages.mb358d3e0aca9') }}</label>
               <div class="project-select-row">
                 <select v-model="selectedProjectId" class="form-select" :disabled="loadingProjects || isSaving">
                   <option v-for="p in projects" :key="p.id" :value="p.id">
-                    {{ p.name }}{{ Number(p.is_default) === 1 ? ' (默认)' : '' }}
+                    {{ p.name }}{{ Number(p.is_default) === 1 ? translateUi('uiMessages.m0e2597efc35d') : '' }}
                   </option>
                 </select>
-                <button type="button" class="quick-create-btn" @click="showQuickCreate = !showQuickCreate" title="新建项目" :disabled="loadingProjects || isSaving">
+                <button type="button" class="quick-create-btn" @click="showQuickCreate = !showQuickCreate" :title="translateUi('uiMessages.m0e1a7040390f')" :disabled="loadingProjects || isSaving">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
                   </svg>
                 </button>
               </div>
               <div v-if="showQuickCreate" class="quick-create-form">
-                <input v-model="quickProjectName" placeholder="输入项目名称" class="form-input" @keydown.enter.prevent="handleQuickCreateProject" />
-                <button type="button" class="quick-create-confirm" @click="handleQuickCreateProject" :disabled="loadingProjects || isSaving">创建</button>
+                <input v-model="quickProjectName" :placeholder="translateUi('uiMessages.mfb7c19b6a4c1')" class="form-input" @keydown.enter.prevent="handleQuickCreateProject" />
+                <button type="button" class="quick-create-confirm" @click="handleQuickCreateProject" :disabled="loadingProjects || isSaving">{{ translateUi('uiMessages.mcde2cd071d25') }}</button>
               </div>
             </div>
 
@@ -705,7 +707,7 @@ function handlePublishToCommunity() {
 
             <!-- 重试上传提示 -->
             <div v-if="retryingUpload" class="retry-upload-message">
-              正在重新上传图片，请稍候...
+              {{ translateUi('uiMessages.m94ff5cf10eb0') }}
             </div>
 
             <!-- 错误提示 -->
@@ -719,7 +721,7 @@ function handlePublishToCommunity() {
                 <span class="info-label">{{ t('canvas.nodeCount') }}</span>
                 <span class="info-value" :class="{ 'large-count': canvasStore.nodes.length > 50 }">
                   {{ canvasStore.nodes.length }}
-                  <span v-if="canvasStore.nodes.length > 50" class="info-badge">大画布</span>
+                  <span v-if="canvasStore.nodes.length > 50" class="info-badge">{{ translateUi('uiMessages.m72b26cf7f814') }}</span>
                 </span>
               </div>
               <div class="info-item">
@@ -727,11 +729,11 @@ function handlePublishToCommunity() {
                 <span class="info-value">{{ canvasStore.edges.length }}</span>
               </div>
               <div class="info-item">
-                <span class="info-label">数据大小</span>
+                <span class="info-label">{{ translateUi('uiMessages.m7640eaa08b0c') }}</span>
                 <span class="info-value" :class="'size-' + dataSizeStatus">
                   {{ formatDataSize(currentDataSize) }}
-                  <span v-if="dataSizeStatus === 'warning'" class="info-badge warning">较大</span>
-                  <span v-if="dataSizeStatus === 'danger'" class="info-badge danger">过大</span>
+                  <span v-if="dataSizeStatus === 'warning'" class="info-badge warning">{{ translateUi('uiMessages.mff3e02138450') }}</span>
+                  <span v-if="dataSizeStatus === 'danger'" class="info-badge danger">{{ translateUi('uiMessages.m487abf44850f') }}</span>
                 </span>
               </div>
             </div>
@@ -763,12 +765,12 @@ function handlePublishToCommunity() {
               @click="handlePublishToCommunity"
               :disabled="isSaving || !currentWorkflowId"
             >
-              发布到社区
+              {{ translateUi('uiMessages.m358fbdcfeca6') }}
             </button>
           </div>
           <p v-if="!currentWorkflowId" class="publish-hint">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            需要先保存工作流才能发布到社区
+            {{ translateUi('uiMessages.m79a815fb9fa0') }}
           </p>
         </div>
       </div>

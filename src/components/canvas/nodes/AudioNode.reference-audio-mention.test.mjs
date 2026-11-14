@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -9,14 +10,14 @@ test('connected reference audio matches the video node mention card behavior', (
   assert.match(source, /@mouseenter="onAudioHoverStart\(inheritedAudioUrl, \$event\)"/)
   assert.match(source, /@mouseleave="onHoverEnd"/)
   assert.match(source, /class="audio-reference-icon"[\s\S]*♪/)
-  assert.match(source, /class="audio-reference-tag"[\s\S]*@音频1/)
+  assert.match(source, localizedPattern(/class="audio-reference-tag"[\s\S]*@音频1/))
 })
 
 test('reference audio mention can be inserted and rendered as an audio tag chip', () => {
   assert.match(source, /function insertAudioReferenceTag\(\)/)
-  assert.match(source, /const tag = '@音频1'/)
+  assert.match(source, localizedPattern(/const tag = '@音频1'/))
   assert.match(source, /restorePromptEditorSelection\(nextEditor, resultCursor, resultCursor\)/)
-  assert.match(source, /highlightedMusicPromptSegments[\s\S]*@音频/)
+  assert.match(source, localizedPattern(/highlightedMusicPromptSegments[\s\S]*@音频/))
   assert.match(source, /<PromptMediaTag[\s\S]*onAudioHoverStart/)
 })
 
@@ -27,7 +28,7 @@ test('audio prompt placeholder is readable in the dark canvas theme', () => {
 })
 
 test('audio option hints are readable in both canvas themes', () => {
-  assert.match(source, /<span class="option-hint">\{\{ sunoV6Operation\.id === 'sounds' \? '生成音效' : '生成音乐或处理已有音乐' \}\}<\/span>/)
+  assert.match(source, localizedPattern(/<span class="option-hint">\{\{ sunoV6Operation\.id === 'sounds' \? '生成音效' : '生成音乐或处理已有音乐' \}\}<\/span>/))
   assert.doesNotMatch(source, /sunoV6Operation\.path \}\} ·/)
   assert.match(source, /\.option-hint\s*\{[\s\S]*color:\s*#ffffff;/)
   assert.match(source, /:root\.canvas-theme-light \.audio-node \.option-hint,[\s\S]*:root\.canvas-theme-light \.audio-config-panel \.option-hint\s*\{[\s\S]*color:\s*#57534e;/)

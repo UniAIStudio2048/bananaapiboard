@@ -82,6 +82,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, computed, watch } from 'vue'
 import { useI18n } from '@/i18n'
 import { getLocalizedTags, getTagsCount } from '@/i18n/musicTags'
@@ -196,22 +198,22 @@ const getCategoryTitle = (category) => {
       instruments: 'Instruments'
     },
     'zh-CN': {
-      genre: '曲风',
-      mood: '情绪',
-      vocal: '人声',
-      instruments: '乐器'
+      genre: translateUi('uiMessages.m31c7c2915f67'),
+      mood: translateUi('uiMessages.m7f1bc9fc4867'),
+      vocal: translateUi('uiMessages.m1f270ddf1563'),
+      instruments: translateUi('uiMessages.ma59949fd38a4')
     },
     'zh-TW': {
-      genre: '曲風',
-      mood: '情緒',
-      vocal: '人聲',
-      instruments: '樂器'
+      genre: translateUi('uiMessages.m680dbc5cdd92'),
+      mood: translateUi('uiMessages.m9e3a00ed3e16'),
+      vocal: translateUi('uiMessages.m3d1e8806fd59'),
+      instruments: translateUi('uiMessages.m0ee5992a5125')
     },
     'ja': {
       genre: 'ジャンル',
       mood: 'ムード',
       vocal: 'ボーカル',
-      instruments: '楽器'
+      instruments: translateUi('uiMessages.md303d01afa01')
     },
     'ko': {
       genre: '장르',

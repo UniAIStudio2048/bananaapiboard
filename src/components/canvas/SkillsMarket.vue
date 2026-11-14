@@ -6,42 +6,42 @@
           <h2 id="skills-market-title">Skill</h2>
         </div>
         <div class="market-header-actions">
-          <button class="create-button" type="button" @click="startCreate"><Plus :size="15" /> 创建</button>
-          <button v-if="!showAll && !editing" class="all-button" type="button" @click="showAll = true">全部</button>
-          <button v-else-if="showAll && !editing" class="all-button" type="button" @click="showAll = false">返回</button>
-          <button class="icon-button" type="button" aria-label="关闭 Skills 市场" @click="emit('close')"><X :size="18" /></button>
+          <button class="create-button" type="button" @click="startCreate"><Plus :size="15" /> {{ translateUi('uiMessages.mcde2cd071d25') }}</button>
+          <button v-if="!showAll && !editing" class="all-button" type="button" @click="showAll = true">{{ translateUi('common.all') }}</button>
+          <button v-else-if="showAll && !editing" class="all-button" type="button" @click="showAll = false">{{ translateUi('common.back') }}</button>
+          <button class="icon-button" type="button" :aria-label="translateUi('uiMessages.m36f612f1b8e9')" @click="emit('close')"><X :size="18" /></button>
         </div>
       </header>
 
       <!-- @reference 由 Canvas.vue 接收，打开 AI 助手并将 Skill 固定为本轮引用。 -->
       <template v-if="!editing">
         <div class="market-toolbar">
-          <div class="market-tabs" role="tablist" aria-label="Skills 分类">
+          <div class="market-tabs" role="tablist" :aria-label="translateUi('uiMessages.m4b6abd9fabe3')">
             <button v-for="item in tabs" :key="item.key" type="button" :class="{ active: activeTab === item.key }" @click="selectTab(item.key)">{{ item.label }}</button>
           </div>
-          <label class="search-box"><Search :size="15" /><input v-model="query" type="search" placeholder="搜索 Skill" /></label>
+          <label class="search-box"><Search :size="15" /><input v-model="query" type="search" :placeholder="translateUi('uiMessages.madb3dcb1d5e3')" /></label>
         </div>
-        <p class="market-selection-hint">选择后会加载到对话框，发送才会调用。</p>
+        <p class="market-selection-hint">{{ translateUi('uiMessages.m10340978d9f5') }}</p>
 
         <p v-if="error" class="market-alert">{{ error }}</p>
         <div v-if="viewing" class="market-detail">
           <header class="market-header">
             <div><h3>{{ viewing.name }}</h3></div>
             <div class="market-header-actions">
-              <button class="icon-button" type="button" aria-label="关闭 Skill 详情" @click="viewing = null"><X :size="18" /></button>
+              <button class="icon-button" type="button" :aria-label="translateUi('uiMessages.mf0add5a61bf1')" @click="viewing = null"><X :size="18" /></button>
             </div>
           </header>
           <div class="detail-body">
             <p class="detail-summary"><code>{{ viewing.trigger || `/${viewing.slug}` }}</code><span>{{ typeLabel(viewing.skill_type) }}</span></p>
-            <p class="detail-desc">{{ viewing.description || viewing.usage_scenario || '暂无使用说明' }}</p>
+            <p class="detail-desc">{{ viewing.description || viewing.usage_scenario || translateUi('uiMessages.mc62a5f2f28d6') }}</p>
             <dl v-if="viewing.usage_scenario || viewing.usage_guide || viewing.output_description" class="detail-fields">
-              <template v-if="viewing.usage_scenario"><dt>使用场景</dt><dd>{{ viewing.usage_scenario }}</dd></template>
-              <template v-if="viewing.usage_guide"><dt>如何使用</dt><dd>{{ viewing.usage_guide }}</dd></template>
-              <template v-if="viewing.output_description"><dt>输出内容</dt><dd>{{ viewing.output_description }}</dd></template>
+              <template v-if="viewing.usage_scenario"><dt>{{ translateUi('uiMessages.mc222fdf19e47') }}</dt><dd>{{ viewing.usage_scenario }}</dd></template>
+              <template v-if="viewing.usage_guide"><dt>{{ translateUi('uiMessages.m26eb7cff0f41') }}</dt><dd>{{ viewing.usage_guide }}</dd></template>
+              <template v-if="viewing.output_description"><dt>{{ translateUi('uiMessages.m87b0fa42c896') }}</dt><dd>{{ viewing.output_description }}</dd></template>
             </dl>
           </div>
         </div>
-        <div v-else-if="loading" class="market-empty">正在加载 Skills…</div>
+        <div v-else-if="loading" class="market-empty">{{ translateUi('uiMessages.m598e07fd77c8') }}</div>
         <div v-else-if="filteredSkills.length" class="market-grid">
           <article
             v-for="skill in filteredSkills"
@@ -55,7 +55,7 @@
             @keydown.space.prevent="skill.status === 'published' && reference(skill)"
           >
             <div class="market-cover" :class="`type-${skill.skill_type || 'text'}`">
-              <img v-if="skill.cover_url" :src="skill.cover_url" :alt="`${skill.name} 封面`" />
+              <img v-if="skill.cover_url" :src="skill.cover_url" :alt="translateUi('uiMessages.med467ecd8b08', { value1: (skill.name) })" />
               <component v-else :is="typeIcon(skill.skill_type)" :size="22" aria-hidden="true" />
             </div>
             <div class="card-copy">
@@ -63,39 +63,41 @@
                 <h3>{{ skill.name }}</h3>
                 <code class="card-trigger">{{ skill.trigger || `/${skill.slug}` }}</code>
               </div>
-              <p>{{ skill.description || skill.usage_scenario || '暂无使用说明' }}</p>
+              <p>{{ skill.description || skill.usage_scenario || translateUi('uiMessages.mc62a5f2f28d6') }}</p>
               <div class="card-meta"><span>{{ typeLabel(skill.skill_type) }}</span></div>
             </div>
             <div class="card-actions">
-              <button v-if="skill.owner_type === 'tenant'" class="ghost-button" type="button" :title="skill.is_favorite ? '取消收藏' : '收藏'" @click.stop="toggleFavorite(skill)">
+              <button v-if="skill.owner_type === 'tenant'" class="ghost-button" type="button" :title="skill.is_favorite ? translateUi('uiMessages.mdca60869e7d2') : translateUi('canvas.assetPanel.favorite')" @click.stop="toggleFavorite(skill)">
                 <Heart :size="15" :fill="skill.is_favorite ? 'currentColor' : 'none'" />
               </button>
-              <button v-if="skill.owner_type === 'user'" class="ghost-button" type="button" title="编辑" @click.stop="startEdit(skill)"><Pencil :size="15" /></button>
-              <button class="reference-button" type="button" :disabled="skill.status !== 'published'" @click.stop="viewDetail(skill)">查看详情</button>
+              <button v-if="skill.owner_type === 'user'" class="ghost-button" type="button" :title="translateUi('common.edit')" @click.stop="startEdit(skill)"><Pencil :size="15" /></button>
+              <button class="reference-button" type="button" :disabled="skill.status !== 'published'" @click.stop="viewDetail(skill)">{{ translateUi('uiMessages.ma748cc074f78') }}</button>
             </div>
           </article>
         </div>
-        <div v-else class="market-empty">{{ activeTab === 'favorites' ? '还没有收藏的通用 Skill' : '没有匹配的 Skill' }}</div>
+        <div v-else class="market-empty">{{ activeTab === 'favorites' ? translateUi('uiMessages.m6b70ce73ba6f') : translateUi('uiMessages.mb446603c8980') }}</div>
       </template>
 
       <form v-else class="skill-editor" @submit.prevent="save">
-        <div class="editor-header"><div><p class="market-kicker">仅自己可见</p><h3>{{ editing.id ? '编辑我的 Skill' : '创建我的 Skill' }}</h3></div><button class="all-button" type="button" @click="editing = null">返回市场</button></div>
-        <p class="editor-hint">个人 Skill 只能使用平台受控的生成能力，不支持 MCP 绑定。</p>
-        <label>名称<input v-model.trim="editing.name" required maxlength="120" placeholder="例如：我的商品文案助手" /></label>
-        <label>一句话介绍<textarea v-model.trim="editing.description" rows="2" placeholder="告诉其他自己，这个 Skill 用来做什么" /></label>
-        <label>类型<select v-model="editing.skill_type"><option value="text">文本</option><option value="image">图片</option><option value="video">视频</option><option value="audio">音频</option></select></label>
-        <label>使用场景<textarea v-model.trim="editing.usage_scenario" rows="2" /></label>
-        <label>如何使用<textarea v-model.trim="editing.usage_guide" rows="2" /></label>
-        <label>输出内容<textarea v-model.trim="editing.output_description" rows="2" /></label>
-        <label class="file-field"><span>SKILL.md</span><input type="file" accept=".md,text/markdown" @change="importSkillMarkdown" /><small>上传时仅提取名称、描述与正文为初始值；平台能力始终由此页面的类型控制。</small></label>
-        <label>SKILL.md 指令<textarea v-model="editing.instructions" rows="11" required placeholder="写入完整的 Skill 指令" /></label>
-        <div class="editor-actions"><button class="reference-button" type="submit" :disabled="saving">{{ saving ? '保存中…' : '保存并发布' }}</button><button v-if="editing.id" class="danger-button" type="button" @click="disable">停用</button></div>
+        <div class="editor-header"><div><p class="market-kicker">{{ translateUi('uiMessages.m33c7823a56bd') }}</p><h3>{{ editing.id ? translateUi('uiMessages.m6113534fd918') : translateUi('uiMessages.ma6bd15751b64') }}</h3></div><button class="all-button" type="button" @click="editing = null">{{ translateUi('uiMessages.m37270849d0c9') }}</button></div>
+        <p class="editor-hint">{{ translateUi('uiMessages.mb6973c484655') }}</p>
+        <label>{{ translateUi('directorStudio.inspector.name') }}<input v-model.trim="editing.name" required maxlength="120" :placeholder="translateUi('uiMessages.m5a0032c0dc8d')" /></label>
+        <label>{{ translateUi('uiMessages.m00e871947a6d') }}<textarea v-model.trim="editing.description" rows="2" :placeholder="translateUi('uiMessages.m1e017ec29139')" /></label>
+        <label>{{ translateUi('canvas.assetPanel.type') }}<select v-model="editing.skill_type"><option value="text">{{ translateUi('canvas.nodes.text') }}</option><option value="image">{{ translateUi('canvas.nodes.image') }}</option><option value="video">{{ translateUi('canvas.nodes.video') }}</option><option value="audio">{{ translateUi('canvas.nodes.audio') }}</option></select></label>
+        <label>{{ translateUi('uiMessages.mc222fdf19e47') }}<textarea v-model.trim="editing.usage_scenario" rows="2" /></label>
+        <label>{{ translateUi('uiMessages.m26eb7cff0f41') }}<textarea v-model.trim="editing.usage_guide" rows="2" /></label>
+        <label>{{ translateUi('uiMessages.m87b0fa42c896') }}<textarea v-model.trim="editing.output_description" rows="2" /></label>
+        <label class="file-field"><span>SKILL.md</span><input type="file" accept=".md,text/markdown" @change="importSkillMarkdown" /><small>{{ translateUi('uiMessages.m1c2536c9485c') }}</small></label>
+        <label>{{ translateUi('uiMessages.mb67d306ffbcf') }}<textarea v-model="editing.instructions" rows="11" required :placeholder="translateUi('uiMessages.m989387cf20fa')" /></label>
+        <div class="editor-actions"><button class="reference-button" type="submit" :disabled="saving">{{ saving ? translateUi('uiMessages.mff509c9ba052') : translateUi('uiMessages.mded7a215db0b') }}</button><button v-if="editing.id" class="danger-button" type="button" @click="disable">{{ translateUi('uiMessages.m4e6fd0e28c55') }}</button></div>
       </form>
     </section>
   </div>
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, onMounted, ref } from 'vue'
 import { FileText, Heart, Image, Pencil, Plus, Search, Type, Video, Volume2, X } from '@lucide/vue'
 import { createMySkill, disableMySkill, favoriteSkill, getFavoriteSkills, getMySkills, getSkillCatalog, referenceSkill, unfavoriteSkill, updateMySkill } from '@/api/agent'
@@ -109,7 +111,7 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'reference'])
 
-const tabs = [{ key: 'general', label: '通用' }, { key: 'favorites', label: '收藏' }, { key: 'mine', label: '我的' }]
+const tabs = [{ key: 'general', get label() { return translateUi('uiMessages.m835b700e028c') } }, { key: 'favorites', get label() { return translateUi('canvas.assetPanel.favorite') } }, { key: 'mine', get label() { return translateUi('directorStudio.modelLibrary.categories.mine') } }]
 const activeTab = ref('general')
 const query = ref('')
 const loading = ref(false)
@@ -130,7 +132,7 @@ const filteredSkills = computed(() => {
   return sourceSkills.value.filter(skill => [skill.name, skill.description, skill.trigger, skill.usage_scenario].filter(Boolean).join(' ').toLowerCase().includes(needle))
 })
 
-function typeLabel(type) { return ({ image: '图片', video: '视频', audio: '音频', text: '文本' })[type] || '文本' }
+function typeLabel(type) { return ({ image: translateUi('canvas.nodeConfig.imageInput.label'), video: translateUi('canvas.nodeConfig.videoInput.label'), audio: translateUi('canvas.nodeConfig.audioInput.label'), text: translateUi('canvas.nodeConfig.textInput.label') })[type] || translateUi('canvas.nodes.text') }
 function typeIcon(type) { return ({ image: Image, video: Video, audio: Volume2, text: Type })[type] || FileText }
 function typeCapabilities(type) { return ({ image: ['image:generate'], video: ['video:generate'], audio: ['audio:generate'], text: ['llm:generate'] })[type] || ['llm:generate'] }
 function viewDetail(skill) { viewing.value = skill }
@@ -143,7 +145,7 @@ async function load() {
     catalog.value = catalogResult.skills || []
     favorites.value = favoriteResult.skills || []
     mine.value = mineResult.skills || []
-  } catch (err) { error.value = err.message || '加载 Skills 市场失败' } finally { loading.value = false }
+  } catch (err) { error.value = err.message || translateUi('uiMessages.m006d7cb87cac') } finally { loading.value = false }
 }
 
 async function selectTab(tab) { activeTab.value = tab; if (tab !== 'general') await load() }
@@ -174,14 +176,14 @@ async function toggleFavorite(skill) {
     if (skill.is_favorite) await unfavoriteSkill(skill.id)
     else await favoriteSkill(skill.id)
     await load()
-  } catch (err) { error.value = err.message || '更新收藏失败' }
+  } catch (err) { error.value = err.message || translateUi('uiMessages.m31c1399f6eae') }
 }
 
 async function reference(skill) {
   try {
     const result = await referenceSkill(skill.id)
     emit('reference', result.skill || skill)
-  } catch (err) { error.value = err.message || '引用 Skill 失败' }
+  } catch (err) { error.value = err.message || translateUi('uiMessages.m64c684642fab') }
 }
 
 async function save() {
@@ -194,12 +196,12 @@ async function save() {
     editing.value = null
     activeTab.value = 'mine'
     await load()
-  } catch (err) { error.value = err.message || '保存我的 Skill 失败' } finally { saving.value = false }
+  } catch (err) { error.value = err.message || translateUi('uiMessages.m14784b31183e') } finally { saving.value = false }
 }
 
 async function disable() {
   if (!editing.value?.id) return
-  try { await disableMySkill(editing.value.id); editing.value = null; await load() } catch (err) { error.value = err.message || '停用 Skill 失败' }
+  try { await disableMySkill(editing.value.id); editing.value = null; await load() } catch (err) { error.value = err.message || translateUi('uiMessages.m00c8fbad6524') }
 }
 
 onMounted(load)

@@ -5,7 +5,7 @@
         <!-- 头部 -->
         <div class="drawer-header">
           <div class="header-info">
-            <h2 class="drawer-title">我的自定义预设</h2>
+            <h2 class="drawer-title">{{ translateUi('uiMessages.m0fae2ba8852d') }}</h2>
             <span class="preset-count">{{ presets.length }}/30</span>
           </div>
           <button class="close-btn" @click="close">
@@ -21,9 +21,9 @@
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
-            新建预设
+            {{ translateUi('uiMessages.ma61bc16ca0f6') }}
           </button>
-          <span v-if="presets.length >= 30" class="limit-hint">已达到最大数量限制</span>
+          <span v-if="presets.length >= 30" class="limit-hint">{{ translateUi('uiMessages.m54da86e56c4b') }}</span>
         </div>
 
         <!-- 加载中 -->
@@ -32,7 +32,7 @@
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
-          <p>加载中...</p>
+          <p>{{ translateUi('common.loading') }}</p>
         </div>
 
         <!-- 预设列表 -->
@@ -47,7 +47,7 @@
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
-                    使用 {{ preset.useCount }} 次
+                    {{ translateUi('uiMessages.m9acd3356b8db', { value1: (preset.useCount) }) }}
                   </span>
                   <span class="meta-item">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -58,17 +58,17 @@
                 </div>
               </div>
               <div class="preset-actions">
-                <button class="action-btn action-select" @click="handleSelect(preset)" title="选择使用">
+                <button class="action-btn action-select" @click="handleSelect(preset)" :title="translateUi('uiMessages.m123bbdb29f61')">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                   </svg>
                 </button>
-                <button class="action-btn" @click="handleEdit(preset)" title="编辑">
+                <button class="action-btn" @click="handleEdit(preset)" :title="translateUi('common.edit')">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                   </svg>
                 </button>
-                <button class="action-btn action-delete" @click="requestDelete(preset)" title="删除">
+                <button class="action-btn action-delete" @click="requestDelete(preset)" :title="translateUi('common.delete')">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
@@ -86,19 +86,19 @@
           <svg class="empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          <p class="empty-text">还没有自定义预设</p>
-          <p class="empty-hint">点击上方"新建预设"按钮创建您的第一个预设</p>
+          <p class="empty-text">{{ translateUi('uiMessages.m9d8472c4ef8c') }}</p>
+          <p class="empty-hint">{{ translateUi('uiMessages.m6dc079e2e230') }}</p>
         </div>
       </div>
       <div v-if="deleteConfirm.visible" class="preset-delete-backdrop" @click.stop.self="cancelDelete">
         <div class="preset-delete-modal" role="dialog" aria-modal="true">
-          <h3>确认删除预设</h3>
-          <p>确定要删除预设 <strong>{{ deleteConfirm.preset?.name }}</strong> 吗？此操作不可恢复。</p>
+          <h3>{{ translateUi('uiMessages.m3a73764274da') }}</h3>
+          <p>{{ translateUi('uiMessages.ma5e28fafb3ce') }} <strong>{{ deleteConfirm.preset?.name }}</strong> {{ translateUi('uiMessages.mcf14eaa8db80') }}</p>
           <p v-if="deleteError" class="delete-error">{{ deleteError }}</p>
           <div class="preset-delete-actions">
-            <button class="btn-cancel-delete" @click="cancelDelete" :disabled="deleteLoading">取消</button>
+            <button class="btn-cancel-delete" @click="cancelDelete" :disabled="deleteLoading">{{ translateUi('common.cancel') }}</button>
             <button class="btn-confirm-delete" @click="confirmDelete" :disabled="deleteLoading">
-              {{ deleteLoading ? '删除中...' : '确认删除' }}
+              {{ deleteLoading ? translateUi('uiMessages.m4669785ade95') : translateUi('uiMessages.ma3ea3c17b401') }}
             </button>
           </div>
         </div>
@@ -108,6 +108,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, watch, onMounted } from 'vue'
 import { getUserLLMPresets, deleteUserLLMPreset } from '@/api/canvas/llm'
 
@@ -137,15 +139,15 @@ function formatDate(timestamp) {
   const days = Math.floor(diff / (1000 * 60 * 60 * 24))
 
   if (days === 0) {
-    return '今天'
+    return translateUi('uiMessages.md5f5a7a01073')
   } else if (days === 1) {
-    return '昨天'
+    return translateUi('uiMessages.m0c184871f658')
   } else if (days < 7) {
-    return `${days}天前`
+    return translateUi('uiMessages.m3b3082f1e94e', { value1: (days) })
   } else {
     const month = date.getMonth() + 1
     const day = date.getDate()
-    return `${month}月${day}日`
+    return translateUi('uiMessages.m6a58db30b43e', { value1: (month), value2: (day) })
   }
 }
 
@@ -226,7 +228,7 @@ async function confirmDelete() {
     }
   } catch (error) {
     console.error('[PresetManager] 删除预设失败:', error)
-    deleteError.value = error.message || '删除失败，请重试'
+    deleteError.value = error.message || translateUi('uiMessages.m2026b0d30e91')
   } finally {
     deleteLoading.value = false
   }

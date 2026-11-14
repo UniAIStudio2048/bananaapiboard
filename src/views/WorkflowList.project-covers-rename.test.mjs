@@ -21,7 +21,7 @@ assert.match(source, /renameWorkflow\(id, trimmed\)/, 'Workflow inline rename sh
 assert.match(source, /const totalWorkflowPages = computed\(\(\) => \{/, 'Workflow list should compute total pages from API total when totalPages is missing')
 assert.match(source, /Math\.ceil\(pagination\.value\.total \/ pagination\.value\.pageSize\)/, 'Workflow pagination should fall back to total/pageSize')
 assert.match(source, /v-if="currentProject && totalWorkflowPages > 1"/, 'Project workflow pagination should appear when more pages exist')
-assert.match(source, /项目数量：\{\{ projects\.length \}\}/, 'Project list should show the actual loaded project count')
-assert.match(source, /共 \{\{ currentProjectWorkflowTotal \}\} 个工作流/, 'Project detail should show the actual workflow total for the selected project')
+  assert.match(source, /translateUi\('uiMessages\.m272766ca2755', \{ value1: \(projects\.length\), value2: \(currentSpaceWorkflowTotal\) \}\)/)
+  assert.match(source, /translateUi\('uiMessages\.m2e73afa109b2', \{ value1: \(currentProjectWorkflowTotal\) \}\)/)
 
 console.log('WorkflowList project cover and rename source tests passed')

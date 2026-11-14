@@ -1,3 +1,6 @@
+import * as i18nTestRuntime from '../../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -6,7 +9,7 @@ import vm from 'node:vm'
 const source = readFileSync(new URL('./ImageNode.vue', import.meta.url), 'utf8')
 const code = source.slice(source.indexOf('const aspectRatios = ['), source.indexOf('// 监听模型变化，如果模型不支持1K'))
 function options(model) {
-  return vm.runInNewContext(code + '\navailableImageAspectRatios', {
+  return vm.runInNewContext(code + '\navailableImageAspectRatios', { translateUi, uiLanguage,
     computed: fn => fn(), modelLookupList: { value: [{ value: 'test', ...model }] }, selectedModel: { value: 'test' }
   })
 }

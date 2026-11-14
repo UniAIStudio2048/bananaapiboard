@@ -2,14 +2,14 @@
   <div class="ticket-list">
     <!-- 头部 -->
     <div class="list-header">
-      <h3 class="header-title">我的工单</h3>
+      <h3 class="header-title">{{ translateUi('uiMessages.m33bc517653ac') }}</h3>
       <div class="header-actions">
-        <button class="create-btn" @click="$emit('create')" title="创建工单">
+        <button class="create-btn" @click="$emit('create')" :title="translateUi('uiMessages.m7f49b9561401')">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 5v14M5 12h14"/>
           </svg>
         </button>
-        <button class="close-btn" @click="$emit('close')" title="关闭">
+        <button class="close-btn" @click="$emit('close')" :title="translateUi('common.close')">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M18 6L6 18M6 6l12 12"/>
           </svg>
@@ -34,14 +34,14 @@
     <div class="list-content">
       <div v-if="loading" class="loading-state">
         <div class="spinner"></div>
-        <p>加载中...</p>
+        <p>{{ translateUi('common.loading') }}</p>
       </div>
 
       <div v-else-if="tickets.length === 0" class="empty-state">
         <svg class="w-12 h-12 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
         </svg>
-        <p>暂无工单</p>
+        <p>{{ translateUi('uiMessages.m0a4d81a7d3ee') }}</p>
       </div>
 
       <div v-else class="ticket-items">
@@ -71,6 +71,8 @@
 </template>
 
 <script setup>
+import { t as translateUi, currentLanguage as uiLanguage } from '@/i18n'
+
 import { ref, onMounted, watch } from 'vue'
 import { getTickets } from '@/api/ticket'
 
@@ -84,11 +86,11 @@ const props = defineProps({
 const emit = defineEmits(['select', 'create', 'close'])
 
 const tabs = [
-  { value: 'all', label: '全部' },
-  { value: 'pending', label: '待处理' },
-  { value: 'processing', label: '处理中' },
-  { value: 'resolved', label: '已解决' },
-  { value: 'closed', label: '已关闭' }
+  { value: 'all', get label() { return translateUi('common.all') } },
+  { value: 'pending', get label() { return translateUi('directorStudio.statusValues.idle') } },
+  { value: 'processing', get label() { return translateUi('videoGen.processing') } },
+  { value: 'resolved', get label() { return translateUi('uiMessages.mb7aae49b52a3') } },
+  { value: 'closed', get label() { return translateUi('uiMessages.m6744b4c6a9aa') } }
 ]
 
 const currentStatus = ref(props.status)
@@ -119,10 +121,10 @@ function changeStatus(status) {
 // 获取状态标签
 function getStatusLabel(status) {
   const labels = {
-    pending: '待处理',
-    processing: '处理中',
-    resolved: '已解决',
-    closed: '已关闭'
+    pending: translateUi('canvas.assetPanel.tagPending'),
+    processing: translateUi('videoGen.processing'),
+    resolved: translateUi('uiMessages.mb7aae49b52a3'),
+    closed: translateUi('uiMessages.m6744b4c6a9aa')
   }
   return labels[status] || status
 }
@@ -130,10 +132,10 @@ function getStatusLabel(status) {
 // 获取类型标签
 function getTypeLabel(type) {
   const labels = {
-    bug: '问题反馈',
-    feature: '功能建议',
-    invoice: '开票申请',
-    other: '其他'
+    bug: translateUi('uiMessages.m55a2ce1324c1'),
+    feature: translateUi('uiMessages.m118db8121c01'),
+    invoice: translateUi('uiMessages.m7cc4ddd2fcde'),
+    other: translateUi('uiMessages.md2909f1647e7')
   }
   return labels[type] || type
 }
@@ -148,12 +150,12 @@ function formatTime(time) {
   const hours = Math.floor(diff / 3600000)
   const days = Math.floor(diff / 86400000)
 
-  if (minutes < 1) return '刚刚'
-  if (minutes < 60) return `${minutes}分钟前`
-  if (hours < 24) return `${hours}小时前`
-  if (days < 7) return `${days}天前`
+  if (minutes < 1) return translateUi('time.justNow')
+  if (minutes < 60) return translateUi('uiMessages.mab2c53a24038', { value1: (minutes) })
+  if (hours < 24) return translateUi('uiMessages.maff25df598e8', { value1: (hours) })
+  if (days < 7) return translateUi('uiMessages.m3b3082f1e94e', { value1: (days) })
 
-  return date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })
+  return date.toLocaleDateString(uiLanguage.value, { month: 'numeric', day: 'numeric' })
 }
 
 watch(() => props.status, (newStatus) => {

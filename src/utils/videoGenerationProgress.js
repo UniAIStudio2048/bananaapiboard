@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 export const VIDEO_GENERATION_TIMEOUT_HINT_MULTIPLIER = 3
 
 export function parseTaskCreatedAt(createdAt) {
@@ -73,7 +74,7 @@ export function formatVideoGenerationElapsed(seconds) {
 }
 
 export function getVideoGenerationProgressText(task, now = Date.now()) {
-  return `生成中${formatVideoGenerationElapsed(getVideoGenerationElapsedSeconds(task, now))}`
+  return translateUi('uiMessages.mb98ce902ed75', { value1: (formatVideoGenerationElapsed(getVideoGenerationElapsedSeconds(task, now))) })
 }
 
 export function shouldShowVideoGenerationTimeoutHint(

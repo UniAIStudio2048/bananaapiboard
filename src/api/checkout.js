@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 
 async function request(path, { signal, body, key, method = 'GET' } = {}) {
@@ -13,7 +14,7 @@ async function request(path, { signal, body, key, method = 'GET' } = {}) {
   try {
     const response = await fetch(getApiUrl(`/api/checkout${path}`), { method, headers, signal: controller.signal, body: body ? (form ? body : JSON.stringify(body)) : undefined })
     const data = await response.json()
-    if (!response.ok) throw new Error(data.message || data.error || '支付请求失败')
+    if (!response.ok) throw new Error(data.message || data.error || translateUi('uiMessages.m0fc8781acf34'))
     return data
   } finally {
     clearTimeout(timeout)

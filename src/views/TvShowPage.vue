@@ -12,7 +12,7 @@
             class="flex items-center gap-2 hover:opacity-80 transition-opacity"
             @click="showUserMenu = !showUserMenu"
           >
-            <img v-if="userAvatar" :src="userAvatar" alt="头像" class="w-8 h-8 rounded-full object-cover" />
+            <img v-if="userAvatar" :src="userAvatar" :alt="translateUi('uiMessages.m3ea2d23c902c')" class="w-8 h-8 rounded-full object-cover" />
             <div v-else class="w-8 h-8 rounded-full bg-neutral-800 flex items-center justify-center">
               <span class="text-sm text-gray-300">{{ (userName || '?')[0] }}</span>
             </div>
@@ -35,14 +35,14 @@
                 @click="goToProfile"
               >
                 <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                个人中心
+                {{ translateUi('nav.user') }}
               </button>
               <button
                 class="w-full px-4 py-3 text-left text-sm text-gray-200 hover:bg-neutral-800 flex items-center gap-2.5 transition-colors"
                 @click="goToCanvas"
               >
                 <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
-                开始创作
+                {{ translateUi('landing.startCreating') }}
               </button>
               <div class="border-t border-neutral-700/60" />
               <button
@@ -50,7 +50,7 @@
                 @click="handleLogout"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-                退出登录
+                {{ translateUi('nav.logout') }}
               </button>
             </div>
           </Transition>
@@ -60,7 +60,7 @@
           class="px-5 py-1.5 rounded-full border border-neutral-600 bg-neutral-900 hover:bg-neutral-800 text-sm text-neutral-300 hover:text-white font-medium transition-all"
           @click="communityStore.showLoginModal = true"
         >
-          登录
+          {{ translateUi('nav.login') }}
         </button>
       </div>
     </nav>
@@ -70,7 +70,7 @@
       <!-- 返回链接 + 标题 -->
       <router-link to="/community" class="inline-flex items-center gap-1 text-sm text-neutral-400 hover:text-white transition-colors mb-4">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-        返回社区
+        {{ translateUi('uiMessages.m939bc79bd1c9') }}
       </router-link>
       <h1 class="text-3xl font-bold mb-6">{{ communityStore.sectionNames.tvshow }}</h1>
 
@@ -87,7 +87,7 @@
         <div class="flex items-center gap-2 flex-shrink-0">
           <div class="relative">
             <input
-              v-model="searchKeyword" type="text" placeholder="请输入搜索内容"
+              v-model="searchKeyword" type="text" :placeholder="translateUi('uiMessages.m52408b1748ed')"
               class="w-48 pl-9 pr-3 py-1.5 rounded-full bg-neutral-800 border-none text-sm text-gray-200 placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-neutral-600 transition-colors"
               @keyup.enter="handleSearch"
             />
@@ -106,7 +106,7 @@
 
       <!-- 顶部作品（前3行，横屏优先，不足时竖屏补位） -->
       <section v-if="topWorks.length" class="mb-8">
-        <h2 class="text-lg font-semibold mb-4 text-neutral-200">精选作品</h2>
+        <h2 class="text-lg font-semibold mb-4 text-neutral-200">{{ translateUi('uiMessages.m796128ff8655') }}</h2>
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           <WorkCard
             v-for="item in topWorks" :key="'top-' + item.id"
@@ -118,7 +118,7 @@
 
       <!-- 竖屏作品瀑布流 -->
       <section v-if="portraitWorks.length">
-        <h2 class="text-lg font-semibold mb-4 text-neutral-200">更多作品</h2>
+        <h2 class="text-lg font-semibold mb-4 text-neutral-200">{{ translateUi('uiMessages.m041e365af695') }}</h2>
         <div class="columns-2 sm:columns-3 lg:columns-4 xl:columns-5 gap-3 [column-fill:_balance-all]">
           <div v-for="item in portraitWorks" :key="'pt-' + item.id" class="break-inside-avoid mb-3">
             <WorkCard :work="item" :landscape="item.orientation === 'landscape'" @click="goToWork" @like="handleLike" />
@@ -136,11 +136,11 @@
         <svg class="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
         </svg>
-        <p class="text-sm">暂无作品</p>
+        <p class="text-sm">{{ translateUi('uiMessages.md8c0476550a7') }}</p>
       </div>
 
       <!-- 没有更多 -->
-      <div v-if="noMore && portraitWorks.length" class="text-center py-6 text-neutral-700 text-sm">已经到底了</div>
+      <div v-if="noMore && portraitWorks.length" class="text-center py-6 text-neutral-700 text-sm">{{ translateUi('uiMessages.mb7c1cdefd7e1') }}</div>
 
       <!-- 无限滚动哨兵 -->
       <div ref="sentinelRef" class="h-1" />
@@ -157,6 +157,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCommunityStore } from '@/stores/community'
@@ -253,13 +255,13 @@ const activeSort = ref('latest')
 const searchKeyword = ref('')
 
 const sortOptions = [
-  { label: '最新', value: 'latest' },
-  { label: '最热', value: 'popular' },
-  { label: '最多点赞', value: 'most_liked' }
+  { get label() { return translateUi('uiMessages.m569af1a47dbd') }, value: 'latest' },
+  { get label() { return translateUi('uiMessages.md8df0b513ff4') }, value: 'popular' },
+  { get label() { return translateUi('uiMessages.m3a2ed4515687') }, value: 'most_liked' }
 ]
 
 const categoryTabs = computed(() => {
-  const fixed = [{ id: null, name: '全部分类' }, { id: 'featured', name: '精选创作' }]
+  const fixed = [{ id: null, get name() { return translateUi('communityUI.allCategories') } }, { id: 'featured', get name() { return translateUi('communityUI.featuredCreations') } }]
   const dynamic = (communityStore.categories || []).map(c => ({ id: c.id, name: c.name }))
   return [...fixed, ...dynamic]
 })

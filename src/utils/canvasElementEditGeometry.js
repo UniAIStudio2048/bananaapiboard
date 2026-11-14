@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 // 元素编辑：几何工具与结构化编辑提示词。
 // 所有坐标都以图片显示区域为基准归一化到 [0, 1]，原点在左上角。
 
@@ -281,9 +282,9 @@ export function buildElementEditRequest(edits, sourceUrl, { maxInputImages = Inf
     images.push(reference.url)
     referenceIndex.set(reference.url, images.length)
   }
-  if (images.length > maxInputImages) throw new Error('参考图数量超过模型上限')
+  if (images.length > maxInputImages) throw new Error(translateUi('uiMessages.md53c80e7bb0c'))
   let prompt = buildElementEditPrompt(edits, referenceIndex, true)
   if (promptMaxLength && prompt.length > promptMaxLength) prompt = buildElementEditPrompt(edits, referenceIndex, false)
-  if (promptMaxLength && prompt.length > promptMaxLength) throw new Error('编辑内容过多，请减少编辑处数')
+  if (promptMaxLength && prompt.length > promptMaxLength) throw new Error(translateUi('uiMessages.m93e3604bad85'))
   return { images, prompt }
 }

@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 /**
  * 排队守卫测试（第一轮结束后插入消息不应误入排队区）：
  * - sendMessage 的排队判断必须基于真实回合状态（activeTurnRunning / serverQueue /
@@ -29,7 +30,7 @@ test('sendMessage 排队守卫基于真实回合状态，而非仅 isLoading（�
 })
 
 test('排队条「立即插入」按钮在存在排队项时始终可点击（不依赖当前回合是否 running）', () => {
-  const insertButton = queueBar.match(/<button[\s\S]*?aria-label="立即插入这条消息"[\s\S]*?<\/button>/)?.[0]
+  const insertButton = queueBar.match(localizedPattern(/<button[\s\S]*?aria-label="立即插入这条消息"[\s\S]*?<\/button>/))?.[0]
   assert.ok(insertButton, 'insert button must exist in AgentQueueBar')
   // 不能用 activeTurnRunning 做 v-if：第一轮结束后 activeTurn 非 running，
   // 排队项仍应提供「立即插入」，否则用户无法强制插入

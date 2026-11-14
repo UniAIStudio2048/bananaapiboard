@@ -1,3 +1,6 @@
+import * as i18nTestRuntime from '../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -18,7 +21,7 @@ const expandButton = find(ast, node => node.tag === 'button' && node.loc.source.
 
 test('展开和还原按钮切换面板状态并提供明确的无障碍名称', () => {
   assert.ok(expandButton)
-  const render = runInNewContext(`(function () { ${compile(expandButton.loc.source).code} })()`, { Vue })
+  const render = runInNewContext(`(function () { ${compile(expandButton.loc.source).code} })()`, { translateUi, uiLanguage, Vue })
   const ctx = { isProfileExpanded: false, Maximize2: 'svg', Minimize2: 'svg' }
   let button = render(ctx, [])
   assert.equal(button.props['aria-expanded'], false)

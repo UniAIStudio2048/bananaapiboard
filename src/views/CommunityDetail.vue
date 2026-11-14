@@ -12,7 +12,7 @@
         class="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm transition-colors"
         @click="goBack()"
       >
-        返回
+        {{ translateUi('common.back') }}
       </button>
     </div>
 
@@ -92,14 +92,14 @@
             <div v-show="controlsVisible" class="absolute top-0 left-0 right-0 z-40 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/70 to-transparent">
               <button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-white/80 hover:text-white transition" @click.stop="exitFullView">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-                返回
+                {{ translateUi('common.back') }}
               </button>
               <button
                 v-if="work.workflow_id"
                 class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-white/80 hover:text-white transition"
                 @click.stop="openWorkflowFromFullView(work.workflow_id)"
               >
-                查看制作过程 →
+                {{ translateUi('uiMessages.m1e7556dc3475') }}
               </button>
             </div>
           </transition>
@@ -126,7 +126,7 @@
                 <!-- 倍速 -->
                 <div class="relative" @mouseenter="showSpeedMenu = true" @mouseleave="showSpeedMenu = false">
                   <button class="px-2 py-1 text-xs text-white/80 hover:text-white bg-white/10 rounded transition" @click.stop>
-                    {{ playbackRate === 1 ? '倍速' : playbackRate + 'x' }}
+                    {{ playbackRate === 1 ? translateUi('uiMessages.m550201855541') : playbackRate + 'x' }}
                   </button>
                   <div v-show="showSpeedMenu" class="absolute bottom-full right-0 mb-2 py-1 bg-gray-900/95 border border-white/10 rounded-lg shadow-xl min-w-[100px] backdrop-blur-sm">
                     <button
@@ -135,7 +135,7 @@
                       class="block w-full px-4 py-1.5 text-xs text-left transition"
                       :class="playbackRate === rate ? 'text-blue-400' : 'text-white/70 hover:text-white hover:bg-white/10'"
                       @click.stop="setSpeed(rate)"
-                    >{{ rate }}x{{ rate === 1 ? ' 默认' : '' }}</button>
+                    >{{ rate }}x{{ rate === 1 ? translateUi('uiMessages.m88cb5e3a6539') : '' }}</button>
                   </div>
                 </div>
                 <!-- 画质 -->
@@ -195,7 +195,7 @@
           <div class="absolute top-0 left-0 right-0 z-40 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/70 to-transparent">
             <button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-white/80 hover:text-white transition" @click.stop="exitFullView">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-              返回
+              {{ translateUi('common.back') }}
             </button>
             <span class="text-sm text-white/60">{{ currentImageIndex + 1 }} / {{ detailMediaUrls.length }}</span>
           </div>
@@ -234,13 +234,13 @@
           <div class="flex items-center gap-3">
             <button
               class="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
-              aria-label="返回"
+              :aria-label="translateUi('common.back')"
               @click="goBack()"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
               </svg>
-              返回
+              {{ translateUi('common.back') }}
             </button>
             <button
               type="button"
@@ -251,13 +251,13 @@
               <img
                 v-if="work.author_avatar"
                 :src="work.author_avatar"
-                alt="作者头像"
+                :alt="translateUi('uiMessages.m9fe956ddc889')"
                 class="w-7 h-7 rounded-full object-cover flex-shrink-0"
               />
               <div v-else class="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center flex-shrink-0">
                 <span class="text-gray-300 text-xs">{{ (work.author_name || '?')[0] }}</span>
               </div>
-              <span class="text-sm text-white font-medium truncate max-w-[400px]">{{ work.author_name || '匿名用户' }}</span>
+              <span class="text-sm text-white font-medium truncate max-w-[400px]">{{ work.author_name || translateUi('uiMessages.mdbb891595578') }}</span>
             </button>
             <FollowButton
               v-if="normalizedAuthorProfile && !normalizedAuthorProfile.is_self"
@@ -281,10 +281,10 @@
         <div class="flex flex-col items-center pb-5">
           <!-- 标题 -->
           <h1 class="text-xl font-bold text-white mb-3 text-center max-w-[600px] px-4">
-            {{ work.title || '无标题' }}
+            {{ work.title || translateUi('uiMessages.m8c974da9d870') }}
             <span v-if="projectInfo" class="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-500/10 border border-blue-500/30 rounded text-xs text-blue-400 ml-2 font-normal align-middle">
               <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
-              项目
+              {{ translateUi('directorStudio.projects.title') }}
             </span>
           </h1>
 
@@ -296,7 +296,7 @@
               @click="handlePlay"
             >
               <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-              {{ isImageSlideshow ? '查看图片' : '立即观看' }}
+              {{ isImageSlideshow ? translateUi('uiMessages.ma9769c635970') : translateUi('uiMessages.md64db6165397') }}
             </button>
             <!-- 查看制作过程 -->
             <button
@@ -307,31 +307,31 @@
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
-              查看制作过程
+              {{ translateUi('uiMessages.m1df27a2f3caf') }}
             </button>
             <!-- 点赞 -->
             <button
               class="flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm transition-colors"
               :class="work.is_liked ? 'text-red-400' : 'text-white hover:bg-white/20'"
               :disabled="isLiking"
-              aria-label="点赞"
+              :aria-label="translateUi('uiMessages.maced5d7f9fc9')"
               @click="handleLike"
             >
               <svg class="w-4 h-4" :fill="work.is_liked ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
               </svg>
-              点赞
+              {{ translateUi('uiMessages.maced5d7f9fc9') }}
             </button>
             <!-- 分享 -->
             <button
               class="flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm text-white transition-colors hover:bg-white/20"
-              aria-label="分享"
+              :aria-label="translateUi('canvas.share')"
               @click="handleShare"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
               </svg>
-              分享
+              {{ translateUi('canvas.share') }}
             </button>
           </div>
 
@@ -364,7 +364,7 @@
                   loading="lazy"
                 />
                 <div v-else class="w-full h-full bg-neutral-800 flex items-center justify-center rounded-md">
-                  <span class="text-neutral-500 text-[10px]">{{ item.title || '无图' }}</span>
+                  <span class="text-neutral-500 text-[10px]">{{ item.title || translateUi('uiMessages.m3ac5075e3e93') }}</span>
                 </div>
               </router-link>
             </div>
@@ -410,6 +410,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, computed, watch, nextTick, onBeforeUnmount, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCommunityStore } from '@/stores/community'
@@ -531,12 +533,12 @@ let controlsTimer = null
 
 const speedOptions = [0.5, 0.75, 1, 1.25, 1.5, 2]
 const qualityOptions = [
-  { label: '自动', value: 'auto' },
-  { label: '480p 流畅', value: '480p' },
-  { label: '720p 高清', value: '720p' },
-  { label: '1080p 原画质', value: '1080p' }
+  { get label() { return translateUi('imageGen.auto') }, value: 'auto' },
+  { get label() { return translateUi('uiMessages.m0dc602e25d32') }, value: '480p' },
+  { get label() { return translateUi('uiMessages.m7ecde80d8970') }, value: '720p' },
+  { get label() { return translateUi('uiMessages.mc1be04dd5970') }, value: '1080p' }
 ]
-const currentQualityLabel = computed(() => qualityOptions.find(q => q.value === currentQuality.value)?.label || '1080p 原画质')
+const currentQualityLabel = computed(() => qualityOptions.find(q => q.value === currentQuality.value)?.label || translateUi('uiMessages.mc1be04dd5970'))
 const progressPercent = computed(() => duration.value ? (currentTime.value / duration.value) * 100 : 0)
 
 const videoStreamUrl = computed(() => {
@@ -586,7 +588,7 @@ async function loadAuthorProfile(userId) {
   } catch (e) {
     console.error('[CommunityDetail] 加载作者信息失败:', e)
     authorProfile.value = null
-    authorProfileError.value = e?.message || '加载作者信息失败'
+    authorProfileError.value = e?.message || translateUi('uiMessages.m8b7616cfe587')
   } finally {
     authorProfileLoading.value = false
   }
@@ -601,7 +603,7 @@ function formatTime(ts) {
   const day = String(d.getDate()).padStart(2, '0')
   const h = String(d.getHours()).padStart(2, '0')
   const min = String(d.getMinutes()).padStart(2, '0')
-  return `${y}年${m}月${day}日 ${h}:${min}`
+  return translateUi('uiMessages.m887392768668', { value1: (y), value2: (m), value3: (day), value4: (h), value5: (min) })
 }
 
 // Toast 工具
@@ -646,7 +648,7 @@ async function loadWork(id) {
       nextTick(() => startImageSlideshow())
     }
   } catch (e) {
-    error.value = e.message || '加载作品失败'
+    error.value = e.message || translateUi('uiMessages.m372e7cb639af')
     work.value = null
   } finally {
     loading.value = false
@@ -887,7 +889,7 @@ async function handleLike() {
     })
     apiToggleFavorite(work.value.id).catch(() => {})
   } catch (e) {
-    toast(e.message || '操作失败')
+    toast(e.message || translateUi('auth.operationFailed'))
   } finally {
     isLiking.value = false
   }
@@ -897,9 +899,9 @@ async function handleLike() {
 async function handleShare() {
   try {
     await navigator.clipboard.writeText(window.location.href)
-    toast('链接已复制到剪贴板')
+    toast(translateUi('uiMessages.m2f7602ddf50b'))
   } catch {
-    toast('复制失败，请手动复制链接')
+    toast(translateUi('uiMessages.m9820487db9ba'))
   }
 }
 

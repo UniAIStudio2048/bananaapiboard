@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -11,8 +12,8 @@ test('connection transfer shortcuts only show when hovering the plus button', ()
   assert.match(source, /\.canvas-board :deep\(\.vue-flow__node \.node-add-btn:hover\)::after/)
   assert.doesNotMatch(source, /\.canvas-board :deep\(\.vue-flow__node:hover \.node-add-btn\)::after/)
   assert.match(source, /transition-delay:\s*1s/)
-  assert.match(source, /Shift \+ 左键拖动：迁移全部连线/)
-  assert.match(source, /Ctrl \+ 左键拖动：复制全部连线/)
+  assert.match(source, localizedPattern(/Shift \+ 左键拖动：迁移全部连线/))
+  assert.match(source, localizedPattern(/Ctrl \+ 左键拖动：复制全部连线/))
 })
 
 test('transfer hint does not intercept pointer events', () => {

@@ -1,3 +1,4 @@
+import { withI18n } from '../i18n/componentTestRuntime.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -32,10 +33,10 @@ for (const [path, match, count, canvas] of [
       assert.equal(entries.length, count)
       for (const entry of entries) {
         const render = new Function('Vue', compile(entry, { prefixIdentifiers: true }).code)(Vue)
-        const html = await renderToString(Vue.createSSRApp({
+        const html = await renderToString(withI18n(Vue.createSSRApp({
           data: () => ({ me: user, canDeleteHistory: Boolean(user && user.can_delete_history !== false), historyWorkflows: [{}], t: value => value, item: {}, h: {}, image: {}, video: {}, contextMenuItem: {}, previewItem: {} }),
           render
-        }))
+        })))
         assert.equal(/<(button|div)[\s>]/.test(html), allowed, `${canvas ? '画布' : '页面'}: ${entry}`)
       }
     })

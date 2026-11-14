@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../i18n/index.js'
 /**
  * Canvas 资产管理 API
  * 管理用户的文案、图片、视频、音频等资源
@@ -48,7 +49,7 @@ export async function getAssets(params = {}) {
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '获取资产列表失败')
+    throw new Error(error.error || translateUi('uiMessages.m08168fe5aa66'))
   }
   
   return response.json()
@@ -67,7 +68,7 @@ export async function getAsset(assetId) {
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '获取资产失败')
+    throw new Error(error.error || translateUi('uiMessages.m1ecd4be3c470'))
   }
   
   return response.json()
@@ -96,7 +97,7 @@ export async function saveAsset(assetData) {
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '保存资产失败')
+    throw new Error(error.error || translateUi('uiMessages.me55d88584541'))
   }
   
   return response.json()
@@ -117,7 +118,7 @@ export async function updateAsset(assetId, updates) {
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '更新资产失败')
+    throw new Error(error.error || translateUi('uiMessages.me082b6cfcb65'))
   }
   
   return response.json()
@@ -136,7 +137,7 @@ export async function deleteAsset(assetId) {
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '删除资产失败')
+    throw new Error(error.error || translateUi('uiMessages.m2bef03d279fa'))
   }
   
   return response.json()
@@ -155,7 +156,7 @@ export async function toggleFavorite(assetId) {
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '操作失败')
+    throw new Error(error.error || translateUi('auth.operationFailed'))
   }
   
   return response.json()
@@ -176,7 +177,7 @@ export async function updateAssetTags(assetId, tags) {
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '更新标签失败')
+    throw new Error(error.error || translateUi('uiMessages.m9ae54faf592e'))
   }
   
   return response.json()
@@ -198,7 +199,7 @@ export async function batchOperation(assetIds, action, params = {}) {
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '批量操作失败')
+    throw new Error(error.error || translateUi('uiMessages.m203f0208220c'))
   }
   
   return response.json()
@@ -224,7 +225,7 @@ export async function copyAssetsToSpace(items, targetSpaceType, targetTeamId) {
   
   const data = await response.json()
   if (!response.ok) {
-    throw new Error(data.error || '复制失败')
+    throw new Error(data.error || translateUi('uiMessages.m753d8bb0da99'))
   }
   return data
 }

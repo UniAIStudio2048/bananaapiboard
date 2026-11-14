@@ -40,16 +40,16 @@
                 />
               </svg>
             </div>
-            <span class="header-title">AI 灵感助手</span>
+            <span class="header-title">{{ translateUi('uiMessages.m8cc8b57b17b7') }}</span>
           </div>
           <div class="header-actions">
-            <button class="header-btn" @click="startNewChat" title="新对话">
+            <button class="header-btn" @click="startNewChat" :title="translateUi('uiMessages.mea4b29f58f87')">
               <MessageSquarePlus :size="16" aria-hidden="true" />
             </button>
-            <button class="header-btn" @click="showHistory = !showHistory" title="历史记录">
+            <button class="header-btn" @click="showHistory = !showHistory" :title="translateUi('imageGen.history')">
               <History :size="16" aria-hidden="true" />
             </button>
-            <button class="header-btn close-btn" @click="$emit('close')" title="关闭">
+            <button class="header-btn close-btn" @click="$emit('close')" :title="translateUi('common.close')">
               <X :size="16" aria-hidden="true" />
             </button>
           </div>
@@ -58,14 +58,14 @@
         <!-- 历史记录抽屉 -->
         <div v-if="showHistory" class="history-drawer">
           <div class="history-header">
-            <span>历史对话</span>
+            <span>{{ translateUi('uiMessages.m60636ba247a0') }}</span>
             <button class="history-close" @click="showHistory = false">
               <X :size="16" aria-hidden="true" />
             </button>
           </div>
           <div class="history-list">
             <div v-if="sessions.length === 0" class="history-empty">
-              暂无历史对话
+              {{ translateUi('uiMessages.m070cdd696c43') }}
             </div>
             <div
               v-for="session in sessions"
@@ -77,15 +77,15 @@
               <div class="history-item__title">
                 {{ session.title }}
                 <span v-if="session.turn_status === 'running'" class="status-badge status-badge--running">
-                  <span class="status-dot status-dot--pulse"></span>进行中
+                  <span class="status-dot status-dot--pulse"></span>{{ translateUi('uiMessages.mdc9591e56d50') }}
                 </span>
-                <span v-else-if="session.turn_status === 'failed'" class="status-badge status-badge--failed">失败</span>
+                <span v-else-if="session.turn_status === 'failed'" class="status-badge status-badge--failed">{{ translateUi('uiMessages.m28384d7afd2e') }}</span>
               </div>
               <div class="history-item__preview">{{ session.last_message }}</div>
               <button
                 class="history-item__delete"
                 @click.stop="deleteSessionItem(session.id)"
-                title="删除"
+                :title="translateUi('common.delete')"
               >
                 <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
@@ -129,27 +129,27 @@
               </svg>
             </div>
             <h3 class="welcome-title">Hi, {{ userName }}!</h3>
-            <p class="welcome-subtitle">在寻找哪方面的灵感?</p>
+            <p class="welcome-subtitle">{{ translateUi('uiMessages.m9ec63bffebcd') }}</p>
             <div class="welcome-tips">
               <div class="tip-card" @click="sendQuickMessage('帮我想一些创意图片的点子')">
                 <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="12" cy="12" r="10"/>
                   <path d="M12 16v-4M12 8h.01"/>
                 </svg>
-                <span>创意灵感</span>
+                <span>{{ translateUi('uiMessages.m51fa31c4c46b') }}</span>
               </div>
               <div class="tip-card" @click="sendQuickMessage('帮我优化这个提示词')">
                 <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
                 </svg>
-                <span>优化提示词</span>
+                <span>{{ translateUi('uiMessages.me3d757bcf7d5') }}</span>
               </div>
               <div class="tip-card" @click="sendQuickMessage('搜索最新的AI艺术风格趋势')">
                 <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="11" cy="11" r="8"/>
                   <path d="m21 21-4.35-4.35"/>
                 </svg>
-                <span>搜索资料</span>
+                <span>{{ translateUi('uiMessages.m862e28d2269e') }}</span>
               </div>
             </div>
           </div>
@@ -297,16 +297,16 @@
         </div>
 
         <div v-if="pendingAgentApproval" class="agent-approval-bar">
-          <span>Skill「{{ pendingAgentApproval.skill?.name || pendingAgentApproval.skill_name }}」请求以下授权</span>
+          <span>{{ translateUi('uiMessages.m50756c6d0994', { value1: (pendingAgentApproval.skill?.name || pendingAgentApproval.skill_name) }) }}</span>
           <div v-for="action in pendingApprovalActions" :key="`${action.capability}:${action.model}`" class="agent-approval-action">
             <code>{{ action.capability }}</code>
-            <span v-if="action.model">模型：{{ action.model }}</span>
-            <span v-if="action.estimated_points">预计 {{ action.estimated_points }} 积分</span>
-            <span v-if="action.write_target">写回：{{ action.write_target.workflow_id }} / {{ action.write_target.node_id }}</span>
+            <span v-if="action.model">{{ translateUi('uiMessages.m1b8966bef118', { value1: (action.model) }) }}</span>
+            <span v-if="action.estimated_points">{{ translateUi('uiMessages.m3b0a08686473', { value1: (action.estimated_points) }) }}</span>
+            <span v-if="action.write_target">{{ translateUi('uiMessages.mc4422206975e', { value1: (action.write_target.workflow_id), value2: (action.write_target.node_id) }) }}</span>
           </div>
           <div>
-            <button type="button" :disabled="approvalDeciding" @click="decideSkillRun('deny')">拒绝</button>
-            <button type="button" :disabled="approvalDeciding" @click="decideSkillRun('allow_once')">确认本次</button>
+            <button type="button" :disabled="approvalDeciding" @click="decideSkillRun('deny')">{{ translateUi('uiMessages.m136de7a8c46f') }}</button>
+            <button type="button" :disabled="approvalDeciding" @click="decideSkillRun('allow_once')">{{ translateUi('uiMessages.m8b7b28d954a9') }}</button>
           </div>
         </div>
 
@@ -338,24 +338,24 @@
                 <polyline points="17 8 12 3 7 8"/>
                 <line x1="12" y1="3" x2="12" y2="15"/>
               </svg>
-              <div class="drag-text">释放以上传文件</div>
-              <div class="drag-hint">支持图片、PDF、文档、代码等格式</div>
+              <div class="drag-text">{{ translateUi('uiMessages.mca566da60dc7') }}</div>
+              <div class="drag-hint">{{ translateUi('uiMessages.m344fd03c8fa1') }}</div>
             </div>
           </div>
           
           <!-- 输入框：已选模型标签卡内嵌在输入框内，仅代表本次轮对话使用该模型 -->
           <div class="input-box" @click.self="focusInputEditor">
-            <div v-if="selectedAssistantModel || referencedSkill" class="input-context-tags" aria-label="当前创作配置">
+            <div v-if="selectedAssistantModel || referencedSkill" class="input-context-tags" :aria-label="translateUi('uiMessages.mb6754f847651')">
               <div v-if="referencedSkill" class="selected-model-tag selected-skill-tag">
                 <Sparkle :size="14" />
                 <span class="input-context-tag-label">{{ referencedSkill.name }}</span>
                 <code v-if="referencedSkill.trigger">{{ referencedSkill.trigger }}</code>
-                <button type="button" class="selected-model-tag-remove" title="移除本轮引用 Skill" aria-label="移除本轮引用 Skill" @click="clearReferencedSkill">×</button>
+                <button type="button" class="selected-model-tag-remove" :title="translateUi('uiMessages.m1175307007c4')" :aria-label="translateUi('uiMessages.m1175307007c4')" @click="clearReferencedSkill">×</button>
               </div>
               <div v-if="selectedAssistantModel" class="selected-model-tag">
                 <span class="selected-model-tag-icon"><ModelIcon :icon="getAssistantModelIcon(selectedAssistantModel)" :label="selectedAssistantModel.label || selectedAssistantModel.value" /></span>
                 <span class="input-context-tag-label">{{ selectedAssistantModel.label || selectedAssistantModel.value }}</span>
-                <button type="button" class="selected-model-tag-remove" title="移除已选模型" aria-label="移除已选模型" @click="clearAssistantModel">×</button>
+                <button type="button" class="selected-model-tag-remove" :title="translateUi('uiMessages.m23dab5ec059d')" :aria-label="translateUi('uiMessages.m23dab5ec059d')" @click="clearAssistantModel">×</button>
               </div>
             </div>
             <div
@@ -389,7 +389,7 @@
 
           <!-- 斜杠命令下拉 -->
           <div v-if="slashMenuVisible" class="slash-menu">
-            <div class="slash-menu-header">可用技能</div>
+            <div class="slash-menu-header">{{ translateUi('uiMessages.m113db9dc3197') }}</div>
             <div
               v-for="(item, index) in slashMenuItems"
               :key="item.id"
@@ -401,7 +401,7 @@
               <span class="slash-menu-trigger">{{ item.trigger }}</span>
               <span class="slash-menu-name">{{ item.name }}</span>
             </div>
-            <div v-if="slashMenuItems.length === 0" class="slash-menu-empty">暂无可用斜杠技能</div>
+            <div v-if="slashMenuItems.length === 0" class="slash-menu-empty">{{ translateUi('uiMessages.m011176ebc3d2') }}</div>
           </div>
 
           <PromptMentionPopup
@@ -418,16 +418,16 @@
             <!-- 左侧功能组 -->
             <div class="toolbar-left">
               <!-- Canvas Skill 执行模式：自动调用或每次调用前确认 -->
-              <div class="skill-execution-selector" role="group" aria-label="Skill 调用模式">
+              <div class="skill-execution-selector" role="group" :aria-label="translateUi('uiMessages.m523033a5ecfa')">
                 <button
                   type="button"
                   class="skill-mode-trigger"
                   :aria-expanded="showSkillExecutionDropdown"
                   aria-haspopup="listbox"
-                  title="Skill 调用模式"
+                  :title="translateUi('uiMessages.m523033a5ecfa')"
                   @click.stop="showSkillExecutionDropdown = !showSkillExecutionDropdown"
                 >
-                  <span class="skill-mode-trigger-value">{{ skillExecutionMode === 'auto' ? 'Agent' : '手动模式' }}</span>
+                  <span class="skill-mode-trigger-value">{{ skillExecutionMode === 'auto' ? 'Agent' : translateUi('uiMessages.m0b19f458b183') }}</span>
                   <span class="skill-mode-trigger-arrow" :class="{ open: showSkillExecutionDropdown }" aria-hidden="true">⌃</span>
                 </button>
                 <Transition name="dropdown">
@@ -435,7 +435,7 @@
                     v-if="showSkillExecutionDropdown"
                     class="skill-mode-dropdown"
                     role="listbox"
-                    aria-label="选择调用模式"
+                    :aria-label="translateUi('uiMessages.mfdb364bf1d47')"
                   >
                     <button
                       type="button"
@@ -445,8 +445,8 @@
                       :aria-selected="skillExecutionMode === 'manual'"
                       @click="selectSkillExecutionMode('manual')"
                     >
-                      <span class="skill-mode-option-name">手动模式</span>
-                      <small>每次生成前询问</small>
+                      <span class="skill-mode-option-name">{{ translateUi('uiMessages.m0b19f458b183') }}</span>
+                      <small>{{ translateUi('uiMessages.m9afd9bed6fdd') }}</small>
                     </button>
                     <button
                       type="button"
@@ -456,8 +456,8 @@
                       :aria-selected="skillExecutionMode === 'auto'"
                       @click="selectSkillExecutionMode('auto')"
                     >
-                      <span class="skill-mode-option-name">Agent模式</span>
-                      <small>Agent 完全自动生成</small>
+                      <span class="skill-mode-option-name">{{ translateUi('uiMessages.m9d2a616a5dec') }}</span>
+                      <small>{{ translateUi('uiMessages.m04a9432b7382') }}</small>
                     </button>
                   </div>
                 </Transition>
@@ -466,8 +466,8 @@
               <button
                 class="toolbar-btn icon-btn skills-market-trigger"
                 type="button"
-                title="选择并引用 Skill"
-                aria-label="选择并引用 Skill"
+                :title="translateUi('uiMessages.mcec0ec695d4d')"
+                :aria-label="translateUi('uiMessages.mcec0ec695d4d')"
                 @click="$emit('open-skills', $event)"
               ><Box :size="16" aria-hidden="true" /></button>
 
@@ -476,14 +476,14 @@
                 <button
                   class="toolbar-btn preset-btn"
                   type="button"
-                  title="选择预设"
-                  aria-label="选择预设"
+                  :title="translateUi('uiMessages.m3c1f90f21e92')"
+                  :aria-label="translateUi('uiMessages.m3c1f90f21e92')"
                   @click.stop="showPresetDropdown = !showPresetDropdown"
                 >
                   <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
                   </svg>
-                  <span class="toolbar-label">{{ selectedPreset ? selectedPreset.name : '自定义预设' }}</span>
+                  <span class="toolbar-label">{{ selectedPreset ? selectedPreset.name : translateUi('uiMessages.m20aac2eb0583') }}</span>
                   <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M18 15l-6-6-6 6"/>
                   </svg>
@@ -498,7 +498,7 @@
                       :class="{ active: !selectedPreset }"
                       @click.stop="selectPreset(null)"
                     >
-                      <span class="preset-name">无预设</span>
+                      <span class="preset-name">{{ translateUi('uiMessages.md2109b4b642e') }}</span>
                       <svg v-if="!selectedPreset" class="w-4 h-4 check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="20 6 9 17 4 12"/>
                       </svg>
@@ -528,7 +528,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                       </svg>
-                      <span class="preset-name">管理预设...</span>
+                      <span class="preset-name">{{ translateUi('uiMessages.mb51f82829f65') }}</span>
                     </button>
                   </div>
                 </Transition>
@@ -536,7 +536,7 @@
 
               <!-- 附件按钮（带下拉菜单） -->
               <div class="attach-selector" ref="attachSelectorRef">
-                <button class="toolbar-btn" type="button" @click="showAttachDropdown = !showAttachDropdown" title="添加附件" aria-label="添加附件">
+                <button class="toolbar-btn" type="button" @click="showAttachDropdown = !showAttachDropdown" :title="translateUi('uiMessages.mc8a47d001848')" :aria-label="translateUi('uiMessages.mc8a47d001848')">
                   <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 5v14M5 12h14"/>
                   </svg>
@@ -549,7 +549,7 @@
                         <polyline points="17 8 12 3 7 8"/>
                         <line x1="12" y1="3" x2="12" y2="15"/>
                       </svg>
-                      <span>本地上传</span>
+                      <span>{{ translateUi('uiMessages.m02413a69d5ca') }}</span>
                     </button>
                     <button class="attach-option" @click="handleCanvasPick">
                       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -557,7 +557,7 @@
                         <circle cx="8.5" cy="8.5" r="1.5"/>
                         <polyline points="21 15 16 10 5 21"/>
                       </svg>
-                      <span>从画布选择</span>
+                      <span>{{ translateUi('uiMessages.m697900a715dc') }}</span>
                     </button>
                   </div>
                 </Transition>
@@ -575,8 +575,8 @@
                 class="toolbar-btn icon-btn model-picker-trigger"
                 type="button"
                 :class="{ active: selectedModelValue }"
-                title="选择生图模型"
-                aria-label="选择生图模型"
+                :title="translateUi('uiMessages.m010fde936c76')"
+                :aria-label="translateUi('uiMessages.m010fde936c76')"
                 @click.stop="openModelPicker()"
               >
                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -594,8 +594,8 @@
                   class="toolbar-btn icon-btn"
                   :class="{ active: showExecutionSettings }"
                   type="button"
-                  title="执行设置"
-                  aria-label="执行设置"
+                  :title="translateUi('uiMessages.med03cdf7e1aa')"
+                  :aria-label="translateUi('uiMessages.med03cdf7e1aa')"
                   @click.stop="showExecutionSettings = !showExecutionSettings"
                 >
                   <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -611,7 +611,7 @@
                         :class="{ active: deepThinkEnabled }"
                         @click="deepThinkEnabled = !deepThinkEnabled"
                       >
-                        <span class="execution-toggle__label">深度思考</span>
+                        <span class="execution-toggle__label">{{ translateUi('uiMessages.m92e20528d303') }}</span>
                         <span class="execution-toggle__switch"><i></i></span>
                       </button>
                       <button
@@ -619,7 +619,7 @@
                         :class="{ active: webSearchEnabled }"
                         @click="webSearchEnabled = !webSearchEnabled"
                       >
-                        <span class="execution-toggle__label">联网搜索</span>
+                        <span class="execution-toggle__label">{{ translateUi('uiMessages.mf30b4fa151f2') }}</span>
                         <span class="execution-toggle__switch"><i></i></span>
                       </button>
                     </div>
@@ -634,8 +634,8 @@
                 :class="{ 'send-btn--stop': isLoading }"
                 :disabled="isLoading ? false : !canSend"
                 @click="isLoading ? stopCurrentActivity() : sendMessage()"
-                :title="isLoading ? '停止当前对话或任务' : '发送'"
-                :aria-label="isLoading ? '停止当前对话或任务' : '发送'"
+                :title="isLoading ? translateUi('uiMessages.m75fac9bc2786') : translateUi('uiMessages.medecf0ae6e51')"
+                :aria-label="isLoading ? translateUi('uiMessages.m75fac9bc2786') : translateUi('uiMessages.medecf0ae6e51')"
               >
                 <svg v-if="isLoading" class="w-5 h-5" style="width: 17px; height: 17px" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <rect x="6" y="6" width="12" height="12" rx="1.5"/>
@@ -654,10 +654,10 @@
   <Teleport to="body">
     <Transition name="model-picker-fade">
       <div v-if="showModelPicker" class="model-picker-overlay" @click.self="showModelPicker = false">
-        <section class="model-picker-dialog" role="dialog" aria-modal="true" aria-label="选择模型" :style="modelPickerStyle">
+        <section class="model-picker-dialog" role="dialog" aria-modal="true" :aria-label="translateUi('uiMessages.m1afed6a81a25')" :style="modelPickerStyle">
           <header class="model-picker-header">
-            <div><h2>选择模型</h2><p>仅显示当前租户与 Skill 允许调用的模型</p></div>
-            <button type="button" class="model-picker-close" title="关闭" aria-label="关闭模型选择" @click="showModelPicker = false">×</button>
+            <div><h2>{{ translateUi('uiMessages.m1afed6a81a25') }}</h2><p>{{ translateUi('uiMessages.mf41a5b988ad5') }}</p></div>
+            <button type="button" class="model-picker-close" :title="translateUi('common.close')" :aria-label="translateUi('uiMessages.m6d6143255d55')" @click="showModelPicker = false">×</button>
           </header>
           <div class="model-picker-tabs" role="tablist">
             <button v-for="type in modelPickerTypes" :key="type" type="button" role="tab" :aria-selected="modelPickerType === type" :class="{ active: modelPickerType === type }" @click="modelPickerType = type">{{ modelTypeLabel(type) }}</button>
@@ -665,17 +665,17 @@
           <div class="model-picker-list">
             <button v-for="model in modelPickerModels" :key="model.value" type="button" class="model-picker-item" :class="{ selected: isAssistantModelSelected(model) }" @click="selectAssistantModel(model)">
               <span class="picker-model-icon"><ModelIcon :icon="getAssistantModelIcon(model)" :label="model.label || model.value" /></span>
-              <span class="picker-model-copy"><strong>{{ model.label || model.value }}</strong><small>{{ model.description || '已启用模型' }}</small></span>
-              <span class="picker-model-action" :class="{ selected: isAssistantModelSelected(model) }" :aria-label="isAssistantModelSelected(model) ? '已选择' : '选择模型'">
+              <span class="picker-model-copy"><strong>{{ model.label || model.value }}</strong><small>{{ model.description || translateUi('uiMessages.m40c57832760a') }}</small></span>
+              <span class="picker-model-action" :class="{ selected: isAssistantModelSelected(model) }" :aria-label="isAssistantModelSelected(model) ? translateUi('uiMessages.m3f4ebc4aad97') : translateUi('uiMessages.m1afed6a81a25')">
                 <svg v-if="isAssistantModelSelected(model)" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg>
                 <svg v-else viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
               </span>
             </button>
-            <p v-if="!modelPickerModels.length" class="model-picker-empty">当前没有可选择的{{ modelTypeLabel(modelPickerType) }}。</p>
+            <p v-if="!modelPickerModels.length" class="model-picker-empty">{{ translateUi('uiMessages.m2dcdf609bbf9', { value1: (modelTypeLabel(modelPickerType)) }) }}</p>
           </div>
           <!-- 视频模型生成模式选择：选中支持多模式的视频模型后显示（text2video/首帧/首尾帧/多模态） -->
           <div v-if="modelPickerType === 'video' && selectedModelValue && selectedVideoModes.length" class="model-picker-modes">
-            <span class="model-picker-modes__label">生成模式</span>
+            <span class="model-picker-modes__label">{{ translateUi('uiMessages.m29ccb4125180') }}</span>
             <div class="model-picker-modes__list">
               <button
                 v-for="mode in selectedVideoModes"
@@ -732,8 +732,8 @@
             type="button"
             class="lightbox-navigation__button"
             :disabled="!hasPreviousLightboxImage"
-            title="上一张图片（左方向键）"
-            aria-label="上一张图片"
+            :title="translateUi('uiMessages.m63282d860508')"
+            :aria-label="translateUi('uiMessages.me6f07f4f927d')"
             @click="showPreviousLightboxImage"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -745,8 +745,8 @@
             type="button"
             class="lightbox-navigation__button"
             :disabled="!hasNextLightboxImage"
-            title="下一张图片（右方向键）"
-            aria-label="下一张图片"
+            :title="translateUi('uiMessages.mecd4f88317fc')"
+            :aria-label="translateUi('uiMessages.m23381b8a7d92')"
             @click="showNextLightboxImage"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -771,7 +771,7 @@
               <circle cx="18" cy="16" r="3"/>
             </svg>
           </div>
-          <div class="lightbox-audio-name">{{ lightboxMedia.name || '音频文件' }}</div>
+          <div class="lightbox-audio-name">{{ lightboxMedia.name || translateUi('uiMessages.md84378e7c299') }}</div>
           <audio
             :src="lightboxMedia.url"
             class="lightbox-audio-player"
@@ -785,13 +785,13 @@
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
             </svg>
-            下载到本地
+            {{ translateUi('uiMessages.m7088e8f02677') }}
           </button>
           <button type="button" class="lightbox-action-btn" @click="loadLightboxMediaToCanvas">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2M12 3v12m0 0 4-4m-4 4-4-4" />
             </svg>
-            加载到画布
+            {{ translateUi('uiMessages.m7e04021da9e3') }}
           </button>
         </div>
       </div>
@@ -800,6 +800,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, computed, watch, nextTick, onMounted, onUnmounted, inject } from 'vue'
 import { Box, History, MessageSquarePlus, Sparkle, X } from '@lucide/vue'
 import AIAssistantMessage from './AIAssistantMessage.vue'
@@ -1115,7 +1117,7 @@ const modelPickerModels = computed(() => {
           name: cfg.name || meta.name,
           actualModel: cfg.actualModel || meta.actualModel,
           label: cfg.displayName || cfg.label || meta.label || cfg.name || cfg.id,
-          description: cfg.description || meta.description || '已启用视频模型',
+          description: cfg.description || meta.description || translateUi('uiMessages.m972e32ac5115'),
           pointsCost: cfg.pointsCost != null ? cfg.pointsCost : meta.pointsCost,
           apiType: cfg.apiType || meta.apiType || null,
           supportedModes: cfg.supportedModes || null,
@@ -1148,7 +1150,7 @@ const selectedAssistantModel = computed(() => {
 })
 
 function modelTypeLabel(type) {
-  return type === 'video' ? '视频' : '图片'
+  return type === 'video' ? translateUi('canvas.nodeConfig.videoInput.label') : translateUi('canvas.nodeConfig.imageInput.label')
 }
 
 function selectAssistantModel(model) {
@@ -1182,10 +1184,10 @@ function isAssistantModelSelected(model) {
 
 // 视频生成模式选择（与 VideoNode 的 MINIMAX_H3_MODES/SEEDANCE2_MODES 对齐，用内部模式值）
 const VIDEO_GENERATION_MODES = [
-  { value: 'text2video', label: '文生视频' },
-  { value: 'image2video_first', label: '首帧' },
-  { value: 'image2video_first_last', label: '首尾帧' },
-  { value: 'multimodal_ref', label: '多模态' }
+  { value: 'text2video', get label() { return translateUi('canvas.nodeTypes.textToVideo') } },
+  { value: 'image2video_first', get label() { return translateUi('uiMessages.m0eee51419641') } },
+  { value: 'image2video_first_last', get label() { return translateUi('uiMessages.ma44f24ac18b3') } },
+  { value: 'multimodal_ref', get label() { return translateUi('uiMessages.m5d7b7e77768b') } }
 ]
 
 // 支持模式选择的视频模型 apiType：MiniMax H3 / Seedance 系（含 HappyHorse）/ Wan
@@ -1246,7 +1248,7 @@ function focusInputEditor() {
 function buildTurnModelHint() {
   const model = selectedAssistantModel.value
   if (!model) return ''
-  const typeLabel = modelPickerType.value === 'video' ? '视频' : '图片'
+  const typeLabel = modelPickerType.value === 'video' ? translateUi('canvas.nodeConfig.videoInput.label') : translateUi('canvas.nodeConfig.imageInput.label')
   const label = model.label || model.value || model.name || ''
   const modelId = selectedModelValue.value || model.value || model.actualModel || label
   if (!modelId) return ''
@@ -1384,7 +1386,7 @@ async function enqueueServerMessage(draft) {
       console.warn('[AI-Assistant] 排队附件上传失败:', error?.message)
       // AC-P1-02: 附件上传失败写入草稿，用户可见可重试
       draft.status = 'error'
-      draft.error = error?.message || '附件上传失败，请重试'
+      draft.error = error?.message || translateUi('uiMessages.m563ca0d2bb89')
       return
     }
   }
@@ -1411,7 +1413,7 @@ async function enqueueServerMessage(draft) {
     console.warn('[AI-Assistant] 服务端排队失败:', error?.message)
     // AC-P1-02: 排队失败写入对应草稿，不静默吞掉
     draft.status = 'error'
-    draft.error = error?.message || '排队失败，请重试'
+    draft.error = error?.message || translateUi('uiMessages.m0003b1132a8f')
   }
   await refreshQueueAndFollow()
 }
@@ -1556,7 +1558,7 @@ async function forceInsertQueuedMessage(queued) {
         await enqueueServerMessage(queued)
         const synced = serverQueue.value.find((s) => s.client_message_id === queued.client_message_id)
         if (!queued.turn_id && !synced?.turn_id) {
-          showAlert('该消息尚未同步到服务端队列，请稍后重试。', '无法立即插入')
+          showAlert(translateUi('uiMessages.md7bf56d522b5'), translateUi('uiMessages.m13eaf86183f5'))
           return
         }
         queued.turn_id = queued.turn_id || synced.turn_id
@@ -1570,7 +1572,7 @@ async function forceInsertQueuedMessage(queued) {
     } catch (error) {
       console.warn('[AI-Assistant] 置顶队列消息失败:', error?.message)
       refreshQueueAndFollow()
-      showAlert('该消息已开始执行，无法置顶。请点击「停止」取消当前任务后重试。', '无法立即插入')
+      showAlert(translateUi('uiMessages.m516721aba3d9'), translateUi('uiMessages.m13eaf86183f5'))
       return
     }
     hidePromotedQueueItem(queued)
@@ -1598,7 +1600,7 @@ async function forceInsertQueuedMessage(queued) {
       } catch (error) {
         console.warn('[AI-Assistant] 队列消息已开始执行，无法强制插入:', error?.message)
         refreshQueueAndFollow()
-        showAlert('该消息已开始执行，无法立即插入。请点击「停止」取消当前任务后重试。', '无法立即插入')
+        showAlert(translateUi('uiMessages.mccf445aa9f16'), translateUi('uiMessages.m13eaf86183f5'))
         return
       }
     }
@@ -1625,7 +1627,7 @@ async function removeQueuedServerMessage(queued) {
     } catch (error) {
       console.warn('[AI-Assistant] 删除队列消息失败:', error?.message)
       queued.status = 'error'
-      queued.error = error?.message || '删除失败，请重试'
+      queued.error = error?.message || translateUi('uiMessages.m2026b0d30e91')
       return
     }
   }
@@ -1779,7 +1781,7 @@ function stopCurrentActivity() {
       activeTurn.value.status = 'running'
       activeTurn.value.phase = 'running'
       activeTurn.value.cancellable = true
-      showAlert(`停止失败：${error?.message || '请重试'}`, '停止 AI 回复')
+      showAlert(translateUi('uiMessages.m7655566590e9', { value1: (error?.message || translateUi('uiMessages.ma2577bae3cfc')) }), translateUi('uiMessages.m9f257b9ba90f'))
     })
   }
   normalStreamController?.abort()
@@ -1799,7 +1801,7 @@ function stopCurrentActivity() {
     // 生成中卡片冻结而非删除：保留占位网格，仅标记已停止（mediaStopped 由
     // AIAssistantMessage 渲染为「已停止」文案并停止脉冲动画），不 delete 生成中字段。
     if (activeMessage.mediaGenerating) activeMessage.mediaStopped = true
-    if (!activeMessage.content) activeMessage.content = '已停止当前对话或任务'
+    if (!activeMessage.content) activeMessage.content = translateUi('uiMessages.m60d7fce8feaa')
   }
   // 停止当前活动时一并取消排队中的跟进消息，避免回合取消后调度器自动执行它们
   // （否则用户点「停止」后排队消息仍会逐个自动跑，表现为对话停不下来）。
@@ -1812,7 +1814,7 @@ function stopCurrentActivity() {
         await deleteQueuedCodexMessage(currentCodexThreadId.value, turnId)
       } catch (error) {
         queued.status = 'error'
-        queued.error = error?.message || '删除失败，请重试'
+        queued.error = error?.message || translateUi('uiMessages.m2026b0d30e91')
       }
     })
     void Promise.all(pendingDeletes).then(() => {
@@ -1840,7 +1842,7 @@ function finalizeDeletedTurnPlaceholders(failedIds) {
     if (promotedQueueKeys.value.has(message.turn_id)) {
       message.isStreaming = false
       message.isThinking = false
-      if (!message.content) message.content = '已停止当前对话或任务'
+      if (!message.content) message.content = translateUi('uiMessages.m60d7fce8feaa')
     }
   }
 }
@@ -2164,7 +2166,7 @@ function handleToolEvent(message, event, opts = {}) {
       return
     }
     if (event.type === 'retrying') {
-      card.detail = `重试中 (${event.attempt}/${event.max_attempts})`
+      card.detail = translateUi('uiMessages.m522d6096a0a9', { value1: (event.attempt), value2: (event.max_attempts) })
       return
     }
     card.status = event.type === 'failed' ? 'error' : (event.status === 'completed' ? 'done' : 'error')
@@ -2217,7 +2219,7 @@ async function loadSessions() {
       const result = await getCodexSessions(teamStore.getSpaceParams('current'))
       sessions.value = (result.sessions || []).map(s => ({
         id: s.thread_id,
-        title: s.summary || '增强模式会话',
+        title: s.summary || translateUi('uiMessages.me610f10d0101'),
         last_message: s.summary || '',
         turn_status: s.turn_status || 'idle',
         ...s
@@ -2405,7 +2407,7 @@ async function loadSession(session) {
         // 无落盘消息时回退到会话详情摘要
         messages.value = [{
           role: 'assistant',
-          content: sessionData.summary || '会话已恢复，可以继续对话。',
+          content: sessionData.summary || translateUi('uiMessages.m65bc86b819a0'),
           timestamp: Date.now()
         }]
       }
@@ -2447,7 +2449,7 @@ async function loadSession(session) {
         if (m.role === 'assistant' && m.status === 'streaming') {
           return {
             ...m,
-            content: m.content && m.content !== '正在生成中…' ? m.content : '（该轮生成中断，未保存完整内容）'
+            content: m.content && m.content !== '正在生成中…' ? m.content : translateUi('uiMessages.mef3820d2e870')
           }
         }
         return m
@@ -2501,7 +2503,7 @@ async function loadSession(session) {
     // 如果加载失败，显示错误提示
     messages.value = [{
       role: 'assistant',
-      content: '加载历史消息失败，请重试。',
+      content: translateUi('uiMessages.m3e7c126808da'),
       timestamp: Date.now()
     }]
   }
@@ -2581,7 +2583,7 @@ function reconnectStream(threadId) {
       }
       if (event.type === 'task.failed' || event.type === 'task.timeout') {
         finalizeMediaGenerationState(last)
-        if (!last.content) last.content = `媒体任务执行失败：${event.error || event.message || '未知错误'}`
+        if (!last.content) last.content = translateUi('uiMessages.me1ffd57b898e', { value1: (event.error || event.message || translateUi('canvas.unknownError')) })
         last.isStreaming = false
         throttledScrollToBottom()
       }
@@ -2627,10 +2629,10 @@ function reconnectStream(threadId) {
 async function deleteSessionItem(sessionId) {
   // AC-P2-04: 删除前确认；说明不会取消已提交的媒体任务
   const confirmed = await showAlert(
-    '删除对话不会取消已经提交的图片或视频任务。\n正在执行的 AI 回复会先停止；确认停止后再删除。',
-    '删除对话',
+    translateUi('uiMessages.m581d7cecc998'),
+    translateUi('uiMessages.mff852de52d1f'),
     '',
-    '删除'
+    translateUi('common.delete')
   )
   if (!confirmed) return
   try {
@@ -2647,11 +2649,11 @@ async function deleteSessionItem(sessionId) {
   } catch (error) {
     // AC-P2-04: 网络失败使用页面内错误组件，不能只 console.error
     if (error?.code === 'delete_waiting_for_cancel' || /正在停止/.test(error?.message || '')) {
-      showAlert('上一轮 AI 回复仍在停止中，请稍后重试删除。', '删除对话')
+      showAlert(translateUi('uiMessages.m9785f5d1f27d'), translateUi('uiMessages.mff852de52d1f'))
       return
     }
     console.error('[AI-Assistant] 删除会话失败:', error)
-    showAlert(`删除会话失败：${error?.message || '未知错误'}`, '删除失败')
+    showAlert(translateUi('uiMessages.me982b9824e1a', { value1: (error?.message || translateUi('canvas.unknownError')) }), translateUi('errors.deleteFailed'))
   }
 }
 
@@ -2727,7 +2729,7 @@ async function handleSavePreset(data) {
     closePresetDialog()
   } catch (error) {
     console.error('[AI-Assistant] 保存预设失败:', error)
-    alert(error.message || '保存失败，请重试')
+    alert(error.message || translateUi('user.saveFailed'))
   }
 }
 
@@ -2735,7 +2737,7 @@ async function handleSavePreset(data) {
 function handleTempUsePreset(data) {
   selectedPreset.value = {
     id: 'temp',
-    name: '临时预设',
+    name: translateUi('uiMessages.m7f0b1f1ff3a5'),
     systemPrompt: data.systemPrompt
   }
   console.log('[AI-Assistant] 使用临时预设')
@@ -3166,7 +3168,7 @@ function collectRecentAssistantMedia() {
           key: `history-media:${index}:${a.url}`,
           type: a.type,
           url: a.url,
-          name: a.name || (a.type === 'image' ? '参考图片' : '参考视频')
+          name: a.name || (a.type === 'image' ? translateUi('canvas.templates.nodeTitle.referenceImage') : translateUi('canvas.videoNode.refVideo'))
         }))
     }
   }
@@ -3333,7 +3335,7 @@ async function sendEnhancedMessage(force = false) {
     if (filesToUpload.length > 0) {
       try {
         isUploading.value = true
-        messages.value[assistantMessageIndex].content = '正在上传附件...'
+        messages.value[assistantMessageIndex].content = translateUi('uiMessages.mb06a7b034eeb')
         const uploadResults = await uploadAttachments(filesToUpload.map(a => a.file))
         const uploadedByOriginal = uploadResults.map((result, index) => ({
           key: filesToUpload[index].key,
@@ -3362,7 +3364,7 @@ async function sendEnhancedMessage(force = false) {
         }
       } catch (uploadError) {
         console.error('[AI-Assistant] 附件上传失败:', uploadError)
-        messages.value[assistantMessageIndex].content = `抱歉，附件上传失败: ${uploadError.message}`
+        messages.value[assistantMessageIndex].content = translateUi('uiMessages.mac890c61cdd1', { value1: (uploadError.message) })
         messages.value[assistantMessageIndex].isStreaming = false
         isLoading.value = false
         isUploading.value = false
@@ -3566,7 +3568,7 @@ async function sendEnhancedMessage(force = false) {
         if (event.type === 'task.failed') {
           if (message) {
             finalizeMediaGenerationState(message)
-            message.content = `媒体任务执行失败：${event.error || '未知错误'}`
+            message.content = translateUi('uiMessages.me1ffd57b898e', { value1: (event.error || translateUi('canvas.unknownError')) })
           }
         }
       },
@@ -3592,7 +3594,7 @@ async function sendEnhancedMessage(force = false) {
         activeTurn.value.cancelRequested = false
         activeTurn.value.cancellable = false
         if (message && !message.content) {
-          message.content = '已停止当前对话或任务'
+          message.content = translateUi('uiMessages.m60d7fce8feaa')
         }
         if (message) {
           message.isThinking = false
@@ -3673,7 +3675,7 @@ async function sendEnhancedMessage(force = false) {
         message.isThinking = false
         finalizeMediaGenerationState(message)
         if (!message.content) {
-          message.content = `抱歉，发生了错误: ${error.message}`
+          message.content = translateUi('uiMessages.mc496c7998ecc', { value1: (error.message) })
         }
         message.isStreaming = false
         queuedTurn.value = false
@@ -3694,7 +3696,7 @@ async function sendEnhancedMessage(force = false) {
       const waitMsg = messages.value[assistantMessageIndex]
       if (waitMsg) {
         waitMsg.isThinking = false
-        waitMsg.content = '正在等待上一轮 AI 回复停止，请稍候…'
+        waitMsg.content = translateUi('uiMessages.mf858b14fc512')
         waitMsg.isStreaming = false
       }
       // 保留输入草稿，1 秒后自动重试（interrupt 用原 client_message_id 幂等）
@@ -3710,7 +3712,7 @@ async function sendEnhancedMessage(force = false) {
     const message = messages.value[assistantMessageIndex]
     if (message) {
       message.isThinking = false
-      message.content = `抱歉，发生了错误: ${error.message}`
+      message.content = translateUi('uiMessages.mc496c7998ecc', { value1: (error.message) })
       message.isStreaming = false
     }
   } finally {
@@ -3833,13 +3835,13 @@ async function sendMessage(force = false) {
     message.attachments = urls.map((url, mediaIndex) => ({
       type: mediaType,
       url,
-      name: `${mediaType === 'image' ? '生成图片' : mediaType === 'video' ? '生成视频' : '生成音频'} ${mediaIndex + 1}`
+      name: `${mediaType === 'image' ? translateUi('canvas.templates.nodeTitle.generateImage') : mediaType === 'video' ? translateUi('canvas.templates.nodeTitle.generateVideo') : translateUi('uiMessages.mb311c8ba2968')} ${mediaIndex + 1}`
     }))
     // 仅在正文为空时使用默认文案，保留模型的流式输出
     if (!message.content) {
       message.content = mediaType === 'image'
-        ? `已生成 ${urls.length} 张图片`
-        : `${mediaType === 'video' ? '视频' : '音频'}生成完成`
+        ? translateUi('uiMessages.m910afa5009f0', { value1: (urls.length) })
+        : translateUi('uiMessages.mac179fb14245', { value1: (mediaType === 'video' ? translateUi('canvas.nodeConfig.videoInput.label') : translateUi('canvas.nodeConfig.audioInput.label')) })
     }
   }
 
@@ -3877,7 +3879,7 @@ async function sendMessage(force = false) {
       if (filesToUpload.length > 0) {
         try {
           isUploading.value = true
-          messages.value[assistantMessageIndex].content = '正在上传附件...'
+          messages.value[assistantMessageIndex].content = translateUi('uiMessages.mb06a7b034eeb')
           console.log(`[AI-Assistant] 开始上传 ${filesToUpload.length} 个附件...`)
           const uploadResults = await uploadAttachments(filesToUpload.map(a => a.file))
           const uploadedByOriginal = uploadResults.map((result, index) => ({
@@ -3908,7 +3910,7 @@ async function sendMessage(force = false) {
           }
         } catch (uploadError) {
           console.error('[AI-Assistant] 附件上传失败:', uploadError)
-          messages.value[assistantMessageIndex].content = `抱歉，附件上传失败: ${uploadError.message}`
+          messages.value[assistantMessageIndex].content = translateUi('uiMessages.mac890c61cdd1', { value1: (uploadError.message) })
           messages.value[assistantMessageIndex].isStreaming = false
           isLoading.value = false
           isUploading.value = false
@@ -3994,7 +3996,7 @@ async function sendMessage(force = false) {
         } else if (event?.type === 'tool_progress') {
           const runningCard = [...message.toolEvents].reverse().find(item => item.status === 'running')
           if (runningCard) {
-            runningCard.detail = event.message || (message.mediaGenerating ? '生成任务已提交，正在等待结果…' : '')
+            runningCard.detail = event.message || (message.mediaGenerating ? translateUi('uiMessages.mb5fa680d9308') : '')
           }
         } else if (event?.type === 'tool_completed') {
           const runningCard = [...message.toolEvents].reverse().find(item => item.status === 'running')
@@ -4026,7 +4028,7 @@ async function sendMessage(force = false) {
       onApproval: (approval) => {
         pendingAgentApproval.value = approval
         pendingAgentMessageIndex.value = assistantMessageIndex
-        messages.value[assistantMessageIndex].content = 'MCP 工具调用需要授权'
+        messages.value[assistantMessageIndex].content = translateUi('uiMessages.m6216b307ea1d')
         messages.value[assistantMessageIndex].isThinking = false
         messages.value[assistantMessageIndex].isStreaming = false
       },
@@ -4037,7 +4039,7 @@ async function sendMessage(force = false) {
           return
         }
         finalizeMediaGenerationState(messages.value[assistantMessageIndex])
-        messages.value[assistantMessageIndex].content = `抱歉，发生了错误: ${error.message}`
+        messages.value[assistantMessageIndex].content = translateUi('uiMessages.mc496c7998ecc', { value1: (error.message) })
         messages.value[assistantMessageIndex].isThinking = false
         messages.value[assistantMessageIndex].isStreaming = false
       }
@@ -4054,7 +4056,7 @@ async function sendMessage(force = false) {
       }
       return
     }
-    messages.value[assistantMessageIndex].content = `抱歉，发生了错误: ${error.message}`
+    messages.value[assistantMessageIndex].content = translateUi('uiMessages.mc496c7998ecc', { value1: (error.message) })
     messages.value[assistantMessageIndex].isThinking = false
     messages.value[assistantMessageIndex].isStreaming = false
   } finally {
@@ -4075,7 +4077,7 @@ async function sendSkillMessage() {
   autoResize()
   messages.value.push({ role: 'user', content: messageText, timestamp: Date.now() })
   const index = messages.value.length
-  messages.value.push({ role: 'assistant', content: '正在准备 Skill 调用…', timestamp: Date.now(), isStreaming: true })
+  messages.value.push({ role: 'assistant', content: translateUi('uiMessages.m5581a4ca5656'), timestamp: Date.now(), isStreaming: true })
   isLoading.value = true
   try {
     const result = await createAgentRun({
@@ -4088,13 +4090,13 @@ async function sendSkillMessage() {
     if (result.status === 'approval_required') {
       pendingAgentApproval.value = result
       pendingAgentMessageIndex.value = index
-      messages.value[index].content = `需要授权调用 ${pendingApprovalActions.value.map(action => action.capability).join('、')}`
+      messages.value[index].content = translateUi('uiMessages.m43c04039b0c2', { value1: (pendingApprovalActions.value.map(action => action.capability).join('、')) })
       messages.value[index].isStreaming = false
     } else {
       await watchAgentRun(result.run_id, index)
     }
   } catch (error) {
-    messages.value[index].content = `Skill 调用失败: ${error.message}`
+    messages.value[index].content = translateUi('uiMessages.m816734a9b0eb', { value1: (error.message) })
     messages.value[index].isStreaming = false
   } finally {
     isLoading.value = false
@@ -4107,14 +4109,14 @@ async function sendSkillMessage() {
  * canvas_skill__{id} → 技能名（内置技能映射为中文），web_search → 联网搜索，MCP 保留原名。
  */
 function formatAssistantToolName(toolName) {
-  if (!toolName) return '工具调用'
+  if (!toolName) return translateUi('uiMessages.ma8ca3c13eb75')
   const builtinNames = {
-    'canvas_skill__builtin-canvas-image-generate': '画布生图',
-    'canvas_skill__builtin-canvas-video-generate': '画布生视频'
+    'canvas_skill__builtin-canvas-image-generate': translateUi('uiMessages.md297b0913dd6'),
+    'canvas_skill__builtin-canvas-video-generate': translateUi('uiMessages.m58d0e74f616a')
   }
   if (builtinNames[toolName]) return builtinNames[toolName]
-  if (toolName === 'web_search') return '联网搜索'
-  if (toolName.startsWith('canvas_skill__')) return `技能: ${toolName.slice('canvas_skill__'.length)}`
+  if (toolName === 'web_search') return translateUi('uiMessages.mf30b4fa151f2')
+  if (toolName.startsWith('canvas_skill__')) return translateUi('uiMessages.m59e58e020afc', { value1: (toolName.slice('canvas_skill__'.length)) })
   return toolName
 }
 
@@ -4159,20 +4161,20 @@ function applyAgentResultToMessage(index, result) {
       const orderIndex = (a) => (a?.task_id && order.includes(a.task_id) ? order.indexOf(a.task_id) : order.length)
       existing.sort((a, b) => orderIndex(a) - orderIndex(b))
       existing.forEach((a, i) => {
-        a.name = `${a.type === 'image' ? '生成图片' : a.type === 'video' ? '生成视频' : '生成音频'} ${i + 1}`
+        a.name = `${a.type === 'image' ? translateUi('canvas.templates.nodeTitle.generateImage') : a.type === 'video' ? translateUi('canvas.templates.nodeTitle.generateVideo') : translateUi('uiMessages.mb311c8ba2968')} ${i + 1}`
       })
     } else {
       let nextId = existing.length + 1 - newItems.length
       for (const item of newItems) {
-        item.name = `${item.type === 'image' ? '生成图片' : item.type === 'video' ? '生成视频' : '生成音频'} ${nextId++}`
+        item.name = `${item.type === 'image' ? translateUi('canvas.templates.nodeTitle.generateImage') : item.type === 'video' ? translateUi('canvas.templates.nodeTitle.generateVideo') : translateUi('uiMessages.mb311c8ba2968')} ${nextId++}`
       }
     }
     messages.value[index].attachments = existing
     const imageCount = existing.filter(a => a.type === 'image').length
     const videoCount = existing.filter(a => a.type === 'video').length
     messages.value[index].content = imageCount > 0
-      ? (videoCount > 0 ? `已生成 ${imageCount} 张图片、${videoCount} 个视频` : `已生成 ${imageCount} 张图片`)
-      : (videoCount > 0 ? `已生成 ${videoCount} 个视频` : (result?.content || JSON.stringify(result || {})))
+      ? (videoCount > 0 ? translateUi('uiMessages.m9a3e018a2dee', { value1: (imageCount), value2: (videoCount) }) : translateUi('uiMessages.m910afa5009f0', { value1: (imageCount) }))
+      : (videoCount > 0 ? translateUi('uiMessages.mfa685f6d0943', { value1: (videoCount) }) : (result?.content || JSON.stringify(result || {})))
     return
   }
   messages.value[index].content = result?.content || JSON.stringify(result || {})
@@ -4261,7 +4263,7 @@ function maybeLatePullTaskResult(assistantMessageIndex) {
         const doneTaskId = event.task_id || null
         if (doneTaskId) finishedTaskIds.add(doneTaskId)
         finalizeMediaGenerationState(msg)
-        if (!msg.content) msg.content = `媒体任务执行失败：${event.error || event.message || '未知错误'}`
+        if (!msg.content) msg.content = translateUi('uiMessages.me1ffd57b898e', { value1: (event.error || event.message || translateUi('canvas.unknownError')) })
         msg.isStreaming = false
         clearPendingToolStatusCards()
         scrollToBottom()
@@ -4310,10 +4312,10 @@ async function watchAgentRun(runId, index) {
         lastEventId = id
         if (!messages.value[index]) return
         if (event.type === 'tool_started') {
-          messages.value[index].content = `正在执行 ${event.capability}…`
+          messages.value[index].content = translateUi('uiMessages.m8d88ab9497fe', { value1: (event.capability) })
           messages.value[index].isStreaming = true
         } else if (event.type === 'tool_progress') {
-          messages.value[index].content = `任务已提交，正在等待 ${event.capability} 完成…`
+          messages.value[index].content = translateUi('uiMessages.mbd46bf79dc2b', { value1: (event.capability) })
         } else if (event.type === 'tool_completed') {
           applyAgentResultToMessage(index, event.result)
         } else if (event.type === 'done') {
@@ -4322,7 +4324,7 @@ async function watchAgentRun(runId, index) {
           messages.value[index].isStreaming = false
         } else if (event.type === 'error') {
           terminal = true
-          messages.value[index].content = `Skill 调用失败: ${event.error}`
+          messages.value[index].content = translateUi('uiMessages.m816734a9b0eb', { value1: (event.error) })
           messages.value[index].isStreaming = false
         }
         scrollToBottom()
@@ -4351,12 +4353,12 @@ async function decideSkillRun(decision) {
     pendingAgentApproval.value = null
     pendingAgentMessageIndex.value = -1
     if (decision === 'deny') {
-      if (messages.value[index]) messages.value[index].content = '已拒绝本次 Skill 调用'
+      if (messages.value[index]) messages.value[index].content = translateUi('uiMessages.ma129af4e2c4d')
     } else {
       await watchAgentRun(result.run_id || approval.run_id, index)
     }
   } catch (error) {
-    if (messages.value[index]) messages.value[index].content = `授权处理失败: ${error.message}`
+    if (messages.value[index]) messages.value[index].content = translateUi('uiMessages.mf5762a7c1778', { value1: (error.message) })
   } finally {
     pendingAgentApproval.value = null
     pendingAgentMessageIndex.value = -1
@@ -4577,7 +4579,7 @@ function downloadLightboxMedia() {
     startStreamDownload(url, name || 'ai-assistant-media')
   } catch (error) {
     console.error('[AI-Assistant] 媒体下载失败:', error)
-    showAlert(`下载失败：${error.message || '未知错误'}`, '下载失败')
+    showAlert(translateUi('uiMessages.mf6cc8d737da5', { value1: (error.message || translateUi('canvas.unknownError')) }), translateUi('errors.downloadFailed'))
   }
   closeLightbox()
 }

@@ -25,7 +25,7 @@
         @ended="onNativeEnded"
         @error="emit('preview-error', '视频预览加载失败，请检查素材地址及跨域访问权限')"
       />
-      <div v-else class="video-preview__empty">选择视频片段</div>
+      <div v-else class="video-preview__empty">{{ translateUi('uiMessages.mc24dc17fb166') }}</div>
       <div
         v-if="mode === 'fine' && selectionStyle"
         class="video-preview__selection"
@@ -41,6 +41,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { normalizePreviewRectToVideo } from '@/utils/videoToolRect'
 
@@ -353,7 +355,7 @@ async function applyClipSettings() {
   try {
     if (!audioContext) {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext
-      if (!AudioContextClass) throw new Error('浏览器不支持音频处理')
+      if (!AudioContextClass) throw new Error(translateUi('uiMessages.m603e071f9848'))
       audioContext = new AudioContextClass()
       audioSource = audioContext.createMediaElementSource(video)
       audioElement = video

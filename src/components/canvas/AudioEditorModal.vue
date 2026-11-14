@@ -1,9 +1,11 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, onUnmounted, ref, watch } from 'vue'
 
 const props = defineProps({
   audioUrl: { type: String, required: true },
-  title: { type: String, default: '音频' },
+  title: { type: String, get default() { return translateUi('canvas.nodeConfig.audioInput.label') } },
   duration: { type: Number, default: 0 }
 })
 
@@ -163,14 +165,14 @@ onUnmounted(() => {
 
 <template>
   <div class="audio-editor-overlay">
-    <section class="audio-editor" aria-label="音频截取">
+    <section class="audio-editor" :aria-label="translateUi('uiMessages.mf8c8f1acb4ba')">
       <header class="audio-editor-header">
         <div>
-          <span class="audio-editor-kicker">♫ 节点</span>
-          <h3>音频截取</h3>
+          <span class="audio-editor-kicker">{{ translateUi('uiMessages.m1347a717a0b0') }}</span>
+          <h3>{{ translateUi('uiMessages.mf8c8f1acb4ba') }}</h3>
           <p>{{ title }}</p>
         </div>
-        <button class="icon-btn" title="关闭" @click="emit('close')">×</button>
+        <button class="icon-btn" :title="translateUi('common.close')" @click="emit('close')">×</button>
       </header>
 
       <audio ref="audioRef" :src="audioUrl" @loadedmetadata="handleLoadedMetadata" @timeupdate="handleTimeUpdate" @pause="isPlaying = false" @ended="isPlaying = false" />
@@ -180,34 +182,34 @@ onUnmounted(() => {
           <i v-for="(height, index) in waveformBars" :key="index" :style="{ height: `${height}%` }"></i>
         </div>
         <div class="trim-selection" :style="selectionStyle" @pointerdown="startSelectionDrag('move', $event)">
-          <button class="trim-handle trim-handle-start" aria-label="调整截取起点" @pointerdown="startSelectionDrag('start', $event)"></button>
+          <button class="trim-handle trim-handle-start" :aria-label="translateUi('uiMessages.mc4a286f7d824')" @pointerdown="startSelectionDrag('start', $event)"></button>
           <span class="trim-duration">{{ clipDuration.toFixed(2) }}<small>s</small></span>
-          <button class="trim-handle trim-handle-end" aria-label="调整截取终点" @pointerdown="startSelectionDrag('end', $event)"></button>
+          <button class="trim-handle trim-handle-end" :aria-label="translateUi('uiMessages.m3301e5d79171')" @pointerdown="startSelectionDrag('end', $event)"></button>
         </div>
       </div>
 
       <div class="audio-status">
         <span>{{ formatTime(previewTime) }} / {{ formatTime(clipDuration) }}</span>
-        <button class="play-btn" :title="isPlaying ? '暂停' : '播放截取片段'" @click="togglePlay">
+        <button class="play-btn" :title="isPlaying ? translateUi('common.pause') : translateUi('uiMessages.mf0a03e4a3706')" @click="togglePlay">
           <svg v-if="isPlaying" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
           <svg v-else viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
         </button>
       </div>
 
-      <button class="advanced-toggle" @click="showAdvanced = !showAdvanced">{{ showAdvanced ? '收起高级编辑' : '高级编辑' }}</button>
+      <button class="advanced-toggle" @click="showAdvanced = !showAdvanced">{{ showAdvanced ? translateUi('uiMessages.mb0f644003a0d') : translateUi('uiMessages.mb6b5c1084c2e') }}</button>
       <div v-if="showAdvanced" class="advanced-grid">
-        <label><span>音量 {{ volume }}x</span><input v-model.number="volume" type="range" min="0" max="3" step="0.1" /></label>
-        <label><span>变调 {{ pitch }} 半音</span><input v-model.number="pitch" type="range" min="-12" max="12" step="1" /></label>
-        <label><span>速度 {{ speed }}x</span><input v-model.number="speed" type="range" min="0.5" max="2" step="0.05" /></label>
-        <label><span>淡入 {{ fadeIn }}s</span><input v-model.number="fadeIn" type="range" min="0" :max="clipDuration" step="0.1" /></label>
-        <label><span>淡出 {{ fadeOut }}s</span><input v-model.number="fadeOut" type="range" min="0" :max="clipDuration" step="0.1" /></label>
-        <label><span>格式</span><select v-model="format"><option value="mp3">MP3</option><option value="wav">WAV</option><option value="m4a">M4A</option></select></label>
+        <label><span>{{ translateUi('uiMessages.mc69c75cca912', { value1: (volume) }) }}</span><input v-model.number="volume" type="range" min="0" max="3" step="0.1" /></label>
+        <label><span>{{ translateUi('uiMessages.mf1ad987c7987', { value1: (pitch) }) }}</span><input v-model.number="pitch" type="range" min="-12" max="12" step="1" /></label>
+        <label><span>{{ translateUi('uiMessages.mc313acd20abf', { value1: (speed) }) }}</span><input v-model.number="speed" type="range" min="0.5" max="2" step="0.05" /></label>
+        <label><span>{{ translateUi('uiMessages.me4142d2eaef7', { value1: (fadeIn) }) }}</span><input v-model.number="fadeIn" type="range" min="0" :max="clipDuration" step="0.1" /></label>
+        <label><span>{{ translateUi('uiMessages.m498a6b5bec75', { value1: (fadeOut) }) }}</span><input v-model.number="fadeOut" type="range" min="0" :max="clipDuration" step="0.1" /></label>
+        <label><span>{{ translateUi('uiMessages.m0e8b1c78c5f3') }}</span><select v-model="format"><option value="mp3">MP3</option><option value="wav">WAV</option><option value="m4a">M4A</option></select></label>
       </div>
 
       <footer class="audio-editor-actions">
-        <button class="secondary-btn" @click="emit('close')">×　截取</button>
+        <button class="secondary-btn" @click="emit('close')">{{ translateUi('uiMessages.m00b0da3b949c') }}</button>
         <span class="range-pill">{{ formatTime(startTime) }} - {{ formatTime(endTime) }}</span>
-        <button class="generate-btn" :disabled="!canSubmit" @click="handleSubmit">生成</button>
+        <button class="generate-btn" :disabled="!canSubmit" @click="handleSubmit">{{ translateUi('nav.generate') }}</button>
       </footer>
     </section>
   </div>
@@ -234,5 +236,20 @@ onUnmounted(() => {
 .advanced-toggle { display: block; margin: 0 auto 12px; border: 0; background: transparent; color: #a3a3a3; cursor: pointer; font-size: 12px; }
 .advanced-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }.advanced-grid label { display: grid; gap: 6px; color: #d4d4d8; font-size: 12px; }.advanced-grid input, .advanced-grid select { min-height: 32px; padding: 0 8px; border: 1px solid #555; border-radius: 6px; background: #171717; color: #f4f4f5; }
 .audio-editor-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 8px; border-radius: 18px; background: #303030; }.secondary-btn, .generate-btn { min-height: 46px; padding: 0 18px; border: 0; border-radius: 12px; font-size: 16px; cursor: pointer; }.secondary-btn { background: transparent; color: #f2f2f2; }.range-pill { padding: 10px 16px; border-radius: 12px; background: #494949; color: #f5f5f5; font-size: 15px; }.generate-btn { background: #f4f4f5; color: #1b1b1b; }.generate-btn:disabled { opacity: .45; cursor: not-allowed; }
+:root.canvas-theme-light .audio-editor-overlay { background: rgba(0, 0, 0, .28); }
+:root.canvas-theme-light .audio-editor { border-color: #dedede; background: #fff; color: #171717; box-shadow: 0 24px 80px rgba(0,0,0,.16); }
+:root.canvas-theme-light .audio-editor-kicker, :root.canvas-theme-light .audio-editor-header p, :root.canvas-theme-light .advanced-toggle { color: #777; }
+:root.canvas-theme-light .icon-btn { color: #656565; }
+:root.canvas-theme-light .trim-timeline { border-color: #ededed; background: #f7f7f7; }
+:root.canvas-theme-light .waveform i { background: #d4d4d4; }
+:root.canvas-theme-light .trim-selection { border-color: #303030; background: rgba(0,0,0,.05); }
+:root.canvas-theme-light .trim-duration { background: #171717; color: #fff; }
+:root.canvas-theme-light .audio-status, :root.canvas-theme-light .advanced-grid label { color: #303030; }
+:root.canvas-theme-light .play-btn { border-color: #dedede; background: #f2f2f2; color: #171717; }
+:root.canvas-theme-light .advanced-grid input, :root.canvas-theme-light .advanced-grid select { border-color: #dedede; background: #fff; color: #171717; }
+:root.canvas-theme-light .audio-editor-actions { background: #f2f2f2; }
+:root.canvas-theme-light .secondary-btn { color: #303030; }
+:root.canvas-theme-light .range-pill { background: #e5e5e5; color: #171717; }
+:root.canvas-theme-light .generate-btn { background: #171717; color: #fff; }
 @media (max-width: 640px) { .audio-editor { padding: 14px; border-radius: 18px; }.trim-timeline { height: 150px; }.trim-duration { font-size: 22px; }.audio-status { font-size: 18px; }.audio-editor-actions { gap: 6px; }.secondary-btn, .generate-btn { padding: 0 12px; }.range-pill { padding: 10px; font-size: 12px; }.advanced-grid { grid-template-columns: 1fr; } }
 </style>

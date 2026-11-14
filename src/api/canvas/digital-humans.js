@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../i18n/index.js'
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { useTeamStore } from '@/stores/team'
 
@@ -17,7 +18,7 @@ async function request(path, options = {}) {
     ...options
   })
   const data = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(data.message || data.error || '数字人请求失败')
+  if (!response.ok) throw new Error(data.message || data.error || translateUi('uiMessages.m27588adceb45'))
   return data
 }
 

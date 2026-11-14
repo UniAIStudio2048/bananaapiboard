@@ -1,3 +1,4 @@
+import { localizedPattern } from '../i18n/sourceAssertions.mjs'
 import { readFileSync, existsSync } from 'node:fs'
 import { strict as assert } from 'node:assert'
 import { fileURLToPath } from 'node:url'
@@ -44,7 +45,7 @@ for (const exportName of [
   'revokeAllGroupMemberCredits',
   'getGroupLedger'
 ]) {
-  assert.match(apiSource, new RegExp(`export async function ${exportName}\\(`), `api/group.js should export ${exportName}`)
+  assert.match(apiSource, localizedPattern(new RegExp(`export async function ${exportName}\\(`)), `api/group.js should export ${exportName}`)
 }
 
 assert.match(apiSource, /getApiUrl\('\/api\/group\/teams'\)/, 'API should call /api/group/teams')
@@ -64,22 +65,22 @@ assert.match(viewSource, /showRevokeMemberModal/, 'GroupCredits should implement
 assert.match(viewSource, /revokeMemberForm/, 'GroupCredits should track partial member revoke form input')
 assert.match(viewSource, /async function submitRevokeMemberCredits\(\)/, 'GroupCredits should submit partial member revoke from the custom modal')
 assert.match(viewSource, /revokeGroupMemberCredits\(/, 'GroupCredits should call revokeGroupMemberCredits for partial member revoke')
-assert.match(viewSource, /部分收回/, 'GroupCredits should label the member action as partial revoke')
-assert.match(viewSource, /收回积分数量/, 'GroupCredits should ask for an amount instead of an allocation id')
-assert.match(viewSource, /确认收回/, 'GroupCredits should render a confirm action for revoke-by-ID')
+assert.match(viewSource, localizedPattern(/部分收回/), 'GroupCredits should label the member action as partial revoke')
+assert.match(viewSource, localizedPattern(/收回积分数量/), 'GroupCredits should ask for an amount instead of an allocation id')
+assert.match(viewSource, localizedPattern(/确认收回/), 'GroupCredits should render a confirm action for revoke-by-ID')
 assert.doesNotMatch(viewSource, /window\.prompt/, 'GroupCredits should not use native prompt for revoke-by-ID')
-assert.doesNotMatch(viewSource, /分配记录 ID/, 'GroupCredits partial member revoke should not ask for allocation id')
+assert.doesNotMatch(viewSource, localizedPattern(/分配记录 ID/), 'GroupCredits partial member revoke should not ask for allocation id')
 assert.doesNotMatch(viewSource, /revokeGroupAllocation\(/, 'GroupCredits should not use allocation-id revocation from the member row')
 assert.match(viewSource, /revokeAllGroupMemberCredits\(/, 'GroupCredits should call revokeAllGroupMemberCredits')
 assert.match(viewSource, /getGroupLedger\(/, 'GroupCredits should load ledger data')
 assert.match(viewSource, /ledgerDrawerOpen/, 'GroupCredits should implement ledger drawer state')
 assert.match(viewSource, /function closeLedgerDrawer\(\)/, 'GroupCredits should expose a dedicated ledger drawer collapse handler')
-const ledgerHeader = viewSource.match(/<h3 class="text-lg font-semibold">团队积分流水<\/h3>[\s\S]*?<div class="flex gap-2 border-b/)
+const ledgerHeader = viewSource.match(localizedPattern(/<h3 class="text-lg font-semibold">团队积分流水<\/h3>[\s\S]*?<div class="flex gap-2 border-b/))
 assert.ok(ledgerHeader, 'Ledger drawer header should be present')
-assert.doesNotMatch(ledgerHeader[0], />\s*收起\s*</, 'Ledger drawer collapse control should not be in the header')
-const ledgerFooter = viewSource.match(/<span>共 \{\{ ledgerPagination\.total \}\} 条<\/span>[\s\S]*?下一页[\s\S]*?<\/div>\n\s*<\/div>\n\s*<\/aside>/)
+assert.doesNotMatch(ledgerHeader[0], localizedPattern(/>\s*收起\s*</), 'Ledger drawer collapse control should not be in the header')
+const ledgerFooter = viewSource.match(/<span>\{\{ translateUi\('uiMessages\.m85ad0e047775', \{ value1: \(ledgerPagination\.total\) \}\) \}\}<\/span>[\s\S]*?translateUi\('uiMessages\.m8a8542f69648'\)[\s\S]*?<\/div>\n\s*<\/div>\n\s*<\/aside>/)
 assert.ok(ledgerFooter, 'Ledger drawer footer should be present')
-assert.match(ledgerFooter[0], />\s*收起\s*</, 'Ledger drawer should include a visible collapse control in the footer')
+assert.match(ledgerFooter[0], localizedPattern(/>\s*收起\s*</), 'Ledger drawer should include a visible collapse control in the footer')
 assert.match(viewSource, /previousPolicy/, 'GroupCredits should rollback failed policy saves')
 assert.match(viewSource, /forbidden|unauthorized|403/, 'GroupCredits should render unauthorized state')
 

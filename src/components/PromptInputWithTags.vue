@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
@@ -16,7 +18,7 @@ const props = defineProps({
   },
   placeholder: {
     type: String,
-    default: '描述你想要的图像...'
+    get default() { return translateUi('uiMessages.md1dd2dac0e12') }
   }
 })
 
@@ -243,7 +245,7 @@ function updateContentEditable() {
       closeBtn.contentEditable = 'false' // 明确设置不可编辑
       closeBtn.setAttribute('data-tag-content', part.content) // 存储标签内容
       closeBtn.setAttribute('role', 'button') // 语义化
-      closeBtn.setAttribute('aria-label', '删除标签')
+      closeBtn.setAttribute('aria-label', translateUi('uiMessages.m2be218c1ebac'))
       
       // 使用 mousedown 和 click 双重监听，确保能触发
       const handleDelete = (e) => {

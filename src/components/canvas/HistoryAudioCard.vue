@@ -4,6 +4,8 @@ let activePlayer = null
 </script>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 
 const props = defineProps({
@@ -40,7 +42,7 @@ async function togglePlayback() {
     await audio.play()
   } catch (e) {
     if (e.name === 'AbortError') return
-    error.value = '音频暂时无法播放，请重试'
+    error.value = translateUi('uiMessages.m789fe0ba2594')
     playing.value = false
   }
 }
@@ -77,7 +79,7 @@ onBeforeUnmount(resetPlayback)
 
 <template>
   <div class="history-audio-card">
-    <p class="history-audio-title" :title="title">{{ title || '音频' }}</p>
+    <p class="history-audio-title" :title="title">{{ title || translateUi('canvas.nodes.audio') }}</p>
     <audio
       ref="audioRef"
       :src="src"
@@ -98,7 +100,7 @@ onBeforeUnmount(resetPlayback)
       <input
         class="history-audio-seek"
         type="range" min="0" :max="duration || 1" step="0.1" :value="currentTime"
-        :disabled="!duration" :aria-label="`${title || '音频'}播放进度`"
+        :disabled="!duration" :aria-label="translateUi('uiMessages.m68808b0f8ebc', { value1: (title || translateUi('canvas.nodes.audio')) })"
         :aria-valuetext="`${formatTime(currentTime)} / ${duration ? formatTime(duration) : '--:--'}`"
         @input="seekTo"
       />
@@ -107,7 +109,7 @@ onBeforeUnmount(resetPlayback)
       <span class="history-audio-time">{{ formatTime(currentTime) }} / {{ duration ? formatTime(duration) : '--:--' }}</span>
       <button
         type="button" class="history-audio-play" :disabled="!src"
-        :aria-label="`${playing ? '暂停' : '播放'}${title || '音频'}`"
+        :aria-label="`${playing ? translateUi('common.pause') : translateUi('uiMessages.mc3396195e91c')}${title || translateUi('canvas.nodes.audio')}`"
         @click.stop="togglePlayback" @pointerdown.stop @keydown.stop @dragstart.prevent.stop
       >
         <svg v-if="playing" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>

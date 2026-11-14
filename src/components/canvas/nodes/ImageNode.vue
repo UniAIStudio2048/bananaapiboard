@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import Seedream55Parameters from '../Seedream55Parameters.vue'
 import BreakdownReferenceDetails from '../BreakdownReferenceDetails.vue'
 defineOptions({
@@ -224,8 +226,8 @@ function isTimeoutError(msg) {
 }
 
 function getErrorHint(msg) {
-  if (isContentSafetyError(msg)) return '请修改提示词或更换参考图片后重试'
-  if (isTimeoutError(msg)) return '生成时间过长，请稍后重试或简化提示词'
+  if (isContentSafetyError(msg)) return translateUi('uiMessages.mb8705a65f9cb')
+  if (isTimeoutError(msg)) return translateUi('uiMessages.m303c84eb838d')
   return ''
 }
 
@@ -349,7 +351,7 @@ function formatPresetOptionName(name, pointsCost = 0) {
   const normalizedCost = normalizePresetPointsCost(pointsCost)
   // 用户分组倍率：预设附加积分同样按 rate_image 调整，与后端实际扣费保持一致
   const discountedCost = normalizedCost > 0 ? roundPoints(normalizedCost * getUserNodeRate('image')) : 0
-  return discountedCost > 0 ? `${name} (+${formatPoints(discountedCost)}积分/张)` : name
+  return discountedCost > 0 ? translateUi('uiMessages.m0986c7dd4ea3', { value1: (name), value2: (formatPoints(discountedCost)) }) : name
 }
 
 // 相机控制状态
@@ -422,13 +424,13 @@ function revokeTrackedBlobUrl(url) {
 }
 
 async function uploadCropBlob(blob, fileName, nodeId) {
-  if (!blob) throw new Error('裁剪图片为空')
+  if (!blob) throw new Error(translateUi('uiMessages.m84dc586a4b86'))
   const file = new File([blob], fileName, { type: blob.type || 'image/png' })
   const uploaded = await uploadCanvasMedia(file, 'image', {
     nodeId,
     tabId: canvasStore.activeTabId
   })
-  if (!uploaded?.url) throw new Error('裁剪图片上传失败')
+  if (!uploaded?.url) throw new Error(translateUi('uiMessages.m287fc8e6174f'))
   return uploaded.url
 }
 
@@ -502,8 +504,8 @@ function decrementGroupImages() {
 // MJ botType 选择（文生图和图生图模式：写实/动漫）
 const botType = ref(props.data.botType || 'MID_JOURNEY')
 const botTypeOptions = [
-  { value: 'MID_JOURNEY', label: '写实' },
-  { value: 'NIJI_JOURNEY', label: '动漫' }
+  { value: 'MID_JOURNEY', get label() { return translateUi('uiMessages.m93294b654c40') } },
+  { value: 'NIJI_JOURNEY', get label() { return translateUi('uiMessages.mdbc31bd44b06') } }
 ]
 
 // 用户最大并发数限制
@@ -519,7 +521,7 @@ async function toggleCount() {
   const currentIndex = countOptions.indexOf(selectedCount.value)
   const nextCount = countOptions[(currentIndex + 1) % countOptions.length]
   if (nextCount > userConcurrentLimit.value) {
-    await showAlert(`您的套餐最大支持 ${userConcurrentLimit.value} 次并发，请升级套餐以使用更多并发`, '并发限制')
+    await showAlert(translateUi('uiMessages.med9fb65e5b97', { value1: (userConcurrentLimit.value) }), translateUi('uiMessages.m44c5959863d8'))
     return
   }
   selectedCount.value = nextCount
@@ -583,7 +585,7 @@ async function loadImagePresets() {
     userPresets.value = data.user || []
     console.log('[ImageNode] 图像预设已加载:', { tenant: tenantPresets.value.length, user: userPresets.value.length })
   } catch (error) {
-    presetLoadError.value = error.message || '图像预设加载失败'
+    presetLoadError.value = error.message || translateUi('uiMessages.m73cf09dd6d4c')
     tenantPresets.value = []
     userPresets.value = []
     console.error('[ImageNode] 加载图像预设失败:', error)
@@ -597,7 +599,7 @@ const availablePresets = computed(() => {
   // 1. 添加"无预设"选项
   presets.push({
     id: '',
-    name: '无预设',
+    get name() { return translateUi('uiMessages.md2109b4b642e') },
     prompt: '',
     type: 'none',
     pointsCost: 0
@@ -606,7 +608,7 @@ const availablePresets = computed(() => {
   if (presetLoadError.value) {
     presets.push({
       id: 'preset-load-error',
-      name: '预设加载失败',
+      get name() { return translateUi('uiMessages.mb67827761c17') },
       description: presetLoadError.value,
       type: 'error'
     })
@@ -614,7 +616,7 @@ const availablePresets = computed(() => {
 
   // 2. 添加用户自定义预设
   if (userPresets.value.length > 0 || selectedPreset.value === 'temp-custom') {
-    presets.push({ id: 'divider-user', type: 'divider', label: '我的预设' })
+    presets.push({ id: 'divider-user', type: 'divider', get label() { return translateUi('uiMessages.m3cbfca23b6e2') } })
     presets.push(...userPresets.value.map(p => ({
       id: `user-${p.id}`,
       name: `📝 ${p.name}`,
@@ -628,7 +630,7 @@ const availablePresets = computed(() => {
     if (selectedPreset.value === 'temp-custom') {
       presets.push({
         id: 'temp-custom',
-        name: '📌 临时自定义',
+        get name() { return translateUi('uiMessages.m7246cd862503') },
         type: 'temp-custom',
         pointsCost: 0
       })
@@ -657,7 +659,7 @@ const availablePresets = computed(() => {
 // 当前选中预设的显示名称
 const selectedPresetLabel = computed(() => {
   if (!selectedPreset.value) {
-    return '无预设'
+    return translateUi('uiMessages.md2109b4b642e')
   }
 
   // 检查是否是用户自定义预设
@@ -668,12 +670,12 @@ const selectedPresetLabel = computed(() => {
 
   // 检查是否是临时自定义
   if (selectedPreset.value === 'temp-custom') {
-    return '📌 临时自定义'
+    return translateUi('uiMessages.m7246cd862503')
   }
 
   const preset = availablePresets.value.find(p => p.id === selectedPreset.value)
   if (preset) return preset.name
-  return props.data?.selectedPresetName || '无预设'
+  return props.data?.selectedPresetName || translateUi('uiMessages.md2109b4b642e')
 })
 
 // 当前选中预设的提示词（用于拼接）
@@ -702,7 +704,7 @@ function buildSelectedPresetDataPatch(preset = null) {
     ? tempCustomPrompt.value
     : (resolvedPreset?.prompt || props.data?.selectedPresetPrompt || '')
   const presetName = selectedPreset.value === 'temp-custom'
-    ? '📌 临时自定义'
+    ? translateUi('uiMessages.m7246cd862503')
     : (selectedPreset.value ? (resolvedPreset?.name || props.data?.selectedPresetName || '') : '')
   const presetType = selectedPreset.value === 'temp-custom'
     ? 'temp-custom'
@@ -840,7 +842,7 @@ async function handleImagePresetSubmit(data) {
     showImagePresetDialog.value = false
   } catch (error) {
     console.error('[ImageNode] 保存图像预设失败:', error)
-    alert(error.message || '保存失败，请重试')
+    alert(error.message || translateUi('user.saveFailed'))
   }
 }
 
@@ -849,7 +851,7 @@ function handleImagePresetTempUse(data) {
   tempCustomPrompt.value = data.prompt
   persistSelectedPreset('temp-custom', {
     id: 'temp-custom',
-    name: '📌 临时自定义',
+    name: translateUi('uiMessages.m7246cd862503'),
     prompt: tempCustomPrompt.value,
     type: 'temp-custom'
   })
@@ -1060,9 +1062,9 @@ function handleBackgroundTaskComplete(event) {
       })
       const internalNodeHd = findNode(props.id)
       if (internalNodeHd) internalNodeHd.data = canvasStore.nodes.find(n => n.id === props.id)?.data
-      showToast(`${task.type === 'image-hd' ? '图片高清' : '全景图生成'}完成${task.result?.pointsCost > 0 ? `，消耗 ${formatPoints(task.result.pointsCost)} 积分` : ''}`, 'success')
+      showToast(translateUi('uiMessages.m79b29b7c0261', { value1: (task.type === 'image-hd' ? translateUi('uiMessages.m7a2f0380f67b') : translateUi('uiMessages.m1cb62c4680a5')), value2: (task.result?.pointsCost > 0 ? translateUi('uiMessages.m52f949782f06', { value1: (formatPoints(task.result.pointsCost)) }) : '') }), 'success')
     } else {
-      canvasStore.updateNodeData(props.id, { status: 'error', error: task.type === 'image-hd' ? '高清完成但未获取到图片' : '全景图生成完成但未获取到图片' })
+      canvasStore.updateNodeData(props.id, { status: 'error', error: task.type === 'image-hd' ? translateUi('uiMessages.m2fff407fb3ab') : translateUi('uiMessages.m41be1e5c2e9f') })
     }
     removeCompletedTask(taskId)
     return
@@ -1084,7 +1086,7 @@ function handleBackgroundTaskComplete(event) {
     console.warn(`[ImageNode] 任务完成但无图片URL: ${taskId}`, task.result)
     canvasStore.updateNodeData(props.id, {
       status: 'error',
-      error: '生成完成但未获取到图片'
+      error: translateUi('uiMessages.me44e27ba433a')
     })
     const internalNodeErr = findNode(props.id)
     if (internalNodeErr) internalNodeErr.data = canvasStore.nodes.find(n => n.id === props.id)?.data
@@ -1128,7 +1130,7 @@ function createGroupImageNodes(groupImageUrls, task) {
         y: startY
       },
       data: {
-        label: `组图 ${i + 2}`,
+        label: translateUi('uiMessages.m95a5ad409df7', { value1: (i + 2) }),
         status: 'success',
         model: selectedModel.value,
         aspectRatio: selectedAspectRatio.value,
@@ -1181,14 +1183,14 @@ function handleBackgroundTaskFailed(event) {
     canvasStore.updateNodeData(props.id, {
       status: 'error',
       progress: null,
-      error: task.error || (task.type === 'image-cutout' ? '抠图处理失败' : (task.type === 'image-panorama' ? '生成全景图失败' : '高清处理失败'))
+      error: task.error || (task.type === 'image-cutout' ? translateUi('uiMessages.me14905f40ed0') : (task.type === 'image-panorama' ? translateUi('uiMessages.m540570c4e3cd') : translateUi('uiMessages.m8c799ce57125')))
     })
-    showToast(task.error || (task.type === 'image-cutout' ? '图片抠图失败' : (task.type === 'image-panorama' ? '生成全景图失败，未扣除积分' : '图片高清失败，未扣除积分')), 'error')
+    showToast(task.error || (task.type === 'image-cutout' ? translateUi('uiMessages.m55b0112cd626') : (task.type === 'image-panorama' ? translateUi('uiMessages.md2e6d2707880') : translateUi('uiMessages.m07bab8f2e091'))), 'error')
     removeCompletedTask(taskId)
     return
   }
   
-  const errorMsg = task.error || '图片生成失败'
+  const errorMsg = task.error || translateUi('uiMessages.m086b43528545')
   canvasStore.updateNodeData(props.id, {
     status: 'error',
     error: errorMsg
@@ -1208,10 +1210,10 @@ function handleBackgroundTaskProgress(event) {
   if (progress) {
     canvasStore.updateNodeData(props.id, {
       progress: task.type === 'image-hd'
-        ? '高清处理中...'
+        ? translateUi('uiMessages.m27f66d065ff4')
         : (task.type === 'image-panorama'
-          ? '全景图生成中...'
-        : (task.type === 'image-cutout' ? '抠图处理中...' : (task.result?.status === 'processing' ? '生成中...' : progress))
+          ? translateUi('uiMessages.m0db8ec220584')
+        : (task.type === 'image-cutout' ? translateUi('uiMessages.m265c6562cdfa') : (task.result?.status === 'processing' ? translateUi('canvas.audioNode.generating') : progress))
         )
     })
   }
@@ -1227,9 +1229,9 @@ function handleBackgroundTaskNetworkError(event) {
   const currentStatus = props.data?.status
   if (currentStatus !== 'processing' && currentStatus !== 'pending') return
   canvasStore.updateNodeData(props.id, {
-    progress: '网络异常，重试中...',
+    progress: translateUi('uiMessages.m8fa4860ebec7'),
     _networkRetrying: true,
-    _networkRetryMessage: message || '网络连接异常'
+    _networkRetryMessage: message || translateUi('uiMessages.me8ce9263039d')
   })
 }
 
@@ -1240,7 +1242,7 @@ function handleBackgroundTaskNetworkRecovered(event) {
   if (task.type !== 'image' && task.type !== 'image-hd' && task.type !== 'image-panorama' && task.type !== 'image-cutout') return
   if (!props.data?._networkRetrying) return
   canvasStore.updateNodeData(props.id, {
-    progress: task.type === 'image-hd' ? '高清处理中...' : (task.type === 'image-panorama' ? '全景图生成中...' : (task.type === 'image-cutout' ? '抠图处理中...' : '生成中...')),
+    progress: task.type === 'image-hd' ? translateUi('uiMessages.m27f66d065ff4') : (task.type === 'image-panorama' ? translateUi('uiMessages.m0db8ec220584') : (task.type === 'image-cutout' ? translateUi('uiMessages.m265c6562cdfa') : translateUi('canvas.audioNode.generating'))),
     _networkRetrying: false,
     _networkRetryMessage: null
   })
@@ -1267,10 +1269,10 @@ function checkAndRestoreBackgroundTasks() {
         status: 'processing',
         error: null,
         progress: props.data?.taskType === 'image-hd'
-          ? '高清处理中...'
+          ? translateUi('uiMessages.m27f66d065ff4')
           : (props.data?.taskType === 'image-panorama'
-            ? '全景图生成中...'
-            : (props.data?.taskType === 'image-cutout' ? '抠图处理中...' : '生成中...'))
+            ? translateUi('uiMessages.m0db8ec220584')
+            : (props.data?.taskType === 'image-cutout' ? translateUi('uiMessages.m265c6562cdfa') : translateUi('canvas.audioNode.generating')))
       })
     }
   }
@@ -1307,14 +1309,14 @@ function checkAndRestoreBackgroundTasks() {
       } else {
         canvasStore.updateNodeData(props.id, {
           status: 'error',
-          error: task.type === 'image-hd' ? '高清完成但未获取到图片' : (task.type === 'image-panorama' ? '全景图生成完成但未获取到图片' : (task.type === 'image-cutout' ? '抠图完成但未获取到图片' : '生成完成但未获取到图片'))
+          error: task.type === 'image-hd' ? translateUi('uiMessages.m2fff407fb3ab') : (task.type === 'image-panorama' ? translateUi('uiMessages.m41be1e5c2e9f') : (task.type === 'image-cutout' ? translateUi('uiMessages.mb8bf1a1fe3e1') : translateUi('uiMessages.me44e27ba433a')))
         })
       }
       removeCompletedTask(task.taskId)
     } else if (task.status === 'failed') {
       canvasStore.updateNodeData(props.id, {
         status: 'error',
-        error: task.error || (task.type === 'image-hd' ? '高清处理失败' : (task.type === 'image-panorama' ? '生成全景图失败' : (task.type === 'image-cutout' ? '抠图处理失败' : '图片生成失败')))
+        error: task.error || (task.type === 'image-hd' ? translateUi('uiMessages.m8c799ce57125') : (task.type === 'image-panorama' ? translateUi('uiMessages.m540570c4e3cd') : (task.type === 'image-cutout' ? translateUi('uiMessages.me14905f40ed0') : translateUi('uiMessages.m086b43528545'))))
       })
       removeCompletedTask(task.taskId)
     } else if ((task.status === 'processing' || task.status === 'pending') && task.createdAt) {
@@ -1323,10 +1325,10 @@ function checkAndRestoreBackgroundTasks() {
       if (taskAge > ZOMBIE_THRESHOLD) {
         console.log(`[ImageNode] 检测到僵尸任务 ${task.taskId} (${Math.round(taskAge/60000)}分钟), 标记失败`)
         task.status = 'failed'
-        task.error = '任务超时，请重试'
+        task.error = translateUi('uiMessages.mdcee6a299644')
         canvasStore.updateNodeData(props.id, {
           status: 'error',
-          error: '任务超时，请重试'
+          error: translateUi('uiMessages.mdcee6a299644')
         })
         removeCompletedTask(task.taskId)
       }
@@ -1339,7 +1341,7 @@ function checkAndRestoreBackgroundTasks() {
     console.log(`[ImageNode] 节点 ${props.id} 状态为 processing 但无关联任务, 重置为 error`)
     canvasStore.updateNodeData(props.id, {
       status: 'error',
-      error: '任务丢失，请重新生成'
+      error: translateUi('uiMessages.m99e6786ce4cd')
     })
   }
 }
@@ -1493,7 +1495,7 @@ const modelLookupList = computed(() => {
     {
       value: currentSelection,
       label: getModelDisplayName(currentSelection, 'image') || currentSelection,
-      description: '历史工作流模型（当前租户未启用）',
+      get description() { return translateUi('uiMessages.m7488885bf79b') },
       hasResolutionPricing: false,
       pointsCost: 1,
       supportedModes: 'both',
@@ -1702,7 +1704,7 @@ const showQualityOption = computed(() => {
 })
 
 const imageParameterQualityOptions = computed(() => {
-  const labels = { low: '低画质', medium: '标准画质', high: '高画质' }
+  const labels = { get low() { return translateUi('uiMessages.mebe98131b5dd') }, get medium() { return translateUi('uiMessages.m3da00d458a4e') }, get high() { return translateUi('uiMessages.mf31c4407739e') } }
   return qualityOptions.value
     .filter(option => option.value !== 'auto')
     .map(option => ({ ...option, label: labels[option.value] || option.label }))
@@ -1723,10 +1725,10 @@ const showCameraControlOption = computed(() => {
 })
 
 const aspectRatios = [
-  { value: 'auto', label: '智能比例', displayLabel: '智能比例' },
-  { value: '16:9', label: '16:9 横屏' },
-  { value: '1:1', label: '1:1 方形' },
-  { value: '9:16', label: '9:16 竖屏' },
+  { value: 'auto', get label() { return translateUi('uiMessages.m2d6a84595d97') }, get displayLabel() { return translateUi('uiMessages.m2d6a84595d97') } },
+  { value: '16:9', get label() { return translateUi('uiMessages.mad2164a05f00') } },
+  { value: '1:1', get label() { return translateUi('uiMessages.m5a2d829e4234') } },
+  { value: '9:16', get label() { return translateUi('uiMessages.m30f5816508c2') } },
   { value: '4:3', label: '4:3' },
   { value: '3:4', label: '3:4' },
   { value: '2:3', label: '2:3' },
@@ -1914,7 +1916,7 @@ const hasSourceImage = computed(() =>
 
 // 是否有数据丢失（旧格式迁移时 blob URL 失效）
 const hasDataLost = computed(() => props.data._dataLost === true)
-const dataLostReason = computed(() => props.data._lostReason || '本地临时文件已失效')
+const dataLostReason = computed(() => props.data._lostReason || translateUi('uiMessages.m8010d249bd5b'))
 
 // 是否正在上传中
 const isUploading = computed(() => props.data.isUploading === true)
@@ -2001,7 +2003,7 @@ const canvasPreviewImages = computed(() => {
 
 const seedanceQuickAssetStatus = computed(() => getSeedanceQuickAssetStatus(props.data))
 const showSeedanceQuickBadge = computed(() => seedanceQuickAssetStatus.value === 'approved' || seedanceQuickAssetStatus.value === 'expired')
-const seedanceQuickBadgeText = computed(() => seedanceQuickAssetStatus.value === 'expired' ? '已失效' : '已过审')
+const seedanceQuickBadgeText = computed(() => seedanceQuickAssetStatus.value === 'expired' ? translateUi('uiMessages.m2fe5a8d0eee9') : translateUi('uiMessages.m93632ccd0ab5'))
 
 // 全景 VR 预览状态
 const showPanoramaPreview = ref(false)
@@ -2064,7 +2066,7 @@ function enterEditMode(tool) {
 
 function handleToolbarElementEdit() {
   if (!currentImageUrl.value) {
-    showToast('没有可编辑的图片', 'error')
+    showToast(translateUi('uiMessages.m94fe7287211d'), 'error')
     return
   }
   showImageEditMenu.value = false
@@ -2123,12 +2125,12 @@ async function uploadElementEditReference(file) {
 
 async function resolveElementEditSourceUrl() {
   let imageUrl = currentImageUrl.value
-  if (!imageUrl) throw new Error('没有可编辑的图片')
+  if (!imageUrl) throw new Error(translateUi('uiMessages.m94fe7287211d'))
   if (imageUrl.startsWith('blob:') || imageUrl.startsWith('data:')) {
     const response = await fetch(imageUrl)
     const blob = await response.blob()
     const urls = await uploadImages([new File([blob], `element_edit_${Date.now()}.png`, { type: blob.type || 'image/png' })])
-    if (!urls?.[0]) throw new Error('原图上传失败')
+    if (!urls?.[0]) throw new Error(translateUi('uiMessages.m7e89af7db6ea'))
     return urls[0]
   }
   if (needsReupload(imageUrl)) return reuploadToCloud(imageUrl)
@@ -2140,8 +2142,8 @@ function createElementEditProcessingNode(model, prompt, elementEditPrompt) {
   const currentNode = canvasStore.nodes.find(node => node.id === props.id)
   if (!currentNode) return null
   const nodeId = `element_edit_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
-  const sourceTitle = String(props.data?.title || props.data?.label || '').trim() || '图片'
-  const title = `${sourceTitle}--元素编辑`
+  const sourceTitle = String(props.data?.title || props.data?.label || '').trim() || translateUi('canvas.nodeConfig.imageInput.label')
+  const title = translateUi('uiMessages.m93b97af7cd83', { value1: (sourceTitle) })
   canvasStore.addNode({
     id: nodeId,
     type: 'image',
@@ -2151,7 +2153,7 @@ function createElementEditProcessingNode(model, prompt, elementEditPrompt) {
       title,
       status: 'processing',
       processingStartedAt: Date.now(),
-      progress: '元素编辑生成中...',
+      progress: translateUi('uiMessages.m9687d67f0c98'),
       taskType: 'image',
       sourceType: 'element-edit',
       sourceNodeId: props.id,
@@ -2175,7 +2177,7 @@ async function handleElementEditGenerate(payload) {
   if (elementEditBusy.value) return
   const model = elementEditModel.value?.value
   if (!model) {
-    elementEditError.value = '暂无可用的图生图模型'
+    elementEditError.value = translateUi('uiMessages.me41f1a1e6bce')
     return
   }
   const edits = Array.isArray(payload?.edits) ? payload.edits : []
@@ -2190,7 +2192,7 @@ async function handleElementEditGenerate(payload) {
     const aspectRatio = natural?.width > 0 && natural?.height > 0 ? findClosestAspectRatio(natural.width, natural.height) : 'auto'
     const userPrompt = edits.map(edit => edit.prompt).filter(Boolean).join('；') || '元素编辑'
     resultNodeId = createElementEditProcessingNode(model, userPrompt, prompt)
-    if (!resultNodeId) throw new Error('无法创建结果节点')
+    if (!resultNodeId) throw new Error(translateUi('uiMessages.m6296f3cc1c28'))
     const result = await generateImageFromImage({
       prompt,
       userPrompt,
@@ -2216,13 +2218,13 @@ async function handleElementEditGenerate(payload) {
       canvasStore.updateNodeData(resultNodeId, { status: 'success', progress: null, output: { type: 'image', url: result.url, urls: [result.url] } })
       invalidateCanvasHistory()
     } else {
-      throw new Error('未获取到生成结果')
+      throw new Error(translateUi('canvas.imageNode.noResult'))
     }
     showElementEditOverlay.value = false
     canvasStore.selectNode?.(resultNodeId)
-    showToast('元素编辑任务已提交', 'success')
+    showToast(translateUi('uiMessages.m3444417674d0'), 'success')
   } catch (error) {
-    const message = error.message || '生成失败，请重试'
+    const message = error.message || translateUi('uiMessages.m82970688146a')
     if (resultNodeId) canvasStore.updateNodeData(resultNodeId, { status: 'error', progress: null, error: message })
     elementEditError.value = message
   } finally {
@@ -2274,11 +2276,11 @@ const isPanoramaGenerating = ref(false)
 
 async function handleToolbarImageHD() {
   if (!currentImageUrl.value) {
-    showToast('没有可处理的图片', 'error')
+    showToast(translateUi('uiMessages.mf44c70106392'), 'error')
     return
   }
   if (isImageHDProcessing.value) {
-    showToast('正在处理中，请稍候', 'warning')
+    showToast(translateUi('uiMessages.mbb1ed5e0c6fa'), 'warning')
     return
   }
   const token = localStorage.getItem('token')
@@ -2287,15 +2289,15 @@ async function handleToolbarImageHD() {
     let imageUrlForHD = currentImageUrl.value
 
     if (imageUrlForHD.startsWith('blob:')) {
-      showToast('上传图片到云端...', 'info')
+      showToast(translateUi('uiMessages.m941bdb886b15'), 'info')
       const response = await fetch(imageUrlForHD)
       const blob = await response.blob()
       const file = new File([blob], `hd_source_${Date.now()}.png`, { type: blob.type || 'image/png' })
       const urls = await uploadImages([file])
-      if (!urls?.length) throw new Error('图片上传失败')
+      if (!urls?.length) throw new Error(translateUi('uiMessages.m2a1aa07b1f9b'))
       imageUrlForHD = urls[0]
     } else if (needsReupload(imageUrlForHD)) {
-      showToast('上传图片到云端...', 'info')
+      showToast(translateUi('uiMessages.m941bdb886b15'), 'info')
       imageUrlForHD = await reuploadToCloud(imageUrlForHD)
     } else if (imageUrlForHD.startsWith('data:image/')) {
       // 交给后端解析 base64
@@ -2303,7 +2305,7 @@ async function handleToolbarImageHD() {
       imageUrlForHD = getApiUrl(imageUrlForHD)
     }
 
-    showToast('提交高清任务...', 'info')
+    showToast(translateUi('uiMessages.m2a9945083c80'), 'info')
     const res = await fetch(getApiUrl('/api/images/hd-upscale'), {
       method: 'POST',
       headers: {
@@ -2319,17 +2321,17 @@ async function handleToolbarImageHD() {
     const result = await res.json()
     if (!res.ok) {
       if (result.error === 'insufficient_points') {
-        showToast('当前积分余额不足', 'error')
+        showToast(translateUi('uiMessages.mb652cf047c13'), 'error')
       } else if (result.error === 'hd_not_configured') {
-        await showAlert(result.message || '图片高清功能未配置，请联系管理员', '提示')
+        await showAlert(result.message || translateUi('uiMessages.m6b449904d892'), translateUi('common.info'))
       } else {
-        showToast(result.message || '提交失败', 'error')
+        showToast(result.message || translateUi('uiMessages.m1440c7e23865'), 'error')
       }
       isImageHDProcessing.value = false
       return
     }
 
-    showToast('高清任务已提交，后台处理中...', 'success')
+    showToast(translateUi('uiMessages.m1334c73535ce'), 'success')
     isImageHDProcessing.value = false
 
     const newNodeId = createImageHDProcessingNode(result.taskId)
@@ -2347,7 +2349,7 @@ async function handleToolbarImageHD() {
     })
   } catch (e) {
     console.error('[ImageNode] 图片高清失败:', e)
-    showToast(e.message || '图片高清失败', 'error')
+    showToast(e.message || translateUi('uiMessages.mc367baab8476'), 'error')
     isImageHDProcessing.value = false
   }
 }
@@ -2365,11 +2367,11 @@ function createImageHDProcessingNode(taskId) {
     type: 'image',
     position: newNodePosition,
     data: {
-      label: '高清放大',
-      title: '高清放大',
+      label: translateUi('uiMessages.m825da56855ae'),
+      title: translateUi('uiMessages.m825da56855ae'),
       status: 'processing',
       processingStartedAt: Date.now(),
-      progress: '高清处理中...',
+      progress: translateUi('uiMessages.m27f66d065ff4'),
       taskId,
       taskType: 'image-hd',
       sourceType: 'image-hd',
@@ -2390,11 +2392,11 @@ function createImageHDProcessingNode(taskId) {
 
 async function handleToolbarGeneratePanorama() {
   if (!currentImageUrl.value) {
-    showToast('没有可处理的图片', 'error')
+    showToast(translateUi('uiMessages.mf44c70106392'), 'error')
     return
   }
   if (isPanoramaGenerating.value) {
-    showToast('正在处理中，请稍候', 'warning')
+    showToast(translateUi('uiMessages.mbb1ed5e0c6fa'), 'warning')
     return
   }
   const token = localStorage.getItem('token')
@@ -2403,21 +2405,21 @@ async function handleToolbarGeneratePanorama() {
     let imageUrlForPanorama = currentImageUrl.value
 
     if (imageUrlForPanorama.startsWith('blob:')) {
-      showToast('上传图片到云端...', 'info')
+      showToast(translateUi('uiMessages.m941bdb886b15'), 'info')
       const response = await fetch(imageUrlForPanorama)
       const blob = await response.blob()
       const file = new File([blob], `panorama_source_${Date.now()}.png`, { type: blob.type || 'image/png' })
       const urls = await uploadImages([file])
-      if (!urls?.length) throw new Error('图片上传失败')
+      if (!urls?.length) throw new Error(translateUi('uiMessages.m2a1aa07b1f9b'))
       imageUrlForPanorama = urls[0]
     } else if (needsReupload(imageUrlForPanorama)) {
-      showToast('上传图片到云端...', 'info')
+      showToast(translateUi('uiMessages.m941bdb886b15'), 'info')
       imageUrlForPanorama = await reuploadToCloud(imageUrlForPanorama)
     } else if (imageUrlForPanorama.startsWith('/api/')) {
       imageUrlForPanorama = getApiUrl(imageUrlForPanorama)
     }
 
-    showToast('提交全景图任务...', 'info')
+    showToast(translateUi('uiMessages.m4c7d9315619d'), 'info')
     const res = await fetch(getApiUrl('/api/images/panorama-generate'), {
       method: 'POST',
       headers: {
@@ -2433,17 +2435,17 @@ async function handleToolbarGeneratePanorama() {
     const result = await res.json()
     if (!res.ok) {
       if (result.error === 'insufficient_points') {
-        showToast('当前积分余额不足', 'error')
+        showToast(translateUi('uiMessages.mb652cf047c13'), 'error')
       } else if (result.error === 'panorama_not_configured') {
-        await showAlert(result.message || '生成全景图功能未配置，请联系管理员', '提示')
+        await showAlert(result.message || translateUi('uiMessages.m0438c52a33ad'), translateUi('common.info'))
       } else {
-        showToast(result.message || '提交失败', 'error')
+        showToast(result.message || translateUi('uiMessages.m1440c7e23865'), 'error')
       }
       isPanoramaGenerating.value = false
       return
     }
 
-    showToast('全景图任务已提交，后台处理中...', 'success')
+    showToast(translateUi('uiMessages.m2208cbb6066f'), 'success')
     isPanoramaGenerating.value = false
 
     const newNodeId = createPanoramaProcessingNode(result.taskId)
@@ -2461,7 +2463,7 @@ async function handleToolbarGeneratePanorama() {
     })
   } catch (e) {
     console.error('[ImageNode] 生成全景图失败:', e)
-    showToast(e.message || '生成全景图失败', 'error')
+    showToast(e.message || translateUi('uiMessages.m540570c4e3cd'), 'error')
     isPanoramaGenerating.value = false
   }
 }
@@ -2479,11 +2481,11 @@ function createPanoramaProcessingNode(taskId) {
     type: 'image',
     position: newNodePosition,
     data: {
-      label: '生成全景图',
-      title: '生成全景图',
+      label: translateUi('user.ledgerType.image_panorama_generate'),
+      title: translateUi('pointsType.image_panorama_generate'),
       status: 'processing',
       processingStartedAt: Date.now(),
-      progress: '全景图生成中...',
+      progress: translateUi('uiMessages.m0db8ec220584'),
       taskId,
       taskType: 'image-panorama',
       sourceType: 'image-panorama',
@@ -2525,10 +2527,10 @@ const pose3DViewerMounted = ref(false) // 首次打开后才挂载，之后保�
 
 // 预设背景颜色
 const cutoutBgPresets = [
-  { id: 'transparent', label: '透明', color: null, icon: '🔲' },
-  { id: 'white', label: '白底', color: '#ffffff', icon: '⬜' },
-  { id: 'green', label: '绿幕', color: '#00ff00', icon: '🟩' },
-  { id: 'custom', label: '自定义', color: null, icon: '🎨' }
+  { id: 'transparent', get label() { return translateUi('uiMessages.m9dddd9f908b2') }, color: null, icon: '🔲' },
+  { id: 'white', get label() { return translateUi('uiMessages.m53a5274e2505') }, color: '#ffffff', icon: '⬜' },
+  { id: 'green', get label() { return translateUi('uiMessages.m26ebb09f7620') }, color: '#00ff00', icon: '🟩' },
+  { id: 'custom', get label() { return translateUi('uiMessages.m4eafa9e925b3') }, color: null, icon: '🎨' }
 ]
 
 // 点击抠图按钮 - 显示选项弹窗
@@ -2538,7 +2540,7 @@ function handleToolbarCutout() {
   const imageUrl = sourceImages.value?.[0] || props.data?.output?.url || props.data?.output?.urls?.[0]
   if (!imageUrl) {
     console.warn('[ImageNode] 抠图：没有图片')
-    showAlert('提示', '请先上传或生成图片')
+    showAlert(translateUi('common.info'), translateUi('uiMessages.mcccb6114c027'))
     return
   }
   
@@ -2566,15 +2568,15 @@ async function startCutoutWithBg(bgType) {
     console.log('[ImageNode] 提交后端抠图任务，背景:', bgType)
 
     if (imageUrl.startsWith('blob:')) {
-      showToast('上传图片到云端...', 'info')
+      showToast(translateUi('uiMessages.m941bdb886b15'), 'info')
       const response = await fetch(imageUrl)
       const blob = await response.blob()
       const file = new File([blob], `cutout_source_${Date.now()}.png`, { type: blob.type || 'image/png' })
       const urls = await uploadImages([file])
-      if (!urls?.length) throw new Error('图片上传失败')
+      if (!urls?.length) throw new Error(translateUi('uiMessages.m2a1aa07b1f9b'))
       imageUrl = urls[0]
     } else if (needsReupload(imageUrl)) {
-      showToast('上传图片到云端...', 'info')
+      showToast(translateUi('uiMessages.m941bdb886b15'), 'info')
       imageUrl = await reuploadToCloud(imageUrl)
     } else if (imageUrl.startsWith('/api/')) {
       imageUrl = getApiUrl(imageUrl)
@@ -2585,12 +2587,12 @@ async function startCutoutWithBg(bgType) {
     const result = await removeImageBackground(imageUrl, bgType, bgColor, props.id)
 
     if (!result.success || !result.taskId) {
-      throw new Error('抠图任务提交失败')
+      throw new Error(translateUi('uiMessages.m451fa720f9b1'))
     }
 
     const newNodeId = createCutoutProcessingNode(result.taskId, bgType)
     if (!newNodeId) {
-      throw new Error('创建抠图结果节点失败')
+      throw new Error(translateUi('uiMessages.m5fd5363c3bae'))
     }
 
     const currentTab = canvasStore.getCurrentTab()
@@ -2606,11 +2608,11 @@ async function startCutoutWithBg(bgType) {
       }
     })
 
-    showToast('抠图任务已提交，后台处理中...', 'success')
+    showToast(translateUi('uiMessages.mea5903cef724'), 'success')
     removeBgProgress.value = 100
   } catch (error) {
     console.error('[ImageNode] 抠图失败:', error)
-    showAlert('抠图失败', error.message || '处理过程中出现错误，请重试')
+    showAlert(translateUi('uiMessages.m6ce163c10e10'), error.message || translateUi('uiMessages.m341f2215a052'))
   } finally {
     isRemovingBackground.value = false
     removeBgProgress.value = 0
@@ -2621,9 +2623,9 @@ function createCutoutProcessingNode(taskId, bgType) {
   const currentNode = canvasStore.nodes.find(n => n.id === props.id)
   if (!currentNode) return null
 
-  const bgLabel = bgType === 'transparent' ? '透明' : 
-                  bgType === 'white' ? '白底' : 
-                  bgType === 'green' ? '绿幕' : '自定义底'
+  const bgLabel = bgType === 'transparent' ? translateUi('uiMessages.m9dddd9f908b2') :
+                  bgType === 'white' ? translateUi('uiMessages.m53a5274e2505') :
+                  bgType === 'green' ? translateUi('uiMessages.m26ebb09f7620') : translateUi('uiMessages.m7e4cf567bd23')
 
   const newNodeId = `cutout_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   const newNodePosition = {
@@ -2636,11 +2638,11 @@ function createCutoutProcessingNode(taskId, bgType) {
     type: 'image',
     position: newNodePosition,
     data: {
-      label: `抠图-${bgLabel}`,
-      title: `抠图-${bgLabel}`,
+      label: translateUi('uiMessages.m4018339a398a', { value1: (bgLabel) }),
+      title: translateUi('uiMessages.m4018339a398a', { value1: (bgLabel) }),
       status: 'processing',
       processingStartedAt: Date.now(),
-      progress: '抠图处理中...',
+      progress: translateUi('uiMessages.m265c6562cdfa'),
       taskId,
       taskType: 'image-cutout',
       sourceType: 'image-cutout',
@@ -2706,7 +2708,7 @@ function handleToolbarOutpaint() {
   const imageUrl = currentImageUrl.value
   if (!imageUrl) {
     console.warn('[ImageNode] 扩图：没有图片')
-    showAlert('提示', '请先上传或生成图片')
+    showAlert(translateUi('common.info'), translateUi('uiMessages.mcccb6114c027'))
     return
   }
   
@@ -2745,7 +2747,7 @@ function nextFrame() {
 async function fetchImageAsBlob(url) {
   const response = await fetch(url)
   if (!response.ok) {
-    throw new Error(`图片下载失败: ${response.status} ${response.statusText}`)
+    throw new Error(translateUi('uiMessages.m3478cee83d6e', { value1: (response.status), value2: (response.statusText) }))
   }
   const blob = await response.blob()
   const blobUrl = URL.createObjectURL(blob)
@@ -2822,17 +2824,17 @@ async function loadImageForCanvas(imageUrl) {
     console.warn('[ImageNode] loadImageForCanvas: crossOrigin 加载也失败:', e.message)
   }
   
-  throw lastError || new Error('图片加载失败，请检查网络连接后重试')
+  throw lastError || new Error(translateUi('uiMessages.m8d4a049e2ddc'))
 }
 
 // ========== 宫格裁剪选项菜单（统一入口） ==========
 
 // 宫格尺寸选项
 const gridCropSizeOptions = [
-  { cols: 2, rows: 2, count: 4, label: '4宫格', type: 'grid4' },
-  { cols: 3, rows: 3, count: 9, label: '9宫格', type: 'grid9' },
-  { cols: 4, rows: 4, count: 16, label: '16宫格', type: 'grid16' },
-  { cols: 5, rows: 5, count: 25, label: '25宫格', type: 'grid25' }
+  { cols: 2, rows: 2, count: 4, get label() { return translateUi('uiMessages.me766a8910eea') }, type: 'grid4' },
+  { cols: 3, rows: 3, count: 9, get label() { return translateUi('uiMessages.mdfc78d0303b6') }, type: 'grid9' },
+  { cols: 4, rows: 4, count: 16, get label() { return translateUi('uiMessages.m2e68ea44e19a') }, type: 'grid16' },
+  { cols: 5, rows: 5, count: 25, get label() { return translateUi('uiMessages.m21696819d974') }, type: 'grid25' }
 ]
 
 // 显示宫格裁剪选项菜单（第一步：选择宫格大小）
@@ -2890,7 +2892,7 @@ async function handleGenericGridCrop(cols, rows) {
   const imageUrl = sourceImages.value?.[0] || props.data?.output?.url || props.data?.output?.urls?.[0]
   if (!imageUrl) {
     console.warn(`[ImageNode] ${count}宫格裁剪：没有图片`)
-    showAlert('提示', '请先上传或生成图片')
+    showAlert(translateUi('common.info'), translateUi('uiMessages.mcccb6114c027'))
     return
   }
   
@@ -2911,7 +2913,7 @@ async function handleGenericGridCrop(cols, rows) {
       }
     } catch (deductError) {
       console.error(`[ImageNode] ${count}宫格裁剪：积分扣除失败`, deductError)
-      showAlert('积分不足', deductError.message || '积分不足，无法执行裁剪操作')
+      showAlert(translateUi('imageGen.insufficientPoints'), deductError.message || translateUi('uiMessages.m5ae20b4a8716'))
       isGridCropping.value = false
       return
     }
@@ -2964,7 +2966,7 @@ async function handleGenericGridCrop(cols, rows) {
           type: 'image',
           position: { x: nodeX, y: nodeY },
           data: {
-            label: `裁剪 ${row + 1}-${col + 1}`,
+            label: translateUi('uiMessages.m3778d69472e4', { value1: (row + 1), value2: (col + 1) }),
             nodeRole: 'source',
             sourceImages: [serverUrl],
             isGenerated: true,
@@ -2983,7 +2985,7 @@ async function handleGenericGridCrop(cols, rows) {
     
     if (newNodeIds.length === count) {
       await nextFrame()
-      canvasStore.createGroup(newNodeIds, `${count}宫格裁剪`)
+      canvasStore.createGroup(newNodeIds, translateUi('uiMessages.macff203a70b5', { value1: (count) }))
     }
     
     notifyCanvasMediaUploadComplete(newNodeIds[0])
@@ -2991,7 +2993,7 @@ async function handleGenericGridCrop(cols, rows) {
     
   } catch (error) {
     console.error(`[ImageNode] ${count}宫格裁剪失败:`, error)
-    showAlert('裁剪失败', error.message || '宫格裁剪失败，请重试')
+    showAlert(translateUi('uiMessages.m6c0e6bdc3951'), error.message || translateUi('uiMessages.mf7be9f2288b9'))
   }finally {
     isGridCropping.value = false
   }
@@ -3007,7 +3009,7 @@ async function createStoryboardFromCrop(cols, rows) {
   const imageUrl = sourceImages.value?.[0] || props.data?.output?.url || props.data?.output?.urls?.[0]
   console.log('[ImageNode] 分镜裁剪图片URL:', imageUrl ? imageUrl.substring(0, 80) + '...' : '无')
   if (!imageUrl) {
-    showAlert('提示', '请先上传或生成图片')
+    showAlert(translateUi('common.info'), translateUi('uiMessages.mcccb6114c027'))
     return
   }
   
@@ -3022,7 +3024,7 @@ async function createStoryboardFromCrop(cols, rows) {
       }
     } catch (deductError) {
       console.error(`[ImageNode] ${cols}x${rows}分镜：积分扣除失败`, deductError)
-      showAlert('提示', deductError.message || '积分不足，无法执行裁剪操作')
+      showAlert(translateUi('common.info'), deductError.message || translateUi('uiMessages.m5ae20b4a8716'))
       return
     }
     
@@ -3100,7 +3102,7 @@ async function createStoryboardFromCrop(cols, rows) {
       type: 'storyboard',
       position: { x: baseX + offsetX, y: baseY },
       data: {
-        title: `${cols}x${rows}分镜`,
+        title: translateUi('uiMessages.mec53ede603e1', { value1: (cols), value2: (rows) }),
         gridSize: gridSize,
         aspectRatio: aspectRatio,
         gridScale: 1,
@@ -3116,7 +3118,7 @@ async function createStoryboardFromCrop(cols, rows) {
     
   } catch (error) {
     console.error('[ImageNode] 创建分镜格子失败:', error)
-    showAlert('错误', '创建分镜格子失败，请重试')
+    showAlert(translateUi('common.error'), translateUi('uiMessages.m482165b1981b'))
   }
 }
 
@@ -3129,10 +3131,10 @@ async function handlePanoramaExport(payload) {
     } else {
       createPanoramaImageNodes(payload)
     }
-    showToast('全景视角已输出到画布', 'success')
+    showToast(translateUi('uiMessages.mee6315d90867'), 'success')
   } catch (error) {
     console.error('[ImageNode] 全景视角输出失败:', error)
-    showAlert('输出失败', error.message || '全景视角输出失败，请重试')
+    showAlert(translateUi('uiMessages.m07b7f6b4fc09'), error.message || translateUi('uiMessages.m268e3acb0f3f'))
   }
 }
 
@@ -3172,8 +3174,8 @@ function createPanoramaImageNodes(payload) {
         y: base.y + row * (cardHeight + gap)
       },
       data: {
-        label: frame.label || `全景视角 ${index + 1}`,
-        title: frame.label || `全景视角 ${index + 1}`,
+        label: frame.label || translateUi('uiMessages.m12413c3297b4', { value1: (index + 1) }),
+        title: frame.label || translateUi('uiMessages.m12413c3297b4', { value1: (index + 1) }),
         nodeRole: 'source',
         sourceImages: [blobUrl],
         isGenerated: true,
@@ -3190,7 +3192,7 @@ function createPanoramaImageNodes(payload) {
   })
 
   if (nodeIds.length > 1) {
-    nextTick(() => canvasStore.createGroup(nodeIds, '全景视角'))
+    nextTick(() => canvasStore.createGroup(nodeIds, translateUi('uiMessages.m01c7ef875dfa')))
   }
 }
 
@@ -3205,7 +3207,7 @@ function createPanoramaStoryboard(payload) {
     type: 'storyboard',
     position: base,
     data: {
-      title: payload.storyboardGridSize === '2x2' ? '全景4宫格' : '全景12宫格',
+      title: payload.storyboardGridSize === '2x2' ? translateUi('uiMessages.ma53fe77a8213') : translateUi('uiMessages.mae9b28990fba'),
       gridSize: payload.storyboardGridSize || '2x2',
       aspectRatio: payload.ratio,
       gridScale: 1,
@@ -3233,7 +3235,7 @@ function createPanoramaStoryboard(payload) {
 async function uploadPanoramaFrameAsync({ file, blobUrl, nodeId, targetType, index }) {
   try {
     const urls = await uploadImages([file])
-    if (!urls?.length) throw new Error('上传结果为空')
+    if (!urls?.length) throw new Error(translateUi('uiMessages.m0bef1c0bcfce'))
 
     const serverUrl = urls[0]
     const node = canvasStore.nodes.find(n => n.id === nodeId)
@@ -3274,7 +3276,7 @@ async function handleToolbarGridCrop() {
   const imageUrl = sourceImages.value?.[0] || props.data?.output?.url || props.data?.output?.urls?.[0]
   if (!imageUrl) {
     console.warn('[ImageNode] 9宫格裁剪：没有图片')
-    showAlert('提示', '请先上传或生成图片')
+    showAlert(translateUi('common.info'), translateUi('uiMessages.mcccb6114c027'))
     return
   }
   
@@ -3294,7 +3296,7 @@ async function handleToolbarGridCrop() {
       }
     } catch (deductError) {
       console.error('[ImageNode] 9宫格裁剪：积分扣除失败', deductError)
-      showAlert('积分不足', deductError.message || '积分不足，无法执行裁剪操作')
+      showAlert(translateUi('imageGen.insufficientPoints'), deductError.message || translateUi('uiMessages.m5ae20b4a8716'))
       isGridCropping.value = false
       return
     }
@@ -3360,7 +3362,7 @@ async function handleToolbarGridCrop() {
           type: 'image',
           position: { x: nodeX, y: nodeY },
           data: {
-            label: `裁剪 ${row + 1}-${col + 1}`,
+            label: translateUi('uiMessages.m3778d69472e4', { value1: (row + 1), value2: (col + 1) }),
             nodeRole: 'source',
             sourceImages: [serverUrl],
             isGenerated: true,
@@ -3383,7 +3385,7 @@ async function handleToolbarGridCrop() {
     // 创建包含这9个节点的组
     if (newNodeIds.length === 9) {
       await nextFrame() // 等待所有节点渲染完成
-      canvasStore.createGroup(newNodeIds, '9宫格裁剪')
+      canvasStore.createGroup(newNodeIds, translateUi('uiMessages.m20459f93ffe0'))
     }
     
     notifyCanvasMediaUploadComplete(newNodeIds[0])
@@ -3391,7 +3393,7 @@ async function handleToolbarGridCrop() {
     
   } catch (error) {
     console.error('[ImageNode] 9宫格裁剪失败:', error)
-    showAlert('裁剪失败', error.message || '9宫格裁剪失败，请重试')
+    showAlert(translateUi('uiMessages.m6c0e6bdc3951'), error.message || translateUi('uiMessages.m9d993a291d08'))
   } finally {
     isGridCropping.value = false
   }
@@ -3405,7 +3407,7 @@ async function handleToolbarGrid4Crop() {
   const imageUrl = sourceImages.value?.[0] || props.data?.output?.url || props.data?.output?.urls?.[0]
   if (!imageUrl) {
     console.warn('[ImageNode] 4宫格裁剪：没有图片')
-    showAlert('提示', '请先上传或生成图片')
+    showAlert(translateUi('common.info'), translateUi('uiMessages.mcccb6114c027'))
     return
   }
   
@@ -3425,7 +3427,7 @@ async function handleToolbarGrid4Crop() {
       }
     } catch (deductError) {
       console.error('[ImageNode] 4宫格裁剪：积分扣除失败', deductError)
-      showAlert('积分不足', deductError.message || '积分不足，无法执行裁剪操作')
+      showAlert(translateUi('imageGen.insufficientPoints'), deductError.message || translateUi('uiMessages.m5ae20b4a8716'))
       isGrid4Cropping.value = false
       return
     }
@@ -3491,7 +3493,7 @@ async function handleToolbarGrid4Crop() {
           type: 'image',
           position: { x: nodeX, y: nodeY },
           data: {
-            label: `裁剪 ${row + 1}-${col + 1}`,
+            label: translateUi('uiMessages.m3778d69472e4', { value1: (row + 1), value2: (col + 1) }),
             nodeRole: 'source',
             sourceImages: [serverUrl],
             isGenerated: true,
@@ -3514,7 +3516,7 @@ async function handleToolbarGrid4Crop() {
     // 创建包含这4个节点的组
     if (newNodeIds.length === 4) {
       await nextFrame() // 等待所有节点渲染完成
-      canvasStore.createGroup(newNodeIds, '4宫格裁剪')
+      canvasStore.createGroup(newNodeIds, translateUi('uiMessages.mfef3585b8c85'))
     }
     
     notifyCanvasMediaUploadComplete(newNodeIds[0])
@@ -3522,7 +3524,7 @@ async function handleToolbarGrid4Crop() {
     
   } catch (error) {
     console.error('[ImageNode] 4宫格裁剪失败:', error)
-    showAlert('裁剪失败', error.message || '4宫格裁剪失败，请重试')
+    showAlert(translateUi('uiMessages.m6c0e6bdc3951'), error.message || translateUi('uiMessages.me9ebf4b51edf'))
   } finally {
     isGrid4Cropping.value = false
   }
@@ -3607,8 +3609,8 @@ async function handleMultiangleGenerateStart(data) {
     type: 'image',
     position: newNodePosition,
     data: {
-      label: '多角度生成中...',
-      title: '多角度生成',
+      label: translateUi('uiMessages.mb114fd1eb84e'),
+      title: translateUi('uiMessages.m45fbc23bcfbd'),
       status: 'processing',
       processingStartedAt: Date.now(),
       cameraAngle: data.angles,
@@ -3675,9 +3677,9 @@ async function pollMultiangleTask(taskId, nodeId) {
       } else if (statusData.status === 'failed' || statusData.status === 'timeout') {
         // 更新节点为失败状态
         canvasStore.updateNodeData(nodeId, {
-          label: '生成失败',
+          label: translateUi('canvas.audioNode.generateFailed'),
           status: 'error',
-          error: statusData.error || '生成失败'
+          error: statusData.error || translateUi('canvas.audioNode.generateFailed')
         })
         console.error('[ImageNode] 多角度生成失败:', statusData.error)
         return
@@ -3690,9 +3692,9 @@ async function pollMultiangleTask(taskId, nodeId) {
   
   // 超时处理
   canvasStore.updateNodeData(nodeId, {
-    label: '生成超时',
+    label: translateUi('uiMessages.mb60976e35087'),
     status: 'error',
-    error: '生成超时，请重试'
+    error: translateUi('uiMessages.m10890ead0448')
   })
 }
 
@@ -3778,7 +3780,7 @@ function handlePose3DApplyAngle(data) {
   showPose3DViewer.value = false
   
   // 显示提示
-  showAlert(`已应用视角：${data.description}`, '成功')
+  showAlert(translateUi('uiMessages.m8e3a564546f4', { value1: (data.description) }), translateUi('common.success'))
 }
 
 function handleToolbarAnnotate() {
@@ -3792,7 +3794,7 @@ function handleToolbarCrop() {
   // 获取当前图片URL
   const imageUrl = currentImageUrl.value
   if (!imageUrl) {
-    showAlert('提示', '请先上传或生成图片')
+    showAlert(translateUi('common.info'), translateUi('uiMessages.mcccb6114c027'))
     return
   }
   
@@ -3828,7 +3830,7 @@ async function handleCropSave(result) {
       type: 'image',
       position: newNodePosition,
       data: {
-        label: result.isExpanded ? '扩图' : '裁剪',
+        label: result.isExpanded ? translateUi('uiMessages.mdc76bd45af6f') : translateUi('uiMessages.m184506303bf5'),
         output: {
           url: serverUrl,
           urls: [serverUrl]
@@ -3846,7 +3848,7 @@ async function handleCropSave(result) {
     console.log('[ImageNode] 已创建新节点:', newNodeId, `${result.width}x${result.height}`, result.isExpanded ? '(扩图)' : '(裁剪)')
   } catch (error) {
     console.error('[ImageNode] 裁剪结果上传失败:', error)
-    await showAlert('裁剪失败', error.message || '裁剪结果上传失败，请重试')
+    await showAlert(translateUi('uiMessages.m6c0e6bdc3951'), error.message || translateUi('uiMessages.m3a3e2119b1e1'))
   } finally {
     showCropper.value = false
     cropperImageUrl.value = ''
@@ -3870,7 +3872,7 @@ async function handleOutpaint(data) {
   // 获取当前节点位置
   const currentNode = canvasStore.nodes.find(n => n.id === props.id)
   if (!currentNode) {
-    showAlert('错误', '无法找到当前节点')
+    showAlert(translateUi('common.error'), translateUi('uiMessages.mcdddfec09e2f'))
     return
   }
 
@@ -3883,7 +3885,7 @@ async function handleOutpaint(data) {
     // 2. 上传图片
     const uploadedUrls = await uploadImages([file])
     if (!uploadedUrls || uploadedUrls.length === 0) {
-      throw new Error('图片上传失败')
+      throw new Error(translateUi('uiMessages.m2a1aa07b1f9b'))
     }
     const uploadedImageUrl = uploadedUrls[0]
     console.log('[ImageNode] 扩图源图已上传:', uploadedImageUrl)
@@ -3901,11 +3903,11 @@ async function handleOutpaint(data) {
       type: 'image',
       position: newNodePosition,
       data: {
-        label: '扩图',
+        label: translateUi('uiMessages.mdc76bd45af6f'),
         sourceNodeId: props.id,
         status: 'processing', // 使用 processing 状态显示"生成中"
         processingStartedAt: Date.now(),
-        progress: '生成中...',
+        progress: translateUi('canvas.audioNode.generating'),
         model: 'gemini-3-pro-image-preview',
         resolution: data.size || '2K',
         outpaintInfo: {
@@ -3975,7 +3977,7 @@ async function handleOutpaint(data) {
 
   } catch (error) {
     console.error('[ImageNode] 扩图失败:', error)
-    showAlert('扩图失败', error.message || '请稍后重试')
+    showAlert(translateUi('uiMessages.m078322e5ba7c'), error.message || translateUi('uiMessages.m9ba4b48c2d18'))
   }
 }
 
@@ -4036,7 +4038,7 @@ async function handleEditorSave(data) {
     }
   } catch (error) {
     console.error('[ImageNode] 保存图片失败:', error)
-    await showAlert('保存图片失败，请重试', '错误')
+    await showAlert(translateUi('uiMessages.m476a195c20d8'), translateUi('common.error'))
   }
   
   closeImageEditor()
@@ -4054,14 +4056,14 @@ async function handleToolbarDownload() {
   if (isDownloading) return
   const activeImageUrl = showPreviewModal.value && previewImageUrl.value ? previewImageUrl.value : currentImageUrl.value
   if (!activeImageUrl) {
-    showToast('没有可下载的图片', 'warning')
+    showToast(translateUi('uiMessages.m16b92f55f19a'), 'warning')
     return
   }
   
   isDownloading = true
   const previewNode = showPreviewModal.value && canvasStore.nodes.find(node => node.id === previewNodeId.value)
   const filename = getCanvasNodeDownloadName(previewNode || { type: 'image', data: props.data }, 'png')
-  showToast('正在下载图片...', 'info')
+  showToast(translateUi('uiMessages.m9c36889fe930'), 'info')
   
   try {
     const imageUrl = getOriginalImageUrl(activeImageUrl)
@@ -4077,15 +4079,15 @@ async function handleToolbarDownload() {
       link.click()
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
-      showToast('下载完成', 'success')
+      showToast(translateUi('uiMessages.mc1c79b63f418'), 'success')
       return
     }
     
     await smartDownload(imageUrl, filename)
-    showToast('已开始下载', 'success')
+    showToast(translateUi('uiMessages.m3ef9b9f84210'), 'success')
   } catch (error) {
     console.error('[ImageNode] 下载图片失败:', error)
-    showToast('下载失败，请重试', 'error')
+    showToast(translateUi('uiMessages.m45f5dfb2c926'), 'error')
   } finally {
     isDownloading = false
   }
@@ -4224,10 +4226,10 @@ async function handleAddToAssets() {
     })
     
     console.log('[ImageNode] 已添加到资产库:', fileName)
-    showSuccessToast('已成功添加到我的资产！')
+    showSuccessToast(translateUi('uiMessages.m2aa250503a6c'))
   } catch (error) {
     console.error('[ImageNode] 添加到资产失败:', error)
-    showErrorToast('添加失败，请重试')
+    showErrorToast(translateUi('uiMessages.m2096e97a237f'))
   }
 }
 
@@ -4568,7 +4570,7 @@ const referenceMediaList = computed(() => {
       type: 'video',
       index: i + 1,
       url,
-      label: `视频${i + 1}`,
+      get label() { return translateUi('uiMessages.m1ffa0c134949', { value1: (i + 1) }) },
       key: getReferenceMediaKey('video', url, i + 1, sourceNode?.id),
       thumbnailUrl: getReferenceVideoThumbnail(url)
     })
@@ -4579,7 +4581,7 @@ const referenceMediaList = computed(() => {
       type: 'image',
       index: i + 1,
       url,
-      label: `图片${i + 1}`,
+      get label() { return translateUi('uiMessages.m1af51a3a6c2e', { value1: (i + 1) }) },
       key: getReferenceMediaKey('image', url, i + 1, sourceNode?.id)
     })
   })
@@ -4877,7 +4879,7 @@ async function handleFileUpload(event) {
     
   } catch (error) {
     console.error('[ImageNode] 上传失败:', error)
-    await showAlert('图片上传失败，请重试', '错误')
+    await showAlert(translateUi('canvas.imageNode.uploadFailed'), translateUi('common.error'))
   }
 }
 
@@ -4936,7 +4938,7 @@ async function uploadImageFile(file) {
     console.log('[ImageNode] 图片上传成功，URL:', urls[0])
     return urls[0]
   }
-  throw new Error('图片上传失败，请检查网络连接后重试')
+  throw new Error(translateUi('uiMessages.meba8ab4e5918'))
 }
 
 // 图生图流程
@@ -5145,7 +5147,7 @@ async function extractLastFrameFromVideo() {
     
   } catch (error) {
     console.error('[ImageNode] 提取视频尾帧失败:', error)
-    errorMessage.value = '提取视频尾帧失败: ' + error.message
+    errorMessage.value = translateUi('uiMessages.m4bb27ec860db') + error.message
   }
 }
 
@@ -5154,7 +5156,7 @@ function loadVideoDuration(videoUrl) {
     const video = document.createElement('video')
     const timeout = setTimeout(() => {
       cleanup()
-      reject(new Error('读取视频时长超时'))
+      reject(new Error(translateUi('uiMessages.mb391db5013d3')))
     }, 10000)
 
     function cleanup() {
@@ -5172,12 +5174,12 @@ function loadVideoDuration(videoUrl) {
       if (duration > 0) {
         resolve(duration)
       } else {
-        reject(new Error('无法读取视频时长'))
+        reject(new Error(translateUi('uiMessages.mfa308eefa87b')))
       }
     }
     video.onerror = () => {
       cleanup()
-      reject(new Error('读取视频时长失败'))
+      reject(new Error(translateUi('uiMessages.m1dcb7b2861cf')))
     }
     video.src = videoUrl
     video.load()
@@ -5604,7 +5606,7 @@ async function reuploadToCloud(url) {
     })
     
     if (!response.ok) {
-      throw new Error(`获取图片失败: ${response.status}`)
+      throw new Error(translateUi('uiMessages.m51ad3ca5f373', { value1: (response.status) }))
     }
     
     const blob = await response.blob()
@@ -5616,7 +5618,7 @@ async function reuploadToCloud(url) {
       console.log('[ImageNode] 重新上传成功，新 URL:', urls[0])
       return urls[0]
     }
-    throw new Error('上传返回空 URL')
+    throw new Error(translateUi('uiMessages.mff46e2b3d326'))
   } catch (error) {
     console.error('[ImageNode] 重新上传失败:', error)
     // 失败时返回原 URL，让后端尝试处理
@@ -5640,7 +5642,7 @@ async function ensureAccessibleUrls(imageUrls) {
         // 从 blob URL 获取图片数据
         const response = await fetch(url)
         if (!response.ok) {
-          throw new Error(`获取 blob 图片失败: ${response.status}`)
+          throw new Error(translateUi('uiMessages.m2251b688a1f9', { value1: (response.status) }))
         }
         const blob = await response.blob()
         const file = new File([blob], `blob_${Date.now()}.png`, { type: blob.type || 'image/png' })
@@ -5817,7 +5819,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
         }
       } catch (e) {
         console.error('[ImageNode] base64 图片上传失败:', e)
-        throw new Error('参考图片上传失败，请重试')
+        throw new Error(translateUi('uiMessages.m346b17c4a12e'))
       }
     }
     
@@ -5887,7 +5889,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
       console.log('[ImageNode] blob URL 处理完成:', processedCount, '成功,', failedCount, '失败')
       
       if (processedCount === 0 && failedCount > 0 && imageUrls.length === 0 && httpUrls.length === 0) {
-        throw new Error('参考图片已失效（blob URL 过期），请重新上传图片或刷新页面后重试')
+        throw new Error(translateUi('uiMessages.mf6aa9d17e949'))
       }
     }
     
@@ -5898,7 +5900,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
     
     // 验证最终的 URL 列表
     if (imageUrls.length === 0) {
-      throw new Error('没有有效的参考图片URL')
+      throw new Error(translateUi('uiMessages.m6437f31a512d'))
     }
     
     console.log('[ImageNode] 图生图请求 - 处理前的参考图片 URLs:', {
@@ -5910,7 +5912,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
     // 如果是本地服务器的相对路径，需要重新上传到七牛云
     const accessibleUrls = await ensureAccessibleUrls(imageUrls)
     if (accessibleUrls.length === 0) {
-      throw new Error('参考图片未能转换为可访问 URL，请重新上传后重试')
+      throw new Error(translateUi('uiMessages.m141625726a02'))
     }
     
     console.log('[ImageNode] 图生图请求 - 处理后的可访问 URLs:', {
@@ -6093,7 +6095,7 @@ async function reconcileNodeFromHistory(nodeId, { prompt, userPrompt, submittedA
     status: 'error',
     progress: null,
     _reconciling: false,
-    error: '网络异常，未能确认生成结果，请查看历史记录'
+    error: translateUi('uiMessages.mf72b6d4979f9')
   })
   return false
 }
@@ -6104,7 +6106,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, taskIndex, userPrompt 
   try {
     canvasStore.updateNodeData(nodeId, {
       status: 'processing',
-      progress: '生成中...',
+      progress: translateUi('canvas.audioNode.generating'),
       processingStartedAt: submittedAt,
       taskType: 'image',
       safetyError: null
@@ -6152,7 +6154,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, taskIndex, userPrompt 
       return result.url
     }
     
-    throw new Error('未获取到生成结果')
+    throw new Error(translateUi('canvas.imageNode.noResult'))
   } catch (error) {
     const errorDetail = {
       name: error.name,
@@ -6191,7 +6193,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, taskIndex, userPrompt 
     // 原生 fetch 丢包可能发生在后端已受理之后，先从历史记录自动对账。
     canvasStore.updateNodeData(nodeId, {
       status: 'processing',
-      progress: '网络波动，正在核对结果...',
+      progress: translateUi('uiMessages.mecc389714355'),
       _reconciling: true
     })
     const reconciled = await reconcileNodeFromHistory(nodeId, {
@@ -6202,7 +6204,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, taskIndex, userPrompt 
     })
     return reconciled
       ? { reconciled: true }
-      : { error: '网络异常，未能确认生成结果，请查看历史记录', detail: errorDetail }
+      : { error: translateUi('uiMessages.mf72b6d4979f9'), detail: errorDetail }
   }
 }
 
@@ -6295,7 +6297,7 @@ function createNewOutputNode() {
 async function handleGenerate(options = {}) {
   const { fromGroup = false, retry = false } = options
   if (findBlockingCanvasUploads(canvasStore.nodes, canvasStore.edges, props.id).length > 0) {
-    showToast('素材仍在上传，请等待完成后重试', 'warning')
+    showToast(translateUi('uiMessages.m97f1343b0c9b'), 'warning')
     return
   }
   // 动态获取上游节点的最新提示词（可能有多个文本节点连接）
@@ -6371,18 +6373,18 @@ async function handleGenerate(options = {}) {
       }
       return
     }
-    await showAlert('请输入提示词或连接参考图片', '提示')
+    await showAlert(translateUi('canvas.imageNode.enterPromptOrRef'), translateUi('common.info'))
     return
   }
 
   if (selectedModelConfig.value?.usable === false) {
-    const message = selectedModelConfig.value.accessMessage || '需要购买对应套餐后使用'
+    const message = selectedModelConfig.value.accessMessage || translateUi('uiMessages.m861a77c9f9fb')
     if (fromGroup) {
       console.log(`[ImageNode] 编组执行跳过节点 ${props.id}：模型需要套餐权限`)
       canvasStore.updateNodeData(props.id, { status: 'skipped' })
       return
     }
-    await showAlert(message, '模型权限')
+    await showAlert(message, translateUi('uiMessages.m220ae4856f14'))
     return
   }
 
@@ -6405,7 +6407,7 @@ async function handleGenerate(options = {}) {
       canvasStore.updateNodeData(props.id, { status: 'skipped' })
       return
     }
-    await showAlert(`您的套餐最大支持 ${userConcurrentLimit.value} 次并发，请升级套餐`, '并发限制')
+    await showAlert(translateUi('uiMessages.me1052afb3c10', { value1: (userConcurrentLimit.value) }), translateUi('uiMessages.m44c5959863d8'))
     // 点击确认后，恢复为默认的 1x
     selectedCount.value = 1
     return
@@ -6425,7 +6427,7 @@ async function handleGenerate(options = {}) {
       maxGroupImages: maxGroupImages.value
     }))
     if (duplicateResult.blocked) {
-      await showAlert(duplicateResult.message, '重复提交')
+      await showAlert(duplicateResult.message, translateUi('uiMessages.m5f0dcd88953e'))
       return
     }
   }
@@ -6489,7 +6491,7 @@ async function handleGenerate(options = {}) {
         allNodeIds.push(stackedNodeId)
       }
 
-      canvasStore.createVisibleGroup(allNodeIds, `图片生成 ×${generateCount}`, {
+      canvasStore.createVisibleGroup(allNodeIds, translateUi('uiMessages.m825cca2477d1', { value1: (generateCount) }), {
         skipHistory: true,
         defaultWidth: displayWidth,
         defaultHeight: displayHeight
@@ -6508,7 +6510,7 @@ async function handleGenerate(options = {}) {
     imageUrl: null,
     error: null,
     processingStartedAt: Date.now(),
-    progress: generateCount > 1 ? `并行生成 ${generateCount} 张...` : '生成中...'
+    progress: generateCount > 1 ? translateUi('uiMessages.m5b22de392a18', { value1: (generateCount) }) : translateUi('canvas.audioNode.generating')
   })
   
   try {
@@ -6537,7 +6539,7 @@ async function handleGenerate(options = {}) {
       const primaryFailure = batchSafetyError
         ? { error: batchSafetyError.message, detail: batchSafetyError }
         : failedResults[0]
-      const firstError = primaryFailure?.error || '未知错误'
+      const firstError = primaryFailure?.error || translateUi('canvas.unknownError')
       const detail = primaryFailure?.detail || {}
       console.error('[ImageNode] 所有任务都失败，首个错误:', firstError, detail)
       const err = new Error(firstError)
@@ -6557,7 +6559,7 @@ async function handleGenerate(options = {}) {
     console.error('[ImageNode] 生成失败:', error)
     isGenerating.value = false
     if (error.code === 'concurrent_limit_exceeded') {
-      await showAlert(error.message, '并发限制')
+      await showAlert(error.message, translateUi('uiMessages.m44c5959863d8'))
       return
     }
     if (isPromptSafetyBlockedError(error)) {
@@ -6570,7 +6572,7 @@ async function handleGenerate(options = {}) {
       await showAlert(dialog.message, dialog.title, dialog.detail)
       return
     }
-    errorMessage.value = error.message || '生成失败'
+    errorMessage.value = error.message || translateUi('canvas.audioNode.generateFailed')
     canvasStore.updateNodeData(targetNodeId, {
       status: 'error',
       error: error.message
@@ -6586,7 +6588,7 @@ async function handleGenerateSingle() {
   const finalPrompt = promptText.value.trim() || upstreamPrompt
 
   if (referenceImages.value.length === 0 && !finalPrompt) {
-    await showAlert('请输入提示词或连接参考图片', '提示')
+    await showAlert(translateUi('canvas.imageNode.enterPromptOrRef'), translateUi('common.info'))
     return
   }
   
@@ -6596,7 +6598,7 @@ async function handleGenerateSingle() {
   canvasStore.updateNodeData(props.id, { 
     status: 'processing',
     processingStartedAt: Date.now(),
-    progress: '生成中...'
+    progress: translateUi('canvas.audioNode.generating')
   })
   
   try {
@@ -6644,7 +6646,7 @@ async function handleGenerateSingle() {
       })
       invalidateCanvasHistory()
     } else {
-      throw new Error('生成完成但未返回图片URL')
+      throw new Error(translateUi('uiMessages.m86592cb7fe7d'))
     }
     
   } catch (error) {
@@ -6659,7 +6661,7 @@ async function handleGenerateSingle() {
       await showAlert(dialog.message, dialog.title, dialog.detail)
       return
     }
-    errorMessage.value = error.message || '生成失败'
+    errorMessage.value = error.message || translateUi('canvas.audioNode.generateFailed')
     canvasStore.updateNodeData(props.id, {
       status: 'error',
       error: error.message
@@ -7284,7 +7286,7 @@ function createUpstreamImageNode(imageUrl) {
     type: 'image-input',
     position: newNodePosition,
     data: {
-      title: `参考图 ${existingUpstreamCount + 1}`,
+      title: translateUi('uiMessages.m380b51de95cd', { value1: (existingUpstreamCount + 1) }),
       nodeRole: 'source',
       sourceImages: [imageUrl]
     }
@@ -7771,7 +7773,7 @@ async function handleDrop(event) {
   
   // 检查是否为图片文件
   if (!file.type.startsWith('image/')) {
-    await showAlert('请拖入图片文件', '提示')
+    await showAlert(translateUi('uiMessages.m52f1d4e0eb9e'), translateUi('common.info'))
     return
   }
   
@@ -7793,7 +7795,7 @@ async function handleDrop(event) {
     })
   } catch (error) {
     console.error('[ImageNode] 拖拽上传失败:', error)
-    await showAlert('图片上传失败，请重试', '错误')
+    await showAlert(translateUi('canvas.imageNode.uploadFailed'), translateUi('common.error'))
   }
 }
 </script>
@@ -7825,18 +7827,18 @@ async function handleDrop(event) {
     <div v-show="showToolbar && !showElementEditOverlay" class="image-toolbar">
       <button
         class="toolbar-btn"
-        title="元素编辑"
+        :title="translateUi('uiMessages.med01d6ef6071')"
         @mousedown.stop.prevent="handleToolbarElementEdit"
         @click.stop.prevent
       >
         <SquareMousePointer :size="16" :stroke-width="1.5" />
-        <span>元素编辑</span>
+        <span>{{ translateUi('uiMessages.med01d6ef6071') }}</span>
       </button>
       <div class="toolbar-divider"></div>
       <button
         class="toolbar-btn toolbar-btn-hd"
         :class="{ 'is-processing': isImageHDProcessing }"
-        title="高清放大"
+        :title="translateUi('uiMessages.m825da56855ae')"
         :disabled="isImageHDProcessing"
         @mousedown.stop.prevent="handleToolbarImageHD"
         @click.stop.prevent
@@ -7849,12 +7851,12 @@ async function handleDrop(event) {
           <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
           <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
         </svg>
-        <span>{{ isImageHDProcessing ? '处理中...' : '高清' }}</span>
+        <span>{{ isImageHDProcessing ? translateUi('common.processing') : translateUi('videoGen.hd') }}</span>
       </button>
       <button
         class="toolbar-btn panorama-generate-btn"
         :class="{ 'is-processing': isPanoramaGenerating }"
-        title="生成全景图"
+        :title="translateUi('user.ledgerType.image_panorama_generate')"
         :disabled="isPanoramaGenerating"
         @mousedown.stop.prevent="handleToolbarGeneratePanorama"
         @click.stop.prevent
@@ -7867,13 +7869,13 @@ async function handleDrop(event) {
           <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
           <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
         </svg>
-        <span>{{ isPanoramaGenerating ? '生成中...' : '生成全景图' }}</span>
+        <span>{{ isPanoramaGenerating ? translateUi('imageGen.generating') : translateUi('user.ledgerType.image_panorama_generate') }}</span>
       </button>
       <div class="toolbar-btn-wrapper image-edit-menu-wrapper">
         <button
           class="toolbar-btn"
           :class="{ active: showImageEditMenu }"
-          title="编辑"
+          :title="translateUi('common.edit')"
           @mousedown.stop.prevent="handleToolbarEditMenuClick"
           @click.stop.prevent
         >
@@ -7881,7 +7883,7 @@ async function handleDrop(event) {
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke-linecap="round" stroke-linejoin="round"/>
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span>编辑</span>
+          <span>{{ translateUi('common.edit') }}</span>
           <svg class="toolbar-dropdown-arrow" :class="{ open: showImageEditMenu }" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
             <path d="M4 6l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
@@ -7893,27 +7895,27 @@ async function handleDrop(event) {
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke-linecap="round" stroke-linejoin="round"/>
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            <span>编辑</span>
+            <span>{{ translateUi('common.edit') }}</span>
           </button>
           <button class="image-edit-dropdown-item" @click="runImageEditAction(handleToolbarRepaint)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 0 0 4.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 0 1-15.357-2m15.357 2H15" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            <span>重绘</span>
+            <span>{{ translateUi('uiMessages.mf56d491d6572') }}</span>
           </button>
           <button class="image-edit-dropdown-item" @click="runImageEditAction(handleToolbarErase)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M18.364 5.636a9 9 0 1 1-12.728 0M12 3v9" stroke-linecap="round" stroke-linejoin="round"/>
               <path d="M4.5 16.5l3-3 3 3-3 3-3-3z" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            <span>擦除</span>
+            <span>{{ translateUi('uiMessages.m96960e526529') }}</span>
           </button>
           <button class="image-edit-dropdown-item" @click="runImageEditAction(handleToolbarSpotHeal)">
             <svg data-icon="spot-heal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M14.7 6.3a4 4 0 0 1 0 5.7l-6.4 6.4a4 4 0 0 1-5.7-5.7L9 6.3a4 4 0 0 1 5.7 0z" stroke-linecap="round" stroke-linejoin="round"/>
               <path d="M6.5 14.5l3 3M16 4l1-2M19 7l2-1M18 11l2 1" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            <span>污点修复</span>
+            <span>{{ translateUi('uiMessages.m53e5c49eed70') }}</span>
           </button>
           <button
             class="image-edit-dropdown-item"
@@ -7929,7 +7931,7 @@ async function handleDrop(event) {
               <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
               <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
             </svg>
-            <span>{{ isRemovingBackground ? `${removeBgProgress}%` : '抠图' }}</span>
+            <span>{{ isRemovingBackground ? `${removeBgProgress}%` : translateUi('uiMessages.mb84dd748d185') }}</span>
           </button>
           <button
             class="image-edit-dropdown-item"
@@ -7945,7 +7947,7 @@ async function handleDrop(event) {
               <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
               <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
             </svg>
-            <span>扩图</span>
+            <span>{{ translateUi('uiMessages.mdc76bd45af6f') }}</span>
           </button>
         </div>
 
@@ -7993,7 +7995,7 @@ async function handleDrop(event) {
                   v-model="cutoutCustomColor"
                   class="cutout-color-input"
                   @change="startCutoutWithBg('custom')"
-                  title="点击选择颜色"
+                  :title="translateUi('uiMessages.m1a39cac0e0e6')"
                 />
               </button>
             </div>
@@ -8001,7 +8003,7 @@ async function handleDrop(event) {
         </Transition>
       </div>
       <div class="toolbar-btn-wrapper" style="position:relative">
-        <button class="toolbar-btn" title="宫格裁剪" @mousedown.stop.prevent="showGridCropMenu('selecting')" @click.stop.prevent>
+        <button class="toolbar-btn" :title="translateUi('uiMessages.m160674cb8c48')" @mousedown.stop.prevent="showGridCropMenu('selecting')" @click.stop.prevent>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <rect x="3" y="3" width="18" height="18" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
             <line x1="9" y1="3" x2="9" y2="21" stroke-linecap="round"/>
@@ -8009,11 +8011,11 @@ async function handleDrop(event) {
             <line x1="3" y1="9" x2="21" y2="9" stroke-linecap="round"/>
             <line x1="3" y1="15" x2="21" y2="15" stroke-linecap="round"/>
           </svg>
-          <span>宫格裁剪</span>
+          <span>{{ translateUi('uiMessages.m160674cb8c48') }}</span>
         </button>
         <!-- 宫格裁剪菜单：第一步选择宫格大小 -->
         <div v-if="gridCropMenuType === 'selecting'" class="grid-crop-dropdown nodrag nowheel" @click.stop.prevent @mousedown.stop.prevent @pointerdown.stop.prevent>
-          <div class="grid-crop-dropdown-title">选择宫格</div>
+          <div class="grid-crop-dropdown-title">{{ translateUi('uiMessages.m25e296ed02c9') }}</div>
           <button
             v-for="opt in gridCropSizeOptions"
             :key="opt.type"
@@ -8039,11 +8041,11 @@ async function handleDrop(event) {
               </template>
             </svg>
             <div class="dropdown-item-text">
-              <span>{{ opt.label }}裁剪</span>
-              <span class="dropdown-hint">{{ opt.cols }}×{{ opt.rows }} 网格</span>
+              <span>{{ translateUi('uiMessages.maba9324f3c08', { value1: (opt.label) }) }}</span>
+              <span class="dropdown-hint">{{ translateUi('uiMessages.m07ae0cc13960', { value1: (opt.cols), value2: (opt.rows) }) }}</span>
             </div>
           </button>
-          <button class="grid-crop-dropdown-cancel" @click.stop.prevent="closeGridCropMenu">取消</button>
+          <button class="grid-crop-dropdown-cancel" @click.stop.prevent="closeGridCropMenu">{{ translateUi('common.cancel') }}</button>
         </div>
         <!-- 宫格裁剪菜单：第二步选择操作 -->
         <div v-if="gridCropMenuType && gridCropMenuType !== 'selecting' && gridCropSelectedSize" class="grid-crop-dropdown nodrag nowheel" @click.stop.prevent @mousedown.stop.prevent @pointerdown.stop.prevent>
@@ -8051,7 +8053,7 @@ async function handleDrop(event) {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;margin-right:4px;">
               <path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            {{ gridCropSelectedSize.label }}裁剪
+            {{ translateUi('uiMessages.maba9324f3c08', { value1: (gridCropSelectedSize.label) }) }}
           </div>
           <button class="grid-crop-dropdown-item" @click.stop.prevent="handleGridCropOnly">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -8059,8 +8061,8 @@ async function handleDrop(event) {
               <line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/>
             </svg>
             <div class="dropdown-item-text">
-              <span>仅裁剪</span>
-              <span class="dropdown-hint">创建独立图片节点</span>
+              <span>{{ translateUi('uiMessages.mab59f1037ff4') }}</span>
+              <span class="dropdown-hint">{{ translateUi('uiMessages.ma90785ecfea1') }}</span>
             </div>
           </button>
           <button class="grid-crop-dropdown-item" @click.stop.prevent="handleGridCropToStoryboard">
@@ -8070,17 +8072,17 @@ async function handleDrop(event) {
               <rect x="5" y="14" width="5" height="5" rx="0.5"/><rect x="14" y="14" width="5" height="5" rx="0.5"/>
             </svg>
             <div class="dropdown-item-text">
-              <span>创建分镜格子</span>
-              <span class="dropdown-hint">自动填充到分镜节点</span>
+              <span>{{ translateUi('uiMessages.m80ce1ec6a889') }}</span>
+              <span class="dropdown-hint">{{ translateUi('uiMessages.m4f56ae6f4feb') }}</span>
             </div>
           </button>
-          <button class="grid-crop-dropdown-cancel" @click.stop.prevent="closeGridCropMenu">取消</button>
+          <button class="grid-crop-dropdown-cancel" @click.stop.prevent="closeGridCropMenu">{{ translateUi('common.cancel') }}</button>
         </div>
       </div>
       <button
         v-if="isPanoramaCandidate"
         class="toolbar-btn panorama-vr-btn"
-        title="全景VR预览"
+        :title="translateUi('uiMessages.mbd1b7c493cad')"
         @mousedown.stop.prevent="openPanoramaPreview"
         @click.stop.prevent
       >
@@ -8088,9 +8090,9 @@ async function handleDrop(event) {
           <circle cx="12" cy="12" r="8" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M4 12h16M12 4c2.2 2.3 3.3 5 3.3 8s-1.1 5.7-3.3 8M12 4c-2.2 2.3-3.3 5-3.3 8s1.1 5.7 3.3 8" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <span>全景VR</span>
+        <span>{{ translateUi('uiMessages.m80e8f4ade8c8') }}</span>
       </button>
-      <button class="toolbar-btn" :class="{ active: show3DCamera }" title="3D相机角度" @mousedown.stop.prevent="handleToolbar3DCamera" @click.stop.prevent>
+      <button class="toolbar-btn" :class="{ active: show3DCamera }" :title="translateUi('uiMessages.m1ac939136ef3')" @mousedown.stop.prevent="handleToolbar3DCamera" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <!-- 相机机身 -->
           <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" stroke-linecap="round" stroke-linejoin="round"/>
@@ -8100,9 +8102,9 @@ async function handleDrop(event) {
           <path d="M12 9V6" stroke-linecap="round" opacity="0.6"/>
           <path d="M16 13h3" stroke-linecap="round" opacity="0.6"/>
         </svg>
-        <span>角度</span>
+        <span>{{ translateUi('uiMessages.m8d855790e87a') }}</span>
       </button>
-      <button class="toolbar-btn disabled" title="姿态检测（功能开发中）" disabled @mousedown.stop.prevent @click.stop.prevent>
+      <button class="toolbar-btn disabled" :title="translateUi('uiMessages.ma876629c68a2')" disabled @mousedown.stop.prevent @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <!-- 人物骨架 -->
           <circle cx="12" cy="4" r="2"/>
@@ -8115,27 +8117,27 @@ async function handleDrop(event) {
           <path d="M20 8c0-2-1.5-3-3-3" stroke-linecap="round" opacity="0.6"/>
           <path d="M19 5l1 3 3-1" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
         </svg>
-        <span>姿态</span>
+        <span>{{ translateUi('uiMessages.mc8228f7c40cd') }}</span>
       </button>
       <SeedanceReviewButton :node-id="id" :data="data" asset-type="Image" />
       <div class="toolbar-divider"></div>
-      <button class="toolbar-btn icon-only" title="标注" @mousedown.stop.prevent="handleToolbarAnnotate" @click.stop.prevent>
+      <button class="toolbar-btn icon-only" :title="translateUi('uiMessages.m9875b1f82509')" @mousedown.stop.prevent="handleToolbarAnnotate" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
-      <button class="toolbar-btn icon-only" title="裁剪" @mousedown.stop.prevent="handleToolbarCrop" @click.stop.prevent>
+      <button class="toolbar-btn icon-only" :title="translateUi('uiMessages.m184506303bf5')" @mousedown.stop.prevent="handleToolbarCrop" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M6 2v4M6 18v4M2 6h4M18 6h4M18 18h-8a2 2 0 01-2-2V6" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M6 6h10a2 2 0 012 2v10" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
-      <button class="toolbar-btn icon-only" title="下载" @mousedown.stop.prevent @click.stop.prevent="handleToolbarDownload">
+      <button class="toolbar-btn icon-only" :title="translateUi('common.download')" @mousedown.stop.prevent @click.stop.prevent="handleToolbarDownload">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
-      <button class="toolbar-btn icon-only" title="放大预览" @mousedown.stop.prevent="handleToolbarPreview" @click.stop.prevent>
+      <button class="toolbar-btn icon-only" :title="translateUi('uiMessages.m6ad55eb17752')" @mousedown.stop.prevent="handleToolbarPreview" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
@@ -8230,7 +8232,7 @@ async function handleDrop(event) {
         ref="addLeftBtnRef"
         class="node-add-btn node-add-btn-left nodrag"
         @mousedown.stop="handleAddLeftMouseDown"
-        title="添加上游输入"
+        :title="translateUi('canvas.addUpstream')"
         @click="handleAddLeftClick"
       >
         +
@@ -8263,7 +8265,7 @@ async function handleDrop(event) {
         @dragleave="handleDragLeave"
         @drop="handleDrop"
       >
-        <div v-if="isHeygenDigitalHumanReference" class="heygen-digital-human-badge">HeyGen数字人</div>
+        <div v-if="isHeygenDigitalHumanReference" class="heygen-digital-human-badge">{{ translateUi('uiMessages.m247ca0ac45e1') }}</div>
 
         <!-- 彗星环绕发光特效（生成中显示） -->
         <svg v-if="data.status === 'processing'" class="comet-border" viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -8307,14 +8309,14 @@ async function handleDrop(event) {
           <!-- 上传按钮（右上角）- 本地上传或图片加载失败时显示，确保失效图也能重新上传 -->
           <button v-if="!isFromHistoryOrAsset || sourceImageLoadFailed" class="upload-overlay-btn" @click="handleReupload">
             <span class="upload-icon">↑</span>
-            <span>{{ sourceImageLoadFailed ? '重新上传' : '上传' }}</span>
+            <span>{{ sourceImageLoadFailed ? translateUi('uiMessages.m11b7c7173da2') : translateUi('common.upload') }}</span>
           </button>
           
           <!-- 拖拽覆盖层 -->
           <div v-if="isDragOver" class="drag-overlay">
             <div class="drag-hint">
               <span class="drag-icon">📷</span>
-              <span>放开以更换图片</span>
+              <span>{{ translateUi('uiMessages.ma91e49ad48d3') }}</span>
             </div>
           </div>
           
@@ -8326,13 +8328,13 @@ async function handleDrop(event) {
               @click="handleReupload"
             >
               <div class="failed-icon">⚠️</div>
-              <div class="failed-text">图片加载失败</div>
-              <div class="failed-hint">点击此处重新上传</div>
+              <div class="failed-text">{{ translateUi('uiMessages.m572993f5820a') }}</div>
+              <div class="failed-hint">{{ translateUi('uiMessages.m37a7714ad449') }}</div>
             </div>
             <CanvasNodeImage
               v-else-if="isNodeVisible"
               :src="sourcePreviewImages[0]"
-              alt="上传的图片"
+              :alt="translateUi('uiMessages.m4ae1647918cd')"
               loading="lazy"
               decoding="async"
               fetchpriority="low"
@@ -8349,7 +8351,7 @@ async function handleDrop(event) {
           <div class="node-content">
             <!-- 加载中状态 - 简洁文字显示 -->
             <div v-if="data.status === 'processing'" class="preview-loading">
-              <span class="processing-text">{{ data.progress || '生成中' }}</span>
+              <span class="processing-text">{{ data.progress || translateUi('uiMessages.m969ef41f7e5b') }}</span>
               <span class="processing-duration-text">{{ imageProcessingElapsedText(data) }}</span>
               <!-- 生成中即显示请求比例（AI 助手/手动生图提交的参数），全部生成完成后结果按实际比例展示 -->
               <span v-if="processingAspectRatio" class="processing-aspect-ratio">{{ processingAspectRatio }}</span>
@@ -8358,7 +8360,7 @@ async function handleDrop(event) {
             <!-- 错误状态 -->
             <div v-else-if="data.status === 'error'" class="preview-error" :class="{ 'content-safety': isContentSafetyError(data.error || errorMessage), 'timeout-error': isTimeoutError(data.error || errorMessage) }">
               <div class="error-icon">{{ isContentSafetyError(data.error || errorMessage) ? '🛡️' : isTimeoutError(data.error || errorMessage) ? '⏱️' : '❌' }}</div>
-              <div class="error-text">{{ data.error || errorMessage || '生成失败' }}</div>
+              <div class="error-text">{{ data.error || errorMessage || translateUi('imageGen.failed') }}</div>
               <div v-if="getErrorHint(data.error || errorMessage)" class="error-hint">{{ getErrorHint(data.error || errorMessage) }}</div>
             </div>
             
@@ -8366,19 +8368,19 @@ async function handleDrop(event) {
             <div v-else-if="hasDataLost" class="preview-error data-lost">
               <div class="error-icon">⚠️</div>
               <div class="error-text">{{ dataLostReason }}</div>
-              <button class="retry-btn" @click="triggerUpload('image-to-image')">重新上传</button>
+              <button class="retry-btn" @click="triggerUpload('image-to-image')">{{ translateUi('uiMessages.m11b7c7173da2') }}</button>
             </div>
             
             <!-- 上传中状态 -->
             <div v-else-if="isUploading" class="preview-loading upload-progress">
-              <span class="processing-text">上传中...</span>
+              <span class="processing-text">{{ translateUi('tips.uploading') }}</span>
             </div>
             
             <!-- 上传失败状态 -->
             <div v-else-if="uploadFailed" class="preview-error upload-failed">
               <div class="error-icon">⚠️</div>
-              <div class="error-text">文件上传失败，保存时数据可能丢失</div>
-              <button class="retry-btn" @click="triggerUpload('image-to-image')">重新上传</button>
+              <div class="error-text">{{ translateUi('uiMessages.m34baf7a48a63') }}</div>
+              <button class="retry-btn" @click="triggerUpload('image-to-image')">{{ translateUi('uiMessages.m11b7c7173da2') }}</button>
             </div>
             
             <!-- 输出预览 -->
@@ -8394,8 +8396,8 @@ async function handleDrop(event) {
               <button
                 type="button"
                 class="preview-output-image-btn output-image-action-btn"
-                title="全图预览"
-                aria-label="全图预览"
+                :title="translateUi('uiMessages.me29abde62fe1')"
+                :aria-label="translateUi('uiMessages.me29abde62fe1')"
                 @mousedown.stop.prevent
                 @click.stop="handleToolbarPreview"
               >
@@ -8410,8 +8412,8 @@ async function handleDrop(event) {
                 v-if="!props.data?.readonly"
                 type="button"
                 class="replace-output-image-btn output-image-action-btn"
-                title="替换图片"
-                aria-label="替换图片"
+                :title="translateUi('uiMessages.mdbc39d0565e7')"
+                :aria-label="translateUi('uiMessages.mdbc39d0565e7')"
                 @mousedown.stop.prevent
                 @click.stop="triggerReplaceOutputUpload"
               >
@@ -8426,7 +8428,7 @@ async function handleDrop(event) {
                 <CanvasNodeImage
                   v-if="isNodeVisible"
                   :src="outputPreviewImages[index]"
-                  :alt="`生成结果 ${index + 1}`"
+                  :alt="translateUi('uiMessages.m4173bd635e70', { value1: (index + 1) })"
                   class="preview-image"
                   :class="{ 'transparent-image': props.data?.isTransparent || props.data?.cutoutResult }"
                   :loading="isCanvasDragging ? 'lazy' : 'eager'"
@@ -8440,7 +8442,7 @@ async function handleDrop(event) {
               </template>
               <div v-if="data._editSaving" class="edit-saving-badge">
                 <svg class="edit-saving-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/></svg>
-                保存中
+                {{ translateUi('uiMessages.ma1a1720d3eb5') }}
               </div>
             </div>
             
@@ -8459,13 +8461,13 @@ async function handleDrop(event) {
                   <span class="prompt-preview">{{ inheritedPrompt.slice(0, 50) }}{{ inheritedPrompt.length > 50 ? '...' : '' }}</span>
                 </template>
                 <template v-else-if="referenceImages.length > 0">
-                  已连接参考图片
+                  {{ translateUi('uiMessages.m56fa8741b0b2') }}
                 </template>
                 <template v-else>
-                  已连接，点击选中配置参数
+                  {{ translateUi('uiMessages.mbf7cffcbc40d') }}
                 </template>
               </div>
-              <div class="ready-hint">选中节点后在下方配置并生成</div>
+              <div class="ready-hint">{{ translateUi('uiMessages.m6272949db761') }}</div>
             </div>
             
             <!-- 空状态 - 快捷操作 -->
@@ -8519,7 +8521,7 @@ async function handleDrop(event) {
       <button 
         ref="addRightBtnRef"
         class="node-add-btn node-add-btn-right nodrag"
-        title="单击：添加节点 | 长按/拖拽：连接到其他节点"
+        :title="translateUi('canvas.imageNode.clickAddLongDrag')"
         @mousedown="handleAddRightMouseDown"
       >
         +
@@ -8544,8 +8546,8 @@ async function handleDrop(event) {
       <button
         class="config-expand-btn"
         type="button"
-        :title="isConfigPanelExpanded ? '缩小输入面板' : '放大输入面板'"
-        :aria-label="isConfigPanelExpanded ? '缩小输入面板' : '放大输入面板'"
+        :title="isConfigPanelExpanded ? translateUi('uiMessages.m49a90c53c3d5') : translateUi('uiMessages.mbe61c8937aa2')"
+        :aria-label="isConfigPanelExpanded ? translateUi('uiMessages.m49a90c53c3d5') : translateUi('uiMessages.mbe61c8937aa2')"
         @click.stop="toggleConfigPanelExpanded"
       >
         <svg v-if="!isConfigPanelExpanded" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -8572,15 +8574,15 @@ async function handleDrop(event) {
         @drop="handleRefDrop"
       >
         <div class="panel-frames-header">
-          <button type="button" class="panel-frames-label" title="从画布或资产管理选择参考" @click.stop="openReferencePicker(id)">＋参考</button>
-          <span class="panel-frames-hint">参考图片 · 拖拽图片到此处 · 拖动调整顺序</span>
+          <button type="button" class="panel-frames-label" :title="translateUi('uiMessages.m2053725df835')" @click.stop="openReferencePicker(id)">{{ translateUi('uiMessages.md329f1d67585') }}</button>
+          <span class="panel-frames-hint">{{ translateUi('uiMessages.m3c626ed74024') }}</span>
         </div>
         <div class="panel-frames-list">
           <div
             v-for="(video, index) in referenceVideos"
             :key="'video-' + index"
             class="panel-frame-item panel-frame-video panel-frame-clickable"
-            :title="`点击插入 @视频${index + 1}`"
+            :title="translateUi('uiMessages.m1308d5c1eec5', { value1: (index + 1) })"
             @mousedown="handleReferenceMediaMouseDown"
             @click="insertMediaTag({ type: 'video', index: index + 1, label: `视频${index + 1}` })"
             @mouseenter="onVideoHoverStart(video, $event)"
@@ -8590,7 +8592,7 @@ async function handleDrop(event) {
               v-if="shouldShowReferenceVideoImage(video)"
               :src="getReferenceVideoPreviewSrc(video)"
               class="video-thumb"
-              alt="参考视频封面"
+              :alt="translateUi('uiMessages.m78361d0df713')"
               loading="lazy"
               decoding="async"
               @error="handleReferenceVideoPreviewError(video)"
@@ -8604,7 +8606,7 @@ async function handleDrop(event) {
               @loadeddata="$event.target.currentTime = 0.1"
             ></video>
             <span class="panel-frame-label">{{ index + 1 }}</span>
-            <span class="panel-frame-tag-badge">@视频{{ index + 1 }}</span>
+            <span class="panel-frame-tag-badge">{{ translateUi('uiMessages.m174e46585c47', { value1: (index + 1) }) }}</span>
             <button class="panel-frame-remove" @click.stop="removeReferenceVideo(index)">×</button>
           </div>
           <!-- 现有图片（支持拖拽排序）- 点击插入 @图片N 标记 -->
@@ -8618,7 +8620,7 @@ async function handleDrop(event) {
               'panel-frame-clickable': true
             }"
             draggable="true"
-            :title="`点击插入 @图片${index + 1}`"
+            :title="translateUi('uiMessages.m5b7e1aef10ce', { value1: (index + 1) })"
             @mousedown="handleImageMouseDown"
             @click="insertMediaTag({ type: 'image', index: index + 1, label: `图片${index + 1}` })"
             @dragstart="handleImageDragStart($event, index)"
@@ -8629,10 +8631,10 @@ async function handleDrop(event) {
             @mouseenter="onHoverStart(img, $event)"
             @mouseleave="onHoverEnd"
           >
-            <CanvasNodeImage v-if="isNodeVisible" :src="getNodePreviewImageUrl(img)" :alt="`图片 ${index + 1}`" loading="lazy" decoding="async" fetchpriority="low" />
+            <CanvasNodeImage v-if="isNodeVisible" :src="getNodePreviewImageUrl(img)" :alt="translateUi('uiMessages.m6af55e777c95', { value1: (index + 1) })" loading="lazy" decoding="async" fetchpriority="low" />
             <div v-else class="image-placeholder" />
             <span class="panel-frame-label">{{ index + 1 }}</span>
-            <span class="panel-frame-tag-badge">@图片{{ index + 1 }}</span>
+            <span class="panel-frame-tag-badge">{{ translateUi('uiMessages.m4ce477e5a322', { value1: (index + 1) }) }}</span>
             <button class="panel-frame-remove" @click.stop="removeReferenceImage(index)">×</button>
           </div>
           <!-- 添加按钮（直接点击触发文件选择） -->
@@ -8642,12 +8644,12 @@ async function handleDrop(event) {
             @mousedown.stop
           >
             <span class="add-icon">+</span>
-            <span class="add-text">添加</span>
+            <span class="add-text">{{ translateUi('common.add') }}</span>
           </div>
         </div>
         <!-- 拖拽覆盖层 -->
         <div v-if="isRefDragOver" class="panel-drag-overlay">
-          <span>释放以添加图片</span>
+          <span>{{ translateUi('uiMessages.m44fb7219ad95') }}</span>
         </div>
       </div>
       
@@ -8758,7 +8760,7 @@ async function handleDrop(event) {
                             {{ formatModelAvgDuration(m.value) }}
                           </span>
                         </div>
-                        <span v-if="m.points" class="model-item-points">{{ m.points }}点</span>
+                        <span v-if="m.points" class="model-item-points">{{ translateUi('uiMessages.mce34bc46d6b9', { value1: (m.points) }) }}</span>
                       </div>
                     </div>
                 </div>
@@ -8812,8 +8814,8 @@ async function handleDrop(event) {
                         <button
                           type="button"
                           class="preset-actions-trigger"
-                          aria-label="预设管理"
-                          title="预设管理"
+                          :aria-label="translateUi('uiMessages.m71d67829caf4')"
+                          :title="translateUi('uiMessages.m71d67829caf4')"
                           @click.stop="togglePresetActions"
                         >
                           ⚙
@@ -8835,14 +8837,14 @@ async function handleDrop(event) {
                 </div>
                 <Transition name="dropdown-fade">
                   <div v-if="isPresetActionsOpen" class="preset-actions-popover" @click.stop>
-                    <div class="preset-actions-title">预设管理</div>
+                    <div class="preset-actions-title">{{ translateUi('uiMessages.m71d67829caf4') }}</div>
                     <button type="button" class="preset-actions-item" @click="selectPreset('action-manage')">
                       <span class="preset-actions-item-icon" aria-hidden="true">⚙</span>
-                      <span>管理预设</span>
+                      <span>{{ translateUi('uiMessages.m1b928509146c') }}</span>
                     </button>
                     <button type="button" class="preset-actions-item" @click="selectPreset('action-new')">
                       <span class="preset-actions-item-icon" aria-hidden="true">＋</span>
-                      <span>新建预设</span>
+                      <span>{{ translateUi('uiMessages.ma61bc16ca0f6') }}</span>
                     </button>
                   </div>
                 </Transition>
@@ -8856,10 +8858,10 @@ async function handleDrop(event) {
               class="camera-toggle-btn"
               :class="{ active: cameraControlEnabled }"
               @click="openCameraControl"
-              title="摄影机控制 - 选择电影机、镜头、焦段、光圈"
+              :title="translateUi('uiMessages.m40446b052962')"
             >
               <span class="toggle-icon">🎬</span>
-              <span class="toggle-label">摄影机控制</span>
+              <span class="toggle-label">{{ translateUi('uiMessages.m604d28e39142') }}</span>
               <span v-if="cameraControlEnabled" class="toggle-indicator"></span>
             </button>
             <!-- 快速关闭按钮 -->
@@ -8867,7 +8869,7 @@ async function handleDrop(event) {
               v-if="cameraControlEnabled" 
               class="camera-close-btn"
               @click.stop="disableCameraControl"
-              title="关闭摄影机控制"
+              :title="translateUi('uiMessages.m468b09457a27')"
             >
               ✕
             </button>
@@ -8881,7 +8883,7 @@ async function handleDrop(event) {
               class="bot-type-chip"
               :class="{ active: botType === option.value }"
               @click="botType = option.value"
-              :title="option.value === 'MID_JOURNEY' ? 'Midjourney 写实风格' : 'Niji Journey 动漫风格'"
+              :title="option.value === 'MID_JOURNEY' ? translateUi('uiMessages.m360782689bbf') : translateUi('uiMessages.m44195f1456c9')"
             >
               {{ option.label }}
             </div>
@@ -8894,7 +8896,7 @@ async function handleDrop(event) {
           <span
             class="count-display clickable"
             @click="toggleCount"
-            :title="`点击切换：1x → 2x → 4x（当前套餐最大 ${userConcurrentLimit}x）`"
+            :title="translateUi('uiMessages.mbc225e577103', { value1: (userConcurrentLimit) })"
           >
             {{ selectedCount }}x
           </span>
@@ -8925,7 +8927,7 @@ async function handleDrop(event) {
         <!-- 展开/收起按钮 -->
         <button class="sora2-collapse-trigger" @click="showSeedreamAdvancedOptions = !showSeedreamAdvancedOptions">
           <span class="sora2-collapse-icon" :class="{ 'expanded': showSeedreamAdvancedOptions }">∧</span>
-          <span>{{ showSeedreamAdvancedOptions ? '收起' : '扩展' }}</span>
+          <span>{{ showSeedreamAdvancedOptions ? translateUi('common.less') : translateUi('uiMessages.m99a4e1e59743') }}</span>
         </button>
 
         <!-- 高级选项内容 -->
@@ -8933,7 +8935,7 @@ async function handleDrop(event) {
           <div v-if="showSeedreamAdvancedOptions" class="sora2-advanced-options seedream-advanced">
             <!-- 联网搜索开关（仅 Seedream 5.0 Lite） -->
             <div v-if="isSeedream50LiteModel" class="sora2-option-row">
-              <span class="sora2-option-label">🔍 联网搜索</span>
+              <span class="sora2-option-label">{{ translateUi('uiMessages.m2b272bcf2331') }}</span>
               <label class="sora2-toggle-switch">
                 <input type="checkbox" v-model="enableWebSearch" />
                 <span class="sora2-toggle-slider"></span>
@@ -8942,7 +8944,7 @@ async function handleDrop(event) {
 
             <!-- 组图生成开关 -->
             <div class="sora2-option-row">
-              <span class="sora2-option-label">🖼️ 组图生成 
+              <span class="sora2-option-label">{{ translateUi('uiMessages.m95ea9722e119') }}
                 <span v-if="enableGroupGeneration" class="kling-sound-multiplier">
                   ({{ maxGroupImages }}x)
                 </span>
@@ -8955,13 +8957,13 @@ async function handleDrop(event) {
             
             <!-- 组图数量控制（+-按钮） -->
             <div v-if="enableGroupGeneration" class="seedream-group-input-row">
-              <span class="seedream-group-label">组图数量:</span>
+              <span class="seedream-group-label">{{ translateUi('uiMessages.m37e3b217f3a6') }}</span>
               <div class="number-control">
                 <button 
                   class="number-btn minus-btn" 
                   @click="decrementGroupImages"
                   :disabled="maxGroupImages <= 2"
-                  title="减少"
+                  :title="translateUi('uiMessages.m43c9f2ba7404')"
                 >
                   −
                 </button>
@@ -8970,7 +8972,7 @@ async function handleDrop(event) {
                   class="number-btn plus-btn" 
                   @click="incrementGroupImages"
                   :disabled="maxGroupImages >= 10"
-                  title="增加"
+                  :title="translateUi('uiMessages.mbce53fe72c92')"
                 >
                   +
                 </button>
@@ -8978,7 +8980,7 @@ async function handleDrop(event) {
             </div>
             
             <div class="seedream-group-hint">
-              💡 开启后一次生成多张图片，积分消耗 = 组图数量 × 批次数 × 单次积分
+              {{ translateUi('uiMessages.m139be47f1e51') }}
             </div>
           </div>
         </Transition>
@@ -9011,8 +9013,8 @@ async function handleDrop(event) {
             type="button"
             :disabled="!canPreviewPreviousCanvasImage"
             @click.stop="switchCanvasPreviewImage(-1)"
-            title="上一张"
-            aria-label="上一张"
+            :title="translateUi('uiMessages.mbcf200709dbc')"
+            :aria-label="translateUi('uiMessages.mbcf200709dbc')"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
               <path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -9024,8 +9026,8 @@ async function handleDrop(event) {
             type="button"
             :disabled="!canPreviewNextCanvasImage"
             @click.stop="switchCanvasPreviewImage(1)"
-            title="下一张"
-            aria-label="下一张"
+            :title="translateUi('uiMessages.mdcd4eb027369')"
+            :aria-label="translateUi('uiMessages.mdcd4eb027369')"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
               <path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -9034,20 +9036,20 @@ async function handleDrop(event) {
           
           <!-- 缩放控制按钮 -->
           <div class="preview-zoom-controls" @click.stop>
-            <button class="zoom-btn" @click="handleZoomOut" title="缩小">
+            <button class="zoom-btn" @click="handleZoomOut" :title="translateUi('canvas.zoomOut')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="11" cy="11" r="8"/>
                 <path d="M21 21l-4.35-4.35M8 11h6"/>
               </svg>
             </button>
             <span class="zoom-level">{{ Math.round(previewScale * 100) }}%</span>
-            <button class="zoom-btn" @click="handleZoomIn" title="放大">
+            <button class="zoom-btn" @click="handleZoomIn" :title="translateUi('canvas.zoomIn')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="11" cy="11" r="8"/>
                 <path d="M21 21l-4.35-4.35M11 8v6M8 11h6"/>
               </svg>
             </button>
-            <button class="zoom-btn reset" @click="handleZoomReset" title="重置">
+            <button class="zoom-btn reset" @click="handleZoomReset" :title="translateUi('common.reset')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
                 <path d="M3 3v5h5"/>
@@ -9064,7 +9066,7 @@ async function handleDrop(event) {
           >
             <img 
               :src="previewImageUrl" 
-              alt="预览图片" 
+              :alt="translateUi('uiMessages.mde078ce976ce')"
               class="preview-image" 
               :style="{
                 transform: `translate(${previewPosition.x}px, ${previewPosition.y}px) scale(${previewScale})`,
@@ -9080,19 +9082,19 @@ async function handleDrop(event) {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
-              <span>下载</span>
+              <span>{{ translateUi('common.download') }}</span>
             </button>
             <button class="preview-action-btn add-asset-btn" @click="handleAddToAssets">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
-              <span>加入资产</span>
+              <span>{{ translateUi('uiMessages.mc55086e7a469') }}</span>
             </button>
           </div>
           
           <!-- 操作提示 -->
           <div class="preview-hint">
-            滚轮缩放 · 拖动查看细节
+            {{ translateUi('uiMessages.m2c58e3e58361') }}
           </div>
         </div>
       </Transition>

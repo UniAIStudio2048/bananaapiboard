@@ -1,3 +1,5 @@
+import { t as translateUi, currentLanguage } from '../../i18n/index.js'
+currentLanguage.value = 'zh-CN'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -59,7 +61,7 @@ function harness(ok = true, conflictNodeVersions = null, options = {}) {
     if (!node) continue
     // The Vite-only store import is provided by the test context; execute the actual API body.
     const body = source.slice(node.start, node.end).replace("const { useCanvasStore } = await import('@/stores/canvas/canvasStore')", '')
-    context[name] = runInNewContext(`(${body})`, context)
+    context[name] = runInNewContext(`(${body})`, Object.assign(context, { translateUi }))
   }
   return { context, applied, workflow, requests, requestHeaders, batchCalls, marks, remoteApplied, flushes, collabStates }
 }

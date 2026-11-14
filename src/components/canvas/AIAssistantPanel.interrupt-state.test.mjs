@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 /**
  * 强插状态（AC-P0-04 / AC-P1-02）测试：interrupt 等待旧回合停止时保留草稿并
  * 显示「等待上一轮停止」；收到 interrupt_waiting_for_cancel 后不直发。
@@ -26,7 +27,7 @@ test('interrupt 分支先取消当前回合并等待终态（cancelActiveTurnAnd
 test('interrupt_waiting_for_cancel：保留草稿并显示等待，不直发新回合', () => {
   const catchBlock = panel.match(/interrupt_waiting_for_cancel[\s\S]*?sendEnhancedMessage\(force\)\n      \}, 1000\)/)?.[0]
   assert.ok(catchBlock, 'interrupt_waiting_for_cancel handling must exist')
-  assert.match(catchBlock, /正在等待上一轮 AI 回复停止，请稍候/)
+  assert.match(catchBlock, localizedPattern(/正在等待上一轮 AI 回复停止，请稍候/))
   assert.match(catchBlock, /inputText\.value = messageText/)
   assert.match(catchBlock, /sendEnhancedMessage\(force\)/)
 })

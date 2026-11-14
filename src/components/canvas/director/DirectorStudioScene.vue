@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js'
@@ -700,7 +702,7 @@ function syncPanorama() {
     undefined,
     error => {
       if (loadToken !== panoramaLoadToken) return
-      handleSceneError(error || new Error('全景图加载失败'))
+      handleSceneError(error || new Error(translateUi('uiMessages.mf687d0ec6b1b')))
       if (panoramaSphere) panoramaSphere.visible = normalizeDirectorMode(props.mode) === 'panorama'
       requestRender()
     }

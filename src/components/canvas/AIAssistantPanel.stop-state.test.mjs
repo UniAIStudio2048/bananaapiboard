@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 /**
  * 停止状态机（AC-P1-02）测试：点击停止先显示「正在停止」；收到 turn.cancelled
  * 后才显示「已停止」；取消 API 失败时不清空真实运行态；媒体任务继续显示。
@@ -25,7 +26,7 @@ test('取消失败恢复 running 并显示可重试错误（AC-P1-02）', () => 
   const block = panel.match(/function stopCurrentActivity\(\)[\s\S]*?\n}/)?.[0]
   assert.ok(block)
   assert.match(block, /activeTurn\.value\.status = 'running'/)
-  assert.match(block, /showAlert\(`停止失败/)
+  assert.match(block, /showAlert\(translateUi\('uiMessages\.m7655566590e9', \{ value1: \(error\?\.message \|\| translateUi\(/)
 })
 
 test('停止不清空取消确认所需的观察流（不 abort reconnectController）', () => {
@@ -39,9 +40,9 @@ test('停止不清空取消确认所需的观察流（不 abort reconnectControl
 test('状态条：cancelled 显示「已停止」而非失败，cancelRequested 显示「正在停止」', async () => {
   const { readFile: read } = await import('node:fs/promises')
   const bar = await read(new URL('./AgentTurnStatusBar.vue', import.meta.url), 'utf8')
-  assert.match(bar, /cancelled: '已停止'/)
-  assert.match(bar, /正在停止/)
-  assert.doesNotMatch(bar, /cancelled: '失败'/)
+  assert.match(bar, localizedPattern(/cancelled: '已停止'/))
+  assert.match(bar, localizedPattern(/正在停止/))
+  assert.doesNotMatch(bar, localizedPattern(/cancelled: '失败'/))
   // cancelled 状态类不触发错误样式
   assert.match(bar, /status === 'cancelled'\) return 'cancelled'/)
   assert.match(bar, /setInterval\(\(\) => \{ now\.value = Date\.now\(\) \}, 1000\)/)

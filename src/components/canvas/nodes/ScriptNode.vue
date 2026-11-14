@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, computed, inject, unref } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import { blankScript } from '@/utils/scriptDocument'
@@ -24,16 +26,16 @@ async function open(entry, action = '') {
 </script>
 <template>
   <section class="script-node" :class="{selected}" @dblclick.stop="open()">
-    <header><span>▤</span><strong>{{ data.title || '脚本' }}</strong><b>脚本工作台</b></header>
+    <header><span>▤</span><strong>{{ data.title || translateUi('uiMessages.m5d4f709636ee') }}</strong><b>{{ translateUi('uiMessages.m8e0edcbfe247') }}</b></header>
     <Handle id="input" type="target" :position="Position.Left" :connectable="!readonly" />
-    <div v-if="summary.shots" class="script-node-summary nodrag nopan" @click="open()"><span>{{ summary.shots }}<small>镜头</small></span><span>{{ summary.assets }}<small>资产</small></span><span>{{ summary.seconds }}<small>秒</small></span></div>
-    <div v-else class="script-node-empty nodrag nopan"><p>尝试：</p><button :disabled="readonly" @click="open('story')">剧本生成分镜脚本 →</button><button :disabled="readonly" @click="open('character')">角色生成分镜脚本 →</button><button :disabled="readonly" @click="open('manual')">自己编写分镜脚本 →</button></div>
+    <div v-if="summary.shots" class="script-node-summary nodrag nopan" @click="open()"><span>{{ summary.shots }}<small>{{ translateUi('directorStudio.inspector.camera') }}</small></span><span>{{ summary.assets }}<small>{{ translateUi('canvas.assetPanel.directory.assetsTab') }}</small></span><span>{{ summary.seconds }}<small>{{ translateUi('auth.secondsLater') }}</small></span></div>
+    <div v-else class="script-node-empty nodrag nopan"><p>{{ translateUi('uiMessages.mcc70740f26cc') }}</p><button :disabled="readonly" @click="open('story')">{{ translateUi('uiMessages.me5d451a8cef6') }}</button><button :disabled="readonly" @click="open('character')">{{ translateUi('uiMessages.m19c4a1a667b9') }}</button><button :disabled="readonly" @click="open('manual')">{{ translateUi('uiMessages.md90e44f82689') }}</button></div>
     <div class="script-node-steps"><span v-for="(name,index) in ['确认镜头','准备资产','合成提示词']" :key="name" :class="{done:summary.steps>index}"><i>{{ summary.steps>index?'✓':index+1 }}</i>{{ name }}</span></div>
-    <p v-if="engine.running.value" role="status">正在分析脚本，关闭详情后仍会继续…</p>
+    <p v-if="engine.running.value" role="status">{{ translateUi('uiMessages.m6cbe3f355d2f') }}</p>
     <p v-if="engine.mediaBusy.value" role="status">{{ engine.mediaProgress.value }}</p>
     <p v-if="engine.error.value" class="script-node-error">{{ engine.error.value }}</p>
-    <button class="script-node-open nodrag nopan" @click="open()">{{ summary.shots ? '打开脚本' : '创建脚本' }} <small>{{ summary.steps }}/3</small></button>
-    <div v-if="summary.shots" class="script-node-quick nodrag nopan"><button :disabled="readonly" @click="open(null,'regenerate')">重新生成</button><button :disabled="readonly || summary.steps < 3" @click="open(null,'image')">批量分镜</button><button :disabled="readonly || summary.steps < 3" @click="open(null,'video')">批量视频</button><button :disabled="summary.steps < 3" @click="open(null,'download')">下载</button></div>
+    <button class="script-node-open nodrag nopan" @click="open()">{{ summary.shots ? translateUi('uiMessages.m4dc71fd75f0c') : translateUi('uiMessages.m162d3c68a7f3') }} <small>{{ summary.steps }}/3</small></button>
+    <div v-if="summary.shots" class="script-node-quick nodrag nopan"><button :disabled="readonly" @click="open(null,'regenerate')">{{ translateUi('imageGen.regenerate') }}</button><button :disabled="readonly || summary.steps < 3" @click="open(null,'image')">{{ translateUi('uiMessages.m8aeaf0d56e96') }}</button><button :disabled="readonly || summary.steps < 3" @click="open(null,'video')">{{ translateUi('uiMessages.mb09533be27d8') }}</button><button :disabled="summary.steps < 3" @click="open(null,'download')">{{ translateUi('common.download') }}</button></div>
     <Handle id="output" type="source" :position="Position.Right" :connectable="!readonly" />
     <ScriptEditor v-if="opened" :engine="engine" :node-id="id" :readonly="readonly" :initial-action="initialAction" @close="opened=false" />
   </section>

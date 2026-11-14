@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed } from 'vue'
 import { X } from '@lucide/vue'
 import { useDirectorStudioI18n } from './useDirectorStudioI18n.js'
@@ -35,10 +37,10 @@ const shortcutRows = computed(() => [
 
 <template>
   <div v-if="open" class="director-shortcut-backdrop" @click.self="emit('close')">
-    <section class="director-shortcut-dialog" role="dialog" aria-modal="true" :aria-label="dt('shortcuts.dialogLabel', '导演台快捷键')">
+    <section class="director-shortcut-dialog" role="dialog" aria-modal="true" :aria-label="dt('shortcuts.dialogLabel', translateUi('directorStudio.shortcuts.dialogLabel'))">
       <header>
-        <h2>{{ dt('shortcuts.title', '快捷键') }}</h2>
-        <button type="button" :title="dt('shortcuts.close', '关闭快捷键')" @click="emit('close')">
+        <h2>{{ dt('shortcuts.title', translateUi('directorStudio.shortcuts.title')) }}</h2>
+        <button type="button" :title="dt('shortcuts.close', translateUi('directorStudio.shortcuts.close'))" @click="emit('close')">
           <X :size="17" stroke-width="2" />
         </button>
       </header>

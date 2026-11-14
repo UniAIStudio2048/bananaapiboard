@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import { readFileSync } from 'node:fs'
 import { strict as assert } from 'node:assert'
 import { fileURLToPath } from 'node:url'
@@ -8,7 +9,7 @@ const source = readFileSync(join(__dirname, 'CameraControlPanel.vue'), 'utf8')
 
 assert.match(
   source,
-  /<button class="reset-btn" @click="resetToDefault" title="重置">/,
+  localizedPattern(/<button class="reset-btn" @click="resetToDefault" title="重置">/),
   'Reset button should restore the default preset state, not only reset the current selector group'
 )
 

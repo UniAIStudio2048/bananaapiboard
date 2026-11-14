@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { getAssets } from '@/api/canvas/assets'
@@ -83,7 +85,7 @@ let mounted = true
 
 const ratioOption = computed(() => getPanoramaRatioOption(selectedRatio.value) || PANORAMA_RATIO_OPTIONS[0])
 const selectedProjectionLabel = computed(() => {
-  return PROJECTION_OPTIONS.find(option => option.id === selectedProjection.value)?.label || '直线投影'
+  return PROJECTION_OPTIONS.find(option => option.id === selectedProjection.value)?.label || translateUi('uiMessages.mbc6bf591e16d')
 })
 const selectedOverlay = computed(() => overlays.value.find(item => item.id === selectedOverlayId.value) || null)
 const visibleSortedOverlays = computed(() => sortVisibleOverlays(overlays.value))
@@ -138,7 +140,7 @@ async function initScene() {
   try {
     if (!viewportRef.value) return
     if (!isWebGLAvailable()) {
-      throw new Error('当前浏览器不支持全景预览')
+      throw new Error(translateUi('uiMessages.m0178d872b8a7'))
     }
 
     scene = new THREE.Scene()
@@ -167,7 +169,7 @@ async function initScene() {
     animate()
   } catch (error) {
     console.error('[PanoramaPreviewModal] 初始化失败:', error)
-    errorMessage.value = error.message || '全景图片加载失败，请重试'
+    errorMessage.value = error.message || translateUi('uiMessages.m61b353d2d7fe')
     isLoading.value = false
   }
 }
@@ -179,7 +181,7 @@ async function loadImageElement(url) {
   image.crossOrigin = 'anonymous'
   await new Promise((resolve, reject) => {
     image.onload = resolve
-    image.onerror = () => reject(new Error('全景图片加载失败，请重试'))
+    image.onerror = () => reject(new Error(translateUi('uiMessages.m61b353d2d7fe')))
     image.src = imageUrl
   })
   return image
@@ -324,7 +326,7 @@ async function addOverlayFromSource(source) {
     isAutoRotating.value = false
   } catch (error) {
     console.error('[PanoramaPreviewModal] 添加贴片失败:', error)
-    errorMessage.value = '图片加载失败，请重试'
+    errorMessage.value = translateUi('uiMessages.mee5780033f2d')
   }
 }
 
@@ -344,7 +346,7 @@ async function loadOverlayPickerTab(tab) {
       const items = result.assets || result.data || []
       assetImages.value = items.map(item => ({
         id: item.id,
-        name: item.name || '资产图片',
+        name: item.name || translateUi('uiMessages.m135f5dabc717'),
         url: item.url || item.content || item.thumbnail_url,
         thumbnailUrl: item.thumbnail_url || item.url || item.content,
         type: 'object',
@@ -357,7 +359,7 @@ async function loadOverlayPickerTab(tab) {
     loadedOverlayTabs.value = new Set([...loadedOverlayTabs.value, tab])
   } catch (error) {
     console.error('[PanoramaPreviewModal] 加载贴片来源失败:', error)
-    overlayPickerError.value = '图片列表加载失败，请重试'
+    overlayPickerError.value = translateUi('uiMessages.mcf6594034717')
   } finally {
     overlayPickerLoading.value = false
   }
@@ -372,7 +374,7 @@ async function handleLocalOverlayFile(event) {
   event.target.value = ''
   if (!file) return
   if (!file.type.startsWith('image/')) {
-    errorMessage.value = '请选择图片文件'
+    errorMessage.value = translateUi('uiMessages.m35fc560913c0')
     return
   }
   const url = URL.createObjectURL(file)
@@ -531,14 +533,14 @@ function handleRowDrop(event, targetOverlay) {
 
 async function uploadOverlayImageIfNeeded(overlay) {
   let imageUrl = overlay.url
-  if (!imageUrl) throw new Error('贴片图片不存在')
+  if (!imageUrl) throw new Error(translateUi('uiMessages.m9a969f2b454d'))
 
   if (imageUrl.startsWith('blob:') || imageUrl.startsWith('data:')) {
     const response = await fetch(imageUrl)
     const blob = await response.blob()
     const file = new File([blob], `overlay_${Date.now()}.png`, { type: blob.type || 'image/png' })
     const urls = await uploadImages([file])
-    if (!urls?.length) throw new Error('贴片图片上传失败')
+    if (!urls?.length) throw new Error(translateUi('uiMessages.mb35552aff83d'))
     return urls[0]
   }
 
@@ -561,15 +563,15 @@ async function waitForRemoveBackground(taskId) {
     const outputUrl = getTaskOutputUrl(result)
     const status = String(result.status || '').toLowerCase()
     if (outputUrl || ['completed', 'success', 'succeeded', 'done'].includes(status)) {
-      if (!outputUrl) throw new Error('抠图完成但未返回图片')
+      if (!outputUrl) throw new Error(translateUi('uiMessages.m8e3b129fa253'))
       return outputUrl
     }
     if (['failed', 'error', 'failure', 'timeout'].includes(status)) {
-      throw new Error(result.error || result.message || '抠图失败')
+      throw new Error(result.error || result.message || translateUi('uiMessages.m6ce163c10e10'))
     }
     await new Promise(resolve => setTimeout(resolve, 2000))
   }
-  throw new Error('抠图任务超时，请稍后重试')
+  throw new Error(translateUi('uiMessages.m300ff68ea3ce'))
 }
 
 async function replaceOverlayImage(id, nextUrl, metadata = {}) {
@@ -596,12 +598,12 @@ async function removeSelectedOverlayBackground(overlay) {
   try {
     const imageUrl = await uploadOverlayImageIfNeeded(overlay)
     const result = await removeImageBackground(imageUrl, 'transparent', null, `panorama-overlay-${overlay.id}`)
-    if (!result.success || !result.taskId) throw new Error(result.message || '抠图任务提交失败')
+    if (!result.success || !result.taskId) throw new Error(result.message || translateUi('uiMessages.m451fa720f9b1'))
     const outputUrl = await waitForRemoveBackground(result.taskId)
-    await replaceOverlayImage(overlay.id, outputUrl, { source: 'cutout', originalName: `${overlay.originalName || overlay.label}-透明抠图` })
+    await replaceOverlayImage(overlay.id, outputUrl, { source: 'cutout', originalName: translateUi('uiMessages.m9f079a5b2157', { value1: (overlay.originalName || overlay.label) }) })
   } catch (error) {
     console.error('[PanoramaPreviewModal] 贴片抠图失败:', error)
-    errorMessage.value = error.message || '贴片抠图失败，请重试'
+    errorMessage.value = error.message || translateUi('uiMessages.mafd48a687ce8')
   } finally {
     processingOverlayId.value = null
     processingOverlayAction.value = ''
@@ -623,7 +625,7 @@ async function handleOverlayCropSave(result) {
   if (!overlayId || !result?.dataUrl) return
   await replaceOverlayImage(overlayId, result.dataUrl, {
     source: 'crop',
-    originalName: `裁剪-${Date.now()}`
+    originalName: translateUi('uiMessages.m5f3ab1c1d052', { value1: (Date.now()) })
   })
 }
 
@@ -656,7 +658,7 @@ async function loadOverlayImage(url) {
   image.crossOrigin = 'anonymous'
   await new Promise((resolve, reject) => {
     image.onload = resolve
-    image.onerror = () => reject(new Error('贴片图片加载失败，请重试'))
+    image.onerror = () => reject(new Error(translateUi('uiMessages.m86817840335d')))
     image.src = imageUrl
   })
   return image
@@ -686,7 +688,7 @@ async function compositeOverlays(baseBlob) {
   outputCanvas.width = ratioOption.value.width
   outputCanvas.height = ratioOption.value.height
   const ctx = outputCanvas.getContext('2d')
-  if (!ctx) throw new Error('当前画面合成失败，请重试')
+  if (!ctx) throw new Error(translateUi('uiMessages.m3b2cbad8cead'))
 
   const baseUrl = URL.createObjectURL(baseBlob)
   try {
@@ -719,7 +721,7 @@ async function compositeOverlays(baseBlob) {
   return await new Promise((resolve, reject) => {
     outputCanvas.toBlob(blob => {
       if (blob) resolve(blob)
-      else reject(new Error('当前画面合成失败，请重试'))
+      else reject(new Error(translateUi('uiMessages.m3b2cbad8cead')))
     }, 'image/png')
   })
 }
@@ -729,7 +731,7 @@ function closeModal() {
 }
 
 async function exportCurrentView() {
-  await exportViews('current-view', [{ label: '当前视角', yaw: yaw.value, pitch: pitch.value }], null)
+  await exportViews('current-view', [{ label: translateUi('uiMessages.m9a1b92896fc4'), yaw: yaw.value, pitch: pitch.value }], null)
 }
 
 async function exportFourImages() {
@@ -772,7 +774,7 @@ async function exportViews(mode, views, storyboardGridSize) {
     closeModal()
   } catch (error) {
     console.error('[PanoramaPreviewModal] 导出失败:', error)
-    errorMessage.value = error.message || '视角提取失败，请重试'
+    errorMessage.value = error.message || translateUi('uiMessages.m541ddf89dbf4')
   } finally {
     isExporting.value = false
   }
@@ -795,7 +797,7 @@ async function captureView(view) {
   const blob = await new Promise((resolve, reject) => {
     canvas.toBlob(result => {
       if (result) resolve(result)
-      else reject(new Error('视角提取失败，请重试'))
+      else reject(new Error(translateUi('uiMessages.m541ddf89dbf4')))
     }, 'image/png')
   })
   captureRenderer.dispose()
@@ -810,11 +812,11 @@ async function captureView(view) {
       <header class="panorama-topbar">
         <div class="panorama-title">
           <span class="title-icon">◎</span>
-          <span>全景VR预览</span>
+          <span>{{ translateUi('uiMessages.mbd1b7c493cad') }}</span>
         </div>
         <div class="panorama-controls">
           <label>
-            <span>投影:</span>
+            <span>{{ translateUi('uiMessages.me0ed2571f803') }}</span>
             <select v-model="selectedProjection" :disabled="isExporting">
               <option v-for="option in PROJECTION_OPTIONS" :key="option.id" :value="option.id">
                 {{ option.label }}
@@ -822,16 +824,16 @@ async function captureView(view) {
             </select>
           </label>
           <label>
-            <span>比例:</span>
+            <span>{{ translateUi('uiMessages.m500f00c70e19') }}</span>
             <select v-model="selectedRatio" :disabled="isExporting">
               <option v-for="option in PANORAMA_RATIO_OPTIONS" :key="option.id" :value="option.id">
                 {{ option.label }}
               </option>
             </select>
           </label>
-          <output class="output-size">输出: {{ ratioOption.width }}x{{ ratioOption.height }}</output>
+          <output class="output-size">{{ translateUi('uiMessages.m0d55149b555b', { value1: (ratioOption.width), value2: (ratioOption.height) }) }}</output>
           <button class="primary-action" :disabled="isLoading || isExporting || !!errorMessage" @click="exportCurrentView">
-            {{ isExporting ? '提取中...' : '提取当前视角' }}
+            {{ isExporting ? translateUi('uiMessages.md386704ff836') : translateUi('uiMessages.m397f884bbb09') }}
           </button>
           <input
             ref="localFileInputRef"
@@ -840,10 +842,10 @@ async function captureView(view) {
             accept="image/png,image/jpeg,image/webp,image/gif"
             @change="handleLocalOverlayFile"
           />
-          <button :disabled="isLoading || isExporting || !!errorMessage" @click="exportFourImages">4张图片</button>
-          <button :disabled="isLoading || isExporting || !!errorMessage" @click="exportStoryboard(4)">4宫格</button>
-          <button :disabled="isLoading || isExporting || !!errorMessage" @click="exportStoryboard(12)">12宫格</button>
-          <button class="close-btn" title="关闭" @click="closeModal">×</button>
+          <button :disabled="isLoading || isExporting || !!errorMessage" @click="exportFourImages">{{ translateUi('uiMessages.mc9abcbebb8ae') }}</button>
+          <button :disabled="isLoading || isExporting || !!errorMessage" @click="exportStoryboard(4)">{{ translateUi('uiMessages.me766a8910eea') }}</button>
+          <button :disabled="isLoading || isExporting || !!errorMessage" @click="exportStoryboard(12)">{{ translateUi('uiMessages.mc3ca61e27bf4') }}</button>
+          <button class="close-btn" :title="translateUi('common.close')" @click="closeModal">×</button>
         </div>
       </header>
 
@@ -879,14 +881,14 @@ async function captureView(view) {
                 :disabled="processingOverlayId === overlay.id"
                 @click.stop="removeSelectedOverlayBackground(overlay)"
               >
-                {{ processingOverlayId === overlay.id && processingOverlayAction === 'remove-bg' ? '抠图中...' : '移除背景' }}
+                {{ processingOverlayId === overlay.id && processingOverlayAction === 'remove-bg' ? translateUi('uiMessages.m346c47ca01aa') : translateUi('uiMessages.m351276be073d') }}
               </button>
               <button
                 type="button"
                 :disabled="processingOverlayId === overlay.id"
                 @click.stop="openOverlayCropper(overlay)"
               >
-                裁剪
+                {{ translateUi('uiMessages.m184506303bf5') }}
               </button>
             </div>
             <input
@@ -913,7 +915,7 @@ async function captureView(view) {
               v-if="overlay.id === selectedOverlayId"
               type="button"
               class="overlay-resize-handle"
-              title="拖动缩放"
+              :title="translateUi('uiMessages.m5b17d1e64714')"
               @pointerdown="handleOverlayResizePointerDown($event, overlay)"
               @pointermove="handleOverlayPointerMove"
               @pointerup="handleOverlayPointerUp"
@@ -921,22 +923,22 @@ async function captureView(view) {
             ></button>
           </div>
         </div>
-        <div v-if="isLoading" class="panorama-state">全景加载中...</div>
+        <div v-if="isLoading" class="panorama-state">{{ translateUi('uiMessages.m6a5fde6757e6') }}</div>
         <div v-else-if="errorMessage" class="panorama-state is-error">{{ errorMessage }}</div>
-        <div v-else-if="isExporting" class="panorama-state">正在提取视角...</div>
+        <div v-else-if="isExporting" class="panorama-state">{{ translateUi('uiMessages.m0233b3834b49') }}</div>
       </main>
 
       <aside class="overlay-inspector">
         <div class="inspector-header">
-          <strong>贴片管理</strong>
+          <strong>{{ translateUi('uiMessages.meb179b7ff661') }}</strong>
           <span>{{ overlays.length }}</span>
         </div>
         <div class="inspector-actions">
-          <button type="button" :disabled="isLoading || isExporting || !!errorMessage" @click="openOverlayPicker('preset')">添加图片</button>
-          <button type="button" :class="{ active: showOverlayLabels }" @click="showOverlayLabels = !showOverlayLabels">标签</button>
-          <button type="button" :disabled="overlays.length === 0" @click="clearOverlays">清空</button>
+          <button type="button" :disabled="isLoading || isExporting || !!errorMessage" @click="openOverlayPicker('preset')">{{ translateUi('uiMessages.m9f0d4e4656ee') }}</button>
+          <button type="button" :class="{ active: showOverlayLabels }" @click="showOverlayLabels = !showOverlayLabels">{{ translateUi('directorStudio.inspector.label') }}</button>
+          <button type="button" :disabled="overlays.length === 0" @click="clearOverlays">{{ translateUi('common.clear') }}</button>
         </div>
-        <div v-if="overlays.length === 0" class="inspector-empty">暂无贴片</div>
+        <div v-if="overlays.length === 0" class="inspector-empty">{{ translateUi('uiMessages.m8e19e0bbb245') }}</div>
         <div
           v-for="overlay in overlays"
           :key="overlay.id"
@@ -952,29 +954,29 @@ async function captureView(view) {
           <span class="drag-handle">⋮⋮</span>
           <img :src="overlay.url" alt="" />
           <span>{{ overlay.label }}</span>
-          <button type="button" @click.stop="updateOverlayById(overlay.id, { visible: overlay.visible === false })">{{ overlay.visible === false ? '隐' : '显' }}</button>
-          <button type="button" @click.stop="deleteOverlay(overlay.id)">删</button>
+          <button type="button" @click.stop="updateOverlayById(overlay.id, { visible: overlay.visible === false })">{{ overlay.visible === false ? translateUi('uiMessages.mb6bdb1c7b163') : translateUi('uiMessages.m528cff041b50') }}</button>
+          <button type="button" @click.stop="deleteOverlay(overlay.id)">{{ translateUi('uiMessages.m8d3ba65b9421') }}</button>
         </div>
         <div v-if="selectedOverlay" class="overlay-editor">
           <label>
-            <span>名称</span>
+            <span>{{ translateUi('directorStudio.inspector.name') }}</span>
             <input :value="selectedOverlay.label" @input="updateSelectedOverlay({ label: $event.target.value })" />
           </label>
           <label>
-            <span>类型</span>
+            <span>{{ translateUi('canvas.assetPanel.type') }}</span>
             <select :value="selectedOverlay.type" @change="updateSelectedOverlay({ type: $event.target.value })">
-              <option value="person">人物</option>
-              <option value="object">物品</option>
+              <option value="person">{{ translateUi('directorStudio.categories.person') }}</option>
+              <option value="object">{{ translateUi('uiMessages.m7c89d6ebe1f9') }}</option>
             </select>
           </label>
           <label>
-            <span>缩放</span>
+            <span>{{ translateUi('directorStudio.toolbar.scale') }}</span>
             <input type="range" min="0.2" max="3" step="0.05" :value="selectedOverlay.scale" @input="updateSelectedOverlay({ scale: Number($event.target.value) })" />
           </label>
-          <button type="button" @click="updateSelectedOverlay({ flipped: !selectedOverlay.flipped })">左右反转</button>
+          <button type="button" @click="updateSelectedOverlay({ flipped: !selectedOverlay.flipped })">{{ translateUi('uiMessages.mffd6b704fc61') }}</button>
           <div class="overlay-order-actions">
-            <button type="button" @click="moveOverlay(selectedOverlay.id, 'up')">上移</button>
-            <button type="button" @click="moveOverlay(selectedOverlay.id, 'down')">下移</button>
+            <button type="button" @click="moveOverlay(selectedOverlay.id, 'up')">{{ translateUi('uiMessages.mf853a70b1204') }}</button>
+            <button type="button" @click="moveOverlay(selectedOverlay.id, 'down')">{{ translateUi('uiMessages.me75e8b4e5c97') }}</button>
           </div>
         </div>
       </aside>
@@ -982,17 +984,17 @@ async function captureView(view) {
       <div v-if="overlayPickerOpen" class="overlay-picker" @click.self="overlayPickerOpen = false">
         <div class="overlay-picker-panel">
           <header>
-            <strong>添加图片</strong>
+            <strong>{{ translateUi('uiMessages.m9f0d4e4656ee') }}</strong>
             <button type="button" @click="overlayPickerOpen = false">×</button>
           </header>
           <nav>
-            <button type="button" :class="{ active: overlayPickerTab === 'preset' }" @click="overlayPickerTab = 'preset'">预设假人</button>
-            <button type="button" :class="{ active: overlayPickerTab === 'object' }" @click="overlayPickerTab = 'object'">物品</button>
-            <button type="button" :class="{ active: overlayPickerTab === 'local' }" @click="overlayPickerTab = 'local'; triggerLocalOverlayUpload()">本地上传</button>
-            <button type="button" :class="{ active: overlayPickerTab === 'asset' }" @click="overlayPickerTab = 'asset'; loadOverlayPickerTab('asset')">资产库</button>
-            <button type="button" :class="{ active: overlayPickerTab === 'history' }" @click="overlayPickerTab = 'history'; loadOverlayPickerTab('history')">历史图片</button>
+            <button type="button" :class="{ active: overlayPickerTab === 'preset' }" @click="overlayPickerTab = 'preset'">{{ translateUi('uiMessages.m4a9f51371eb0') }}</button>
+            <button type="button" :class="{ active: overlayPickerTab === 'object' }" @click="overlayPickerTab = 'object'">{{ translateUi('uiMessages.m7c89d6ebe1f9') }}</button>
+            <button type="button" :class="{ active: overlayPickerTab === 'local' }" @click="overlayPickerTab = 'local'; triggerLocalOverlayUpload()">{{ translateUi('uiMessages.m02413a69d5ca') }}</button>
+            <button type="button" :class="{ active: overlayPickerTab === 'asset' }" @click="overlayPickerTab = 'asset'; loadOverlayPickerTab('asset')">{{ translateUi('uiMessages.mc5da57d69c77') }}</button>
+            <button type="button" :class="{ active: overlayPickerTab === 'history' }" @click="overlayPickerTab = 'history'; loadOverlayPickerTab('history')">{{ translateUi('uiMessages.m8e0a6fa69dca') }}</button>
           </nav>
-          <div v-if="overlayPickerLoading" class="picker-state">加载中...</div>
+          <div v-if="overlayPickerLoading" class="picker-state">{{ translateUi('common.loading') }}</div>
           <div v-else-if="overlayPickerError" class="picker-state is-error">{{ overlayPickerError }}</div>
           <div v-else class="picker-grid">
             <button
@@ -1012,8 +1014,8 @@ async function captureView(view) {
         <span>{{ ratioOption.width }}×{{ ratioOption.height }}</span>
         <span>FOV: {{ Math.round(fov) }}°</span>
         <span>{{ selectedProjectionLabel }}</span>
-        <span>{{ isAutoRotating ? '自动旋转中' : '已暂停旋转' }}</span>
-        <span class="hint">鼠标拖拽旋转并停止自动旋转 · 空格暂停/恢复 · 滚轮缩放</span>
+        <span>{{ isAutoRotating ? translateUi('uiMessages.m430a170df88b') : translateUi('uiMessages.m376dc221aa91') }}</span>
+        <span class="hint">{{ translateUi('uiMessages.ma9c1092bdc61') }}</span>
       </footer>
 
       <ImageCropper

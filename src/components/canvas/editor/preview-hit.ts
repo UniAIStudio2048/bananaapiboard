@@ -20,9 +20,9 @@ export function previewTargets(canvas:HTMLElement, main:VideoTransform | undefin
  }
  const base=canvas.querySelector<HTMLVideoElement|HTMLImageElement>('[data-video-tool-preview]'), t=main??fallback
  if(mainVisible)media('video',mainIndex,base??undefined,.5+valueAt(t.x,t.keyframes?.x,sourceTime),.5+valueAt(t.y,t.keyframes?.y,sourceTime),valueAt(t.scale,t.keyframes?.scale,sourceTime),valueAt(t.rotation,t.keyframes?.rotation,sourceTime),valueAt(t.opacity,t.keyframes?.opacity,sourceTime))
- const videoElements=Array.from(canvas.querySelectorAll<HTMLVideoElement>('[aria-label="叠加视频预览"]'))
- const imageElements=Array.from(canvas.querySelectorAll<HTMLImageElement>('[aria-label="图片预览"] img'))
- const textElements=Array.from(canvas.querySelectorAll<HTMLElement>('[aria-label="文字预览"] span'))
+ const videoElements=Array.from(canvas.querySelectorAll<HTMLVideoElement>('[data-preview-layer="video"]'))
+ const imageElements=Array.from(canvas.querySelectorAll<HTMLImageElement>('[data-preview-layer="image"] img'))
+ const textElements=Array.from(canvas.querySelectorAll<HTMLElement>('[data-preview-layer="text"] span'))
  let vi=0,ii=0,ti=0
  for(const ref of orderedVisuals(videos,images,text)) {
   if(ref.kind==='video') {const layer=videos[ref.index],el=urls[layer.resource_uuid]?videoElements[vi++]:undefined;if(time<layer.start||time>=layer.end)continue;const tr=layer.transform??fallback, at=layer.source_start+(time-layer.start)*layer.rate;media('overlay',ref.index,el,.5+valueAt(tr.x,tr.keyframes?.x,at),.5+valueAt(tr.y,tr.keyframes?.y,at),valueAt(tr.scale,tr.keyframes?.scale,at),valueAt(tr.rotation,tr.keyframes?.rotation,at),valueAt(tr.opacity,tr.keyframes?.opacity,at))}

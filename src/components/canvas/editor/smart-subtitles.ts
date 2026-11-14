@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../../i18n/index.js'
 import { editorStorage } from './storage'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { MAX_TEXT_LAYERS, type AudioLayer, type SubtitleSegment, type TextLayer, type VideoClip, type VideoLayer, type VideoToolApi, type VideoToolJob } from './api'
@@ -16,17 +17,17 @@ export function subtitleTarget(state: ClipboardDraft, ref: ClipboardSelection | 
   const clip: VideoClip | undefined = state.clips[ref.index]
   if (!clip || clip.media_type === 'image') return
   const timeline_start = state.clips.slice(0, ref.index).reduce((sum, item) => sum + (item.end - item.start) / item.rate, 0)
-  return { resource: clip.resource_uuid, media_type: 'video', source_start: clip.start, source_end: clip.end, timeline_start, rate: clip.rate, name: `片段 ${ref.index + 1}` }
+  return { resource: clip.resource_uuid, media_type: 'video', source_start: clip.start, source_end: clip.end, timeline_start, rate: clip.rate, name: translateUi('uiMessages.m8bdcc8527ef9', { value1: (ref.index + 1) }) }
  }
  if (ref.kind === 'video') {
   const layer: VideoLayer | undefined = state.videoLayers[ref.index]
   if (!layer) return
-  return { resource: layer.resource_uuid, media_type: 'video', source_start: layer.source_start, source_end: layer.source_start + (layer.end - layer.start) * layer.rate, timeline_start: layer.start, rate: layer.rate, name: `叠加视频${ref.index + 1}` }
+  return { resource: layer.resource_uuid, media_type: 'video', source_start: layer.source_start, source_end: layer.source_start + (layer.end - layer.start) * layer.rate, timeline_start: layer.start, rate: layer.rate, name: translateUi('uiMessages.mcfc1c037dd2b', { value1: (ref.index + 1) }) }
  }
  if (ref.kind === 'audio') {
   const layer: AudioLayer | undefined = state.audioLayers[ref.index]
   if (!layer) return
-  return { resource: layer.resource_uuid, media_type: 'audio', source_start: layer.source_start, source_end: layer.source_start + layer.end - layer.start, timeline_start: layer.start, rate: 1, name: `音频${ref.index + 1}` }
+  return { resource: layer.resource_uuid, media_type: 'audio', source_start: layer.source_start, source_end: layer.source_start + layer.end - layer.start, timeline_start: layer.start, rate: 1, name: translateUi('uiMessages.m01182cf2cda3', { value1: (ref.index + 1) }) }
  }
 }
 
@@ -41,7 +42,7 @@ export function subtitleTextLayers(state: ClipboardDraft, target: SubtitleTarget
   if (end - start < 1 / Math.max(fps, 1)) continue
   layers.push({ ...subtitleStyle, background: { ...subtitleStyle.background }, text: segment.text, start, end, track_id: trackId, z_index: z, track_hidden: false })
  }
- if (layers.length > MAX_TEXT_LAYERS - state.textLayers.length) throw Object.assign(new Error(`文字元素超过 ${MAX_TEXT_LAYERS} 个上限，字幕结果已保留；请删除部分文字后等待自动写入`), { code: 'subtitle_capacity' })
+ if (layers.length > MAX_TEXT_LAYERS - state.textLayers.length) throw Object.assign(new Error(translateUi('uiMessages.m62867204bb0a', { value1: (MAX_TEXT_LAYERS) })), { code: 'subtitle_capacity' })
  return layers
 }
 
@@ -84,9 +85,9 @@ export function useSmartSubtitles({ api, project, storageKey, onSegments }: { ap
   setTarget(pending.target)
   const lookup = () => { void api.get(project, pending.job).then(next => {
    if (!live) return
-   if (next.operation !== 'subtitle') throw new Error('字幕任务类型无效')
+   if (next.operation !== 'subtitle') throw new Error(translateUi('uiMessages.m8c995cbd2fdc'))
    setJob(next); setRecovering(false); setError('')
-  }).catch(() => { if (live) { setError('E7009 字幕任务状态暂不可用，正在重试，请勿重复生成'); timer = setTimeout(lookup, 2000) } }) }
+  }).catch(() => { if (live) { setError(translateUi('uiMessages.m7e8828ee53e0')); timer = setTimeout(lookup, 2000) } }) }
   lookup()
   return () => { live = false; clearTimeout(timer) }
  }, [api, project, storageKey])
@@ -98,10 +99,10 @@ export function useSmartSubtitles({ api, project, storageKey, onSegments }: { ap
  }, [api, project, job?.uuid, job?.state])
  useEffect(() => {
   if (!job || !target) return
-  if (job.state === 'failed') { writePending(storageKey); setError(`${job.error_code ?? 'E7009'} 字幕识别失败，积分已退回`); return }
-  if (job.state === 'unknown') { setError('E7099 字幕任务结果待确认，请勿重复生成'); return }
+  if (job.state === 'failed') { writePending(storageKey); setError(translateUi('uiMessages.m0f6d729963de', { value1: (job.error_code ?? 'E7009') })); return }
+  if (job.state === 'unknown') { setError(translateUi('uiMessages.mac475614dc2c')); return }
   if (job.state !== 'succeeded' || applied.current === job.uuid) return
-  if (!api.subtitles) { setError('E7009 当前环境暂不支持读取字幕结果'); return }
+  if (!api.subtitles) { setError(translateUi('uiMessages.me428cb1fa367')); return }
   let live = true
   let timer: ReturnType<typeof setTimeout> | undefined
   const load = () => { void api.subtitles!(project, job.uuid).then(segments => {
@@ -110,7 +111,7 @@ export function useSmartSubtitles({ api, project, storageKey, onSegments }: { ap
    editorStorage.transaction(() => { notice = apply.current(target, segments, job.uuid); writePending(storageKey) })
    applied.current = job.uuid
    setNotice(notice); setError(''); setJob(undefined); setTarget(undefined)
-  }).catch(error => { if (live) { setError(error?.code === 'subtitle_capacity' ? error.message : 'E7009 字幕结果读取失败，正在重试'); timer = setTimeout(load, 2000) } }) }
+  }).catch(error => { if (live) { setError(error?.code === 'subtitle_capacity' ? error.message : translateUi('uiMessages.m8d69d8ef45d9')); timer = setTimeout(load, 2000) } }) }
   load()
   return () => { live = false; clearTimeout(timer) }
  }, [api, project, storageKey, job?.uuid, job?.state, target])
@@ -119,7 +120,7 @@ export function useSmartSubtitles({ api, project, storageKey, onSegments }: { ap
   setBusy(true); setError(''); setNotice(''); setTarget(next); setJob(undefined)
   try {
    setJob(await api.quote(project, { operation: 'subtitle', mode: '', clips: [{ resource_uuid: next.resource, ...(next.media_type === 'audio' ? { media_type: 'audio' as const } : {}), start: next.source_start, end: next.source_end, rate: 1, volume_db: 0 }] }))
-  } catch { setTarget(undefined); setError('E7009 无法为该片段生成字幕，请确认片段包含音频且智能字幕已启用') }
+  } catch { setTarget(undefined); setError(translateUi('uiMessages.m9094f621029b')) }
   finally { setBusy(false) }
  }, [api, project, busy, job, recovering])
  const confirm = useCallback(async () => {
@@ -133,8 +134,8 @@ export function useSmartSubtitles({ api, project, storageKey, onSegments }: { ap
    const next = await api.submit(project, job.uuid)
    setJob(next)
   } catch {
-   if (attempted) { setError('E7099 提交状态待确认，正在查询原任务，请勿重复生成'); setJob({ ...job, state: 'queued' }) }
-   else setError('E7009 字幕任务编号尚未保存，请先重试保存再确认生成')
+   if (attempted) { setError(translateUi('uiMessages.mefa4d618895f')); setJob({ ...job, state: 'queued' }) }
+   else setError(translateUi('uiMessages.m5103d6174afd'))
   }
   finally { setBusy(false) }
  }, [api, project, storageKey, job, target, busy])

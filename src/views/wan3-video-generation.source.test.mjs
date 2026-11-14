@@ -1,3 +1,4 @@
+import { localizedPattern } from '../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -29,10 +30,10 @@ test('万相 3.0 的 4 秒 480P 请求传递百炼字段', () => {
 
 test('万相 3.0 在提交前限制输入组合，且其 UI 可配置所有官方模式', () => {
   assert.match(source, /if \(isWan3Model\.value\) \{/)
-  assert.match(source, /万相 3\.0 首尾帧不能与参考素材、文件或网页链接同时使用/)
-  assert.match(source, /万相 3\.0 文件和网页链接不能同时使用/)
+  assert.match(source, localizedPattern(/万相 3\.0 首尾帧不能与参考素材、文件或网页链接同时使用/))
+  assert.match(source, localizedPattern(/万相 3\.0 文件和网页链接不能同时使用/))
   assert.match(source, /v-if="isWan3Model"/)
-  assert.match(source, /参考图片、视频、音频、文件和链接不能混用首尾帧/)
+  assert.match(source, localizedPattern(/参考图片、视频、音频、文件和链接不能混用首尾帧/))
   assert.match(source, /v-model\.number="wan3Duration"/)
   assert.match(source, /v-for="dur in availableDurations"/)
 })

@@ -1,5 +1,5 @@
 <template>
-  <div v-if="latestTools.length" class="agent-tool-timeline" role="status" aria-label="工具调用状态">
+  <div v-if="latestTools.length" class="agent-tool-timeline" role="status" :aria-label="translateUi('uiMessages.m37ce55a190cb')">
     <div
       v-for="tool in latestTools"
       :key="tool.id || tool.key"
@@ -13,6 +13,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed } from 'vue'
 
 const props = defineProps({
@@ -28,17 +30,17 @@ const latestTools = computed(() => {
 })
 
 const STATUS_LABELS = {
-  queued: '排队中',
-  running: '执行中',
-  waiting: '等待结果',
-  retrying: '重试中',
-  completed: '已完成',
-  failed: '失败',
-  cancelled: '已取消',
+  get queued() { return translateUi('uiMessages.md6f766f2adf5') },
+  get running() { return translateUi('uiMessages.m5026a63b58cd') },
+  get waiting() { return translateUi('uiMessages.m33037aadf043') },
+  get retrying() { return translateUi('uiMessages.ma3f9afd0aae3') },
+  get completed() { return translateUi('canvas.assetPanel.tagCompleted') },
+  get failed() { return translateUi('uiMessages.m28384d7afd2e') },
+  get cancelled() { return translateUi('uiMessages.ma37778f17c5f') },
 }
 
 function statusLabel(tool) {
-  return STATUS_LABELS[tool.status] || tool.status || '排队中'
+  return STATUS_LABELS[tool.status] || tool.status || translateUi('uiMessages.md6f766f2adf5')
 }
 </script>
 

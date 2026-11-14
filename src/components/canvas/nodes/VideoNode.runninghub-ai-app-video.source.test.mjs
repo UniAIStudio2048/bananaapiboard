@@ -35,7 +35,7 @@ test('画布视频成本缩放保留配置中的小数积分', () => {
 test('画布 RunningHub V3.1 计费按所选秒数实时显示计算后的总消耗', () => {
   assert.match(source, /const runningHubV31CostText = computed\(/)
   assert.match(source, /isRunningHubAiAppVideoV31Model\.value \|\| !selectedDuration\.value/)
-  assert.match(source, /return `\$\{formatVideoNodePoints\(pointsCost\.value \* selectedCount\.value\)\}积分`/)
+  assert.match(source, /return translateUi\('uiMessages\.m0b5bba8d3d7b', \{ value1: \(formatVideoNodePoints\(pointsCost\.value \* selectedCount\.value\)\) \}\)/)
   assert.match(source, /<template v-else-if="isRunningHubAiAppVideoV31Model">/)
   assert.match(source, /\{\{ runningHubV31CostText \}\}/)
 })

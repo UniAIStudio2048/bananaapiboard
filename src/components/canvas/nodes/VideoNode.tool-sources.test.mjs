@@ -1,3 +1,5 @@
+import { t as translateUi, currentLanguage } from '../../../i18n/index.js'
+currentLanguage.value = 'zh-CN'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
@@ -5,7 +7,7 @@ import { test } from 'node:test'
 const source = readFileSync(new URL('./VideoNode.vue', import.meta.url), 'utf8')
 const body = source.match(/const canvasVideoToolSources = computed\(\(\) => \{([\s\S]*?)\n\}\)/)?.[1]
 assert.ok(body, 'video tool source catalog must be available')
-const readSources = new Function('canvasStore', 'videoToolInitialSource', body)
+const readSources = new Function('translateUi', 'canvasStore', 'videoToolInitialSource', body).bind(null, translateUi)
 
 test('video tools list all eight video outputs and exclude image and audio outputs', () => {
   const videos = Array.from({ length: 8 }, (_, i) => ({ id: `video-${i}`, type: 'video', data: { output: { url: `https://media.example/${i}.mp4` } } }))

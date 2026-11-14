@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * CanvasBoard.vue - 无限画布组件
  * 基于 Vue Flow 实现
@@ -3603,7 +3605,7 @@ function handleClipboardText(text, positionOverride) {
     type: 'text-input',
     position,
     data: {
-      title: '文本',
+      title: translateUi('canvas.nodeConfig.textInput.label'),
       text
     }
   })
@@ -3777,7 +3779,7 @@ async function handleFileDrop(event) {
             }
           } catch (error) {
             console.error('[CanvasBoard] 加载工作流失败:', error)
-            alert('加载工作流失败：' + error.message)
+            alert(translateUi('uiMessages.m76c4889c1c05') + error.message)
           }
         })
         return
@@ -3802,8 +3804,8 @@ async function handleFileDrop(event) {
             type: 'image-input',
             position: { x: canvasX, y: canvasY },
             data: {
-              title: att.name || '图片',
-              label: att.name || '图片',
+              title: att.name || translateUi('canvas.nodeConfig.imageInput.label'),
+              label: att.name || translateUi('canvas.nodeConfig.imageInput.label'),
               sourceImages: [att.url],
               nodeRole: 'source',
               fromAIChat: true
@@ -3815,8 +3817,8 @@ async function handleFileDrop(event) {
             type: 'video',
             position: { x: canvasX, y: canvasY },
             data: {
-              title: att.name || '视频',
-              label: att.name || '视频',
+              title: att.name || translateUi('canvas.nodeConfig.videoInput.label'),
+              label: att.name || translateUi('canvas.nodeConfig.videoInput.label'),
               status: 'success',
               detectAspectRatio: true,
               output: {
@@ -3833,7 +3835,7 @@ async function handleFileDrop(event) {
             type: 'text-input',
             position: { x: canvasX, y: canvasY },
             data: {
-              title: att.name || '文件',
+              title: att.name || translateUi('uiMessages.m39932f24fe11'),
               text: att.url,
               fromAIChat: true
             }
@@ -3857,7 +3859,7 @@ async function handleFileDrop(event) {
               type: 'text-input',
               position: { x: canvasX, y: canvasY },
               data: {
-                title: asset.name || '文本资产',
+                title: asset.name || translateUi('uiMessages.md896dd701835'),
                 text: asset.content || '',
                 fromAsset: true,
                 assetId: asset.id
@@ -3870,8 +3872,8 @@ async function handleFileDrop(event) {
               type: 'image-input',
               position: { x: canvasX, y: canvasY },
               data: {
-                title: asset.name || '图片资产',
-                label: asset.name || '图片',
+                title: asset.name || translateUi('canvas.nodes.imageAsset'),
+                label: asset.name || translateUi('canvas.nodeConfig.imageInput.label'),
                 sourceImages: [asset.url],
                 thumbnailUrl: asset.thumbnail_url || asset.url,
                 thumbnail_url: asset.thumbnail_url || asset.url,
@@ -3891,8 +3893,8 @@ async function handleFileDrop(event) {
               type: 'video',
               position: { x: canvasX, y: canvasY },
               data: {
-                title: asset.name || '视频资产',
-                label: asset.name || '视频',
+                title: asset.name || translateUi('canvas.nodes.videoAsset'),
+                label: asset.name || translateUi('canvas.nodeConfig.videoInput.label'),
                 status: 'success',
                 detectAspectRatio: true,
                 output: {
@@ -3913,8 +3915,8 @@ async function handleFileDrop(event) {
               type: 'audio-input',
               position: { x: canvasX, y: canvasY },
               data: {
-                title: asset.name || '音频资产',
-                label: asset.name || '音频',
+                title: asset.name || translateUi('canvas.nodes.audioAsset'),
+                label: asset.name || translateUi('canvas.nodeConfig.audioInput.label'),
                 audioUrl: asset.url,
                 status: 'success',
                 output: {
@@ -3936,7 +3938,7 @@ async function handleFileDrop(event) {
                 position: { x: canvasX, y: canvasY },
                 data: {
                   ...characterData,
-                  title: asset.name || (asset.type === 'bytefor-character' ? 'Bytefor角色' : 'Seedance角色'),
+                  title: asset.name || (asset.type === 'bytefor-character' ? translateUi('uiMessages.meb2536ef9bc2') : translateUi('uiMessages.mf75444a8035e')),
                   width: 220,
                   fromAsset: true,
                   canvasAssetId: asset.id
@@ -3946,7 +3948,7 @@ async function handleFileDrop(event) {
             break
           case 'sora-character':
             // Sora 角色卡节点 - 显示角色名称和 ID
-            const characterName = asset.name || '角色'
+            const characterName = asset.name || translateUi('user.role')
             const characterUsername = asset.metadata?.username || ''
             canvasStore.addNode({
               id: nodeId,
@@ -3981,7 +3983,7 @@ async function handleFileDrop(event) {
           type: data.type === 'bytefor-character' || data.libraryType === 'bytefor' ? 'bytefor-character' : 'seedance-character',
           position: { x: canvasX, y: canvasY },
           data: {
-            title: data.assetName || (data.libraryType === 'bytefor' ? 'Bytefor角色' : 'Seedance角色'),
+            title: data.assetName || (data.libraryType === 'bytefor' ? translateUi('uiMessages.meb2536ef9bc2') : translateUi('uiMessages.mf75444a8035e')),
             assetId: data.assetId,
             assetUri: data.assetUri || `asset://${data.assetId}`,
             assetUrl: data.assetUrl,
@@ -4036,7 +4038,7 @@ async function handleFileDrop(event) {
           type: 'image-input',
           position: { x: canvasX + offsetX, y: canvasY + offsetY },
           data: {
-            title: file.name || '图片',
+            title: file.name || translateUi('canvas.nodeConfig.imageInput.label'),
             nodeRole: 'source',
             sourceImages: [blobUrl],
             isUploading: true // 标记正在上传
@@ -4050,7 +4052,7 @@ async function handleFileDrop(event) {
           type: 'video',
           position: { x: canvasX + offsetX, y: canvasY + offsetY },
           data: {
-            title: file.name || '视频',
+            title: file.name || translateUi('canvas.nodeConfig.videoInput.label'),
             status: 'success',
             detectAspectRatio: true,
             output: {
@@ -4062,7 +4064,7 @@ async function handleFileDrop(event) {
         })
         uploadTasks.push({ file, type: 'video', nodeId, blobUrl, field: 'output.url' })
       } else if (category === 'audio') {
-        const fileName = file.name || '音频'
+        const fileName = file.name || translateUi('canvas.nodeConfig.audioInput.label')
         const displayName = fileName.replace(/\.[^/.]+$/, '')
         
         canvasStore.addNode({
@@ -4421,8 +4423,8 @@ onUnmounted(() => {
     <div v-if="isFileDragOver" class="file-drop-overlay">
       <div class="file-drop-hint">
         <span class="file-drop-icon">📁</span>
-        <span class="file-drop-text">释放以添加文件</span>
-        <span class="file-drop-subtext">支持图片、视频、音频</span>
+        <span class="file-drop-text">{{ translateUi('uiMessages.mf7dae4e6ffeb') }}</span>
+        <span class="file-drop-subtext">{{ translateUi('uiMessages.m8a06592d0db5') }}</span>
       </div>
     </div>
     
@@ -4542,7 +4544,7 @@ onUnmounted(() => {
         v-if="edgeHoverDelete.visible"
         class="edge-hover-delete-btn"
         :style="{ left: `${edgeHoverDelete.x}px`, top: `${edgeHoverDelete.y}px` }"
-        title="删除连线"
+        :title="translateUi('uiMessages.m24f758910119')"
         @pointerdown.stop
         @click.stop="handleEdgeHoverDeleteClick"
         @mouseenter="handleEdgeHoverDeleteBtnEnter"
@@ -4593,8 +4595,8 @@ onUnmounted(() => {
         type="button"
         class="multi-select-connect-btn"
         :style="{ left: `${multiSelectConnectAnchor.x - 18}px`, top: `${multiSelectConnectAnchor.y - 18}px` }"
-        title="拖拽到目标节点：将所有选中节点连接为下游输入"
-        aria-label="批量连接选中节点"
+        :title="translateUi('uiMessages.mc24af4ea3f2d')"
+        :aria-label="translateUi('uiMessages.mbb43d5381448')"
         @mousedown="handleMultiSelectConnectStart"
         @click.stop
       >+</button>
@@ -4616,7 +4618,7 @@ onUnmounted(() => {
         :zoomable="false"
         :width="220"
         :height="150"
-        aria-label="画布地图"
+        :aria-label="translateUi('uiMessages.mb838d168ca21')"
         @click="handleMiniMapClick"
       />
       <CanvasMiniMapOverview

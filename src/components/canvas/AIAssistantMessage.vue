@@ -68,7 +68,7 @@
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
             <path d="M14 2v6h6" />
           </svg>
-          <span>{{ att.name || (att.type === 'image' ? '图片附件' : '附件') }}</span>
+          <span>{{ att.name || (att.type === 'image' ? translateUi('uiMessages.m08491f93c0e2') : translateUi('uiMessages.mc7225dbf105e')) }}</span>
         </button>
       </div>
 
@@ -84,7 +84,7 @@
           <svg v-else class="w-4 h-4 transition-transform" :class="{ 'rotate-90': showThinking }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M9 18l6-6-6-6"/>
           </svg>
-          <span :class="{ 'ai-live-shimmer': message.isThinking }">{{ message.isThinking ? '思考中…' : '思考过程' }}</span>
+          <span :class="{ 'ai-live-shimmer': message.isThinking }">{{ message.isThinking ? translateUi('uiMessages.m64088d8cd78a') : translateUi('uiMessages.ma62acb184f47') }}</span>
         </button>
         <div v-if="showThinking && message.thinking" class="ai-thinking__content">
           {{ message.thinking }}
@@ -113,7 +113,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="m5.5 17.5 4.5-4.5 3 3 3-3 2.5 2.5" />
           </svg>
           </div>
-          <span class="media-generating__label">{{ message.mediaGenerating === 'video' ? (message.mediaStopped ? '视频生成已停止' : '视频生成中…') : (message.mediaStopped ? '图片生成已停止' : '图片生成中…') }}</span>
+          <span class="media-generating__label">{{ message.mediaGenerating === 'video' ? (message.mediaStopped ? translateUi('uiMessages.m870a8278be30') : translateUi('uiMessages.mf2a18c20aeb9')) : (message.mediaStopped ? translateUi('uiMessages.m7da5d19dfcb2') : translateUi('uiMessages.m80fea3352bc4')) }}</span>
         </div>
         <div v-if="message.mediaGenerating === 'image'" class="media-generating__grid">
           <!-- 逐格填充：已完成的图片原位显示在对应占位格，未完成保持灰格 -->
@@ -145,21 +145,21 @@
       <div v-if="message.turnState === 'failed'" class="ai-message-turn-state ai-message-turn-state--failed" role="status">
         <span class="ai-message-turn-state__dot" aria-hidden="true"></span>
         <span class="ai-message-turn-state__summary">
-          {{ message.error_message || '回合执行失败' }}
+          {{ message.error_message || translateUi('uiMessages.me5d728b71658') }}
         </span>
         <button
           v-if="message.retryable !== false"
           type="button"
           class="ai-message-turn-state__retry"
-          aria-label="重试这个回合"
+          :aria-label="translateUi('uiMessages.m0e6af6b699c6')"
           @click="$emit('retry', message)"
         >
-          重试
+          {{ translateUi('common.retry') }}
         </button>
       </div>
       <div v-else-if="message.turnState === 'cancelled'" class="ai-message-turn-state ai-message-turn-state--cancelled" role="status">
         <span class="ai-message-turn-state__dot" aria-hidden="true"></span>
-        <span class="ai-message-turn-state__summary">已停止{{ message.cancel_reason ? `（${message.cancel_reason}）` : '' }}</span>
+        <span class="ai-message-turn-state__summary">{{ translateUi('uiMessages.m07ba120ca70d', { value1: (message.cancel_reason ? `（${message.cancel_reason}）` : '') }) }}</span>
       </div>
 
       <!-- 主要内容 -->
@@ -170,7 +170,7 @@
         @contextmenu="handleContextMenu"
       >
         <template v-if="message.isStreaming && !message.content">
-          <span class="loading-dots">AI 正在回复</span>
+          <span class="loading-dots">{{ translateUi('uiMessages.m708b27807489') }}</span>
         </template>
         <template v-else-if="message.isStreaming && message.content">
           <div class="ai-message__text-stream">{{ message.content }}</div>
@@ -192,7 +192,7 @@
       <div v-if="message.role === 'assistant' && mediaResults.length && message.mediaGenerating !== 'image'" class="ai-media-results">
         <button type="button" class="ai-media-results__toggle" :aria-expanded="showMediaResults" @click="showMediaResults = !showMediaResults">
           <svg class="ai-media-results__toggle-icon" :class="{ 'is-expanded': showMediaResults }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
-          <span>{{ mediaResults[0].type === 'video' ? '视频已生成' : '图片已生成' }} ×{{ mediaResults.length }}</span>
+          <span>{{ mediaResults[0].type === 'video' ? translateUi('uiMessages.mdd3baa83a846') : translateUi('uiMessages.m38cd3c80df9c') }} ×{{ mediaResults.length }}</span>
         </button>
         <button v-if="!showMediaResults" type="button" class="ai-media-results__collapsed" @click="showMediaResults = true">
           <!-- 真实图片堆叠：前 3 张错位露出边缘，其余并入 +N 角标；背面图片带轻微倾斜（分镜格子折叠感），层内缩不超出按钮边界，不与相邻文字重叠 -->
@@ -237,8 +237,8 @@
           <button
             type="button"
             class="ai-media-card__download"
-            title="下载"
-            aria-label="下载媒体文件"
+            :title="translateUi('common.download')"
+            :aria-label="translateUi('uiMessages.m8a3ef8362150')"
             @click.stop="startStreamDownload(media.url, media.name)"
           >
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -246,7 +246,7 @@
               <polyline points="7 10 12 15 17 10"/>
               <line x1="12" y1="15" x2="12" y2="3"/>
             </svg>
-            <span>下载</span>
+            <span>{{ translateUi('common.download') }}</span>
           </button>
         </div>
         </div>
@@ -266,7 +266,7 @@
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
             </svg>
-            <span>复制</span>
+            <span>{{ translateUi('common.copy') }}</span>
           </div>
         </div>
       </Teleport>
@@ -302,7 +302,7 @@
                 <polygon points="5 3 19 12 5 21 5 3"/>
               </svg>
             </div>
-            <div class="ai-attachment__video-label">{{ att.name || '视频' }}</div>
+            <div class="ai-attachment__video-label">{{ att.name || translateUi('canvas.nodes.video') }}</div>
           </div>
           <!-- 音频内联播放器 - 现代毛玻璃风格 -->
           <div v-else-if="att.type === 'audio'" class="ai-audio-player" @click.stop>
@@ -312,7 +312,7 @@
               </div>
             </div>
             <div class="ai-audio-player__info">
-              <div class="ai-audio-player__name">{{ att.name || '音频' }}</div>
+              <div class="ai-audio-player__name">{{ att.name || translateUi('canvas.nodes.audio') }}</div>
               <audio
                 :ref="el => { if (el) audioRefs[index] = el }"
                 :src="att.url"
@@ -353,7 +353,7 @@
             <span>{{ att.name }}</span>
           </div>
           <!-- 拖拽提示角标 -->
-          <div class="ai-attachment__drag-hint" title="拖拽到画布">
+          <div class="ai-attachment__drag-hint" :title="translateUi('uiMessages.m94a3a8aa066c')">
             <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
             </svg>
@@ -370,6 +370,8 @@
 </template>
 
 <script setup>
+import { t as translateUi, currentLanguage as uiLanguage } from '@/i18n'
+
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -705,10 +707,10 @@ markdownRenderer.table = function (token) {
   const rows = Array.isArray(token.rows) ? token.rows : []
   const items = rows.map((row, rowIndex) => {
     const cells = Array.isArray(row) ? row : []
-    const fallbackTitle = { tokens: [{ type: 'text', raw: `项目 ${rowIndex + 1}`, text: `项目 ${rowIndex + 1}` }] }
+    const fallbackTitle = { tokens: [{ type: 'text', get raw() { return translateUi('uiMessages.m392224fa0a21', { value1: (rowIndex + 1) }) }, get text() { return translateUi('uiMessages.m392224fa0a21', { value1: (rowIndex + 1) }) } }] }
     const title = renderCell(cells[0] || fallbackTitle)
     const properties = cells.slice(1).map((cell, cellIndex) => {
-      const label = header[cellIndex + 1] ? renderCell(header[cellIndex + 1]) : `字段 ${cellIndex + 2}`
+      const label = header[cellIndex + 1] ? renderCell(header[cellIndex + 1]) : translateUi('uiMessages.mf8f7efd518f3', { value1: (cellIndex + 2) })
       return `<div class="ai-table-list__property"><span class="ai-table-list__label">${label}</span><span class="ai-table-list__value">${renderCell(cell)}</span></div>`
     }).join('')
     const fallback = cells.length <= 1 ? cells.map((cell) => `<div class="ai-table-list__value">${renderCell(cell)}</div>`).join('') : ''
@@ -757,7 +759,7 @@ const formattedContent = computed(() => {
 function formatTime(timestamp) {
   if (!timestamp) return ''
   const date = new Date(timestamp)
-  return date.toLocaleTimeString('zh-CN', {
+  return date.toLocaleTimeString(uiLanguage.value, {
     hour: '2-digit',
     minute: '2-digit'
   })

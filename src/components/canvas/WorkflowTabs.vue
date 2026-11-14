@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * WorkflowTabs.vue - 工作流标签栏
  * 支持多工作流标签切换、拖拽排序、双击重命名
@@ -233,7 +235,7 @@ async function confirmRename() {
       console.log('[WorkflowTabs] 工作流重命名成功:', trimmedName)
     } catch (error) {
       console.error('[WorkflowTabs] 重命名失败:', error)
-      alert('重命名失败：' + error.message)
+      alert(translateUi('uiMessages.m0ab10c33f462') + error.message)
       editState.value.saving = false
       return
     }
@@ -383,9 +385,9 @@ onUnmounted(() => {
       v-if="tabs.length >= 2"
       type="button"
       class="tabs-collapse-btn"
-      :aria-label="isPinnedOpen ? '收起工作流' : '展开工作流'"
+      :aria-label="isPinnedOpen ? translateUi('uiMessages.m02652ddc2804') : translateUi('uiMessages.m9071f122d6b6')"
       :aria-expanded="isExpanded"
-      :title="isPinnedOpen ? '收起工作流' : '点击固定展开，悬停临时展开'"
+      :title="isPinnedOpen ? translateUi('uiMessages.m02652ddc2804') : translateUi('uiMessages.m3b06530d2867')"
       @mouseenter="handleTabsHover"
       @click="toggleTabsPanel"
     >
@@ -446,7 +448,7 @@ onUnmounted(() => {
         </span>
         
         <!-- 未保存标记 -->
-        <span v-if="tab.hasChanges && !(editState.editing && editState.tabId === tab.id)" class="unsaved-dot" title="有未保存的更改"></span>
+        <span v-if="tab.hasChanges && !(editState.editing && editState.tabId === tab.id)" class="unsaved-dot" :title="translateUi('uiMessages.m6265f9d3f3cd')"></span>
         
         <!-- 保存中指示器 -->
         <span v-if="editState.saving && editState.tabId === tab.id" class="saving-indicator">
@@ -460,7 +462,7 @@ onUnmounted(() => {
           v-if="!(editState.editing && editState.tabId === tab.id)"
           class="tab-close" 
           @click="requestCloseTab($event, tab)"
-          :title="tabs.length === 1 ? '关闭并返回首页' : '关闭'"
+          :title="tabs.length === 1 ? translateUi('uiMessages.mbc58017ed7ec') : translateUi('common.close')"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
@@ -538,11 +540,11 @@ onUnmounted(() => {
     <Transition name="fade">
       <div v-if="closeConfirm.visible" class="close-confirm-overlay" @click.self="cancelClose">
         <div class="close-confirm-dialog">
-          <p>工作流 "{{ closeConfirm.tab?.name }}" 有未保存的更改</p>
+          <p>{{ translateUi('uiMessages.m728dfa5b0495', { value1: (closeConfirm.tab?.name) }) }}</p>
           <div class="confirm-actions">
-            <button class="btn-discard" @click="confirmClose">不保存</button>
-            <button class="btn-cancel" @click="cancelClose">取消</button>
-            <button class="btn-save" @click="saveAndClose">保存</button>
+            <button class="btn-discard" @click="confirmClose">{{ translateUi('uiMessages.m8bcc3e177f5f') }}</button>
+            <button class="btn-cancel" @click="cancelClose">{{ translateUi('common.cancel') }}</button>
+            <button class="btn-save" @click="saveAndClose">{{ translateUi('common.save') }}</button>
           </div>
         </div>
       </div>

@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 import { isSeedanceSd2VideoModel } from './videoGenerationMode.js'
 
 export const VIDEO_QUICK_ACTION_TYPES = {
@@ -47,8 +48,8 @@ export function selectVideoQuickActionModel(models = [], actionType) {
 
 function buildVideoEditNode(sourceVideoUrl, model) {
   const nodeData = {
-    title: '视频编辑',
-    label: '视频编辑',
+    get title() { return translateUi('canvas.nodeConfig.videoEdit.label') },
+    get label() { return translateUi('canvas.nodeConfig.videoEdit.label') },
     nodeRole: 'edit',
     editMode: true,
     sourceVideoUrl
@@ -71,8 +72,8 @@ function buildVideoEditNode(sourceVideoUrl, model) {
 
 function buildVideoExtendNode(sourceVideoUrl, model) {
   const nodeData = {
-    title: '视频延长',
-    label: '视频延长',
+    get title() { return translateUi('canvas.videoNode.videoExtend') },
+    get label() { return translateUi('canvas.videoNode.videoExtend') },
     nodeRole: 'extend',
     extendMode: true,
     sourceVideoUrl
@@ -102,7 +103,7 @@ export function buildVideoQuickActionNode(actionType, sourceNode, options = {}) 
     return {
       nodeType: 'image-input',
       nodeData: {
-        title: '尾帧图片',
+        get title() { return translateUi('uiMessages.m9b31d6cfb16f') },
         nodeRole: 'source',
         extractedFromVideo: true,
         videoUrl: sourceVideoUrl,
@@ -118,7 +119,7 @@ export function buildVideoQuickActionNode(actionType, sourceNode, options = {}) 
     return {
       nodeType: 'text-input',
       nodeData: {
-        title: '视频反推',
+        get title() { return translateUi('canvas.textNode.videoReverse') },
         selectedPreset: 'video-describe',
         inheritedData: sourceVideoUrl ? { type: 'video', url: sourceVideoUrl } : undefined
       }

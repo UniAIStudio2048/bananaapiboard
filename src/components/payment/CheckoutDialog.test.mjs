@@ -1,3 +1,6 @@
+import * as i18nTestRuntime from '../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -8,11 +11,11 @@ const source = readFileSync(new URL('./CheckoutDialog.vue', import.meta.url), 'u
 function fixture(qrcode = QRCode) {
   const watchers = []
   const ctx = { ref, shallowRef, computed, QRCode: qrcode, useCurrencyDisplay: () => ({ formatMoney: String }), checkoutApi: {}, checkoutRequest: ref(null), closeCheckout() {}, createCheckoutController: () => ({}), watch: (...args) => watchers.push(args), onBeforeUnmount() {} }
-  runInNewContext(source, ctx)
+  runInNewContext(source, Object.assign(ctx, { translateUi, uiLanguage }))
   return {
-    set: value => { ctx.value = value; runInNewContext('state.value = { attempt: value }', ctx) },
+    set: value => { ctx.value = value; runInNewContext('state.value = { attempt: value }', Object.assign(ctx, { translateUi, uiLanguage })) },
     render: () => watchers[1][1](ctx.value?.qr_code || ctx.value?.pay_url),
-    get: name => runInNewContext(`typeof ${name} === 'undefined' ? undefined : ${name}.value`, ctx)
+    get: name => runInNewContext(`typeof ${name} === 'undefined' ? undefined : ${name}.value`, Object.assign(ctx, { translateUi, uiLanguage }))
   }
 }
 test('payment codes render without DOM canvas or data-URL export', async () => {

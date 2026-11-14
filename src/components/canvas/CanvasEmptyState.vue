@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * CanvasEmptyState.vue - 空白画布引导
  */
@@ -207,7 +209,7 @@ function handleDoubleClickHint() {
             <path d="M8 10H16M8 14H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
         </span>
-        我的项目
+        {{ translateUi('uiMessages.m9ce557b30a3f') }}
       </button>
     </div>
   </div>

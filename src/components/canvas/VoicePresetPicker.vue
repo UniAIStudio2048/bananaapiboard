@@ -1,63 +1,63 @@
 <template>
   <div class="voice-picker-backdrop" @click.self="emit('close')">
-    <section class="voice-picker" role="dialog" aria-modal="true" aria-label="音色选择">
+    <section class="voice-picker" role="dialog" aria-modal="true" :aria-label="translateUi('uiMessages.mf59a1ecfa906')">
       <header class="voice-picker-header">
-        <h2>音色选择</h2>
-        <button type="button" class="close-button" aria-label="关闭" @click="emit('close')">×</button>
+        <h2>{{ translateUi('uiMessages.mf59a1ecfa906') }}</h2>
+        <button type="button" class="close-button" :aria-label="translateUi('common.close')" @click="emit('close')">×</button>
       </header>
 
       <div class="voice-picker-toolbar">
-        <div class="voice-picker-tabs" role="tablist" aria-label="音色分类">
-          <button type="button" :class="{ active: activeTab === 'all' }" @click="activeTab = 'all'">音色库</button>
-          <button v-if="!isMiniMax && !isFish" type="button" :class="{ active: activeTab === 'favorites' }" @click="activeTab = 'favorites'">收藏音色</button>
-          <button type="button" :class="{ active: activeTab === 'mine' }" @click="switchToMine">我的音色</button>
-          <button v-if="(!isMiniMax && !isFish) || isMiniMaxCloneEnabled || isFishCloneEnabled" type="button" :class="{ active: activeTab === 'clone' }" @click="activeTab = 'clone'">克隆新音色</button>
+        <div class="voice-picker-tabs" role="tablist" :aria-label="translateUi('uiMessages.me72a98c29f36')">
+          <button type="button" :class="{ active: activeTab === 'all' }" @click="activeTab = 'all'">{{ translateUi('uiMessages.m27d2cbd9672d') }}</button>
+          <button v-if="!isMiniMax && !isFish" type="button" :class="{ active: activeTab === 'favorites' }" @click="activeTab = 'favorites'">{{ translateUi('uiMessages.m92118bfec471') }}</button>
+          <button type="button" :class="{ active: activeTab === 'mine' }" @click="switchToMine">{{ translateUi('uiMessages.m3eb9b0316310') }}</button>
+          <button v-if="(!isMiniMax && !isFish) || isMiniMaxCloneEnabled || isFishCloneEnabled" type="button" :class="{ active: activeTab === 'clone' }" @click="activeTab = 'clone'">{{ translateUi('uiMessages.mc0d8a2c5e363') }}</button>
         </div>
         <label class="voice-search">
           <span aria-hidden="true">⌕</span>
-          <input v-model.trim="keyword" type="search" placeholder="搜索音色库" />
+          <input v-model.trim="keyword" type="search" :placeholder="translateUi('uiMessages.m7b3bc6e622eb')" />
         </label>
       </div>
 
       <div v-if="!isMiniMax && !isFish" class="voice-picker-filters">
-        <select v-model="locale"><option value="">全部语种</option><option v-for="item in locales" :key="item" :value="item">{{ localeLabels[item] || item }}</option></select>
-        <select v-model="gender"><option value="">全部性别</option><option value="female">女声</option><option value="male">男声</option></select>
-        <select v-model="style"><option value="">全部风格</option><option v-for="item in styles" :key="item" :value="item">{{ styleLabels[item] || item }}</option></select>
+        <select v-model="locale"><option value="">{{ translateUi('uiMessages.m95ee12babffe') }}</option><option v-for="item in locales" :key="item" :value="item">{{ localeLabels[item] || item }}</option></select>
+        <select v-model="gender"><option value="">{{ translateUi('uiMessages.m8a860413090c') }}</option><option value="female">{{ translateUi('uiMessages.m12a25ecd3917') }}</option><option value="male">{{ translateUi('uiMessages.m221a8fbb1cc2') }}</option></select>
+        <select v-model="style"><option value="">{{ translateUi('uiMessages.md33ee59a8236') }}</option><option v-for="item in styles" :key="item" :value="item">{{ styleLabels[item] || item }}</option></select>
       </div>
 
       <div v-if="activeTab === 'clone'" class="voice-picker-list">
         <div class="clone-panel">
           <div class="clone-reading">
             <div class="clone-reading-header">
-              <h3>朗读文案</h3>
-              <button type="button" class="clone-refresh-button" :disabled="isRecording || readingTexts.length < 2" @click="refreshReadingText">换一段</button>
+              <h3>{{ translateUi('uiMessages.mdd5872162737') }}</h3>
+              <button type="button" class="clone-refresh-button" :disabled="isRecording || readingTexts.length < 2" @click="refreshReadingText">{{ translateUi('uiMessages.m258fb70e6c91') }}</button>
             </div>
             <p v-if="currentReadingText" class="clone-reading-text">{{ currentReadingText }}</p>
-            <p v-else class="voice-empty">未配置朗读文案</p>
+            <p v-else class="voice-empty">{{ translateUi('uiMessages.m4d5b8c93b491') }}</p>
           </div>
           <div class="clone-recorder">
             <div class="clone-controls">
-              <button v-if="!isRecording" type="button" class="clone-record-button" @click="startRecording">开始录音</button>
-              <button v-else type="button" class="clone-record-button recording" @click="stopRecording">停止录音（{{ recordSeconds }}s）</button>
+              <button v-if="!isRecording" type="button" class="clone-record-button" @click="startRecording">{{ translateUi('uiMessages.mee9247035880') }}</button>
+              <button v-else type="button" class="clone-record-button recording" @click="stopRecording">{{ translateUi('uiMessages.m949ba32bcb6e', { value1: (recordSeconds) }) }}</button>
               <input v-if="isMiniMax || isFish" ref="cloneAudioInput" type="file" accept="audio/mpeg,audio/mp4,audio/wav,.mp3,.m4a,.wav" class="mine-upload-input" @change="handleMiniMaxCloneAudioUpload" />
-              <button v-if="isMiniMax || isFish" type="button" class="mine-upload-button" :disabled="cloneSaving" @click="openMiniMaxCloneAudioUpload">上传音频</button>
+              <button v-if="isMiniMax || isFish" type="button" class="mine-upload-button" :disabled="cloneSaving" @click="openMiniMaxCloneAudioUpload">{{ translateUi('canvas.audioNode.upload') }}</button>
               <audio v-if="recordedBlobUrl" :src="recordedBlobUrl" controls class="clone-preview"></audio>
             </div>
-            <p v-if="isMiniMax || isFish" class="clone-upload-hint">支持 MP3、M4A、WAV，时长 10 秒至 5 分钟，文件不超过 20MB。</p>
+            <p v-if="isMiniMax || isFish" class="clone-upload-hint">{{ translateUi('uiMessages.m30ba9e69834d') }}</p>
             <div v-if="isRecording" class="clone-waveform" role="status">
-              <canvas ref="waveformCanvas" aria-label="录音实时波形"></canvas>
-              <span>正在录音，实时显示麦克风波形</span>
+              <canvas ref="waveformCanvas" :aria-label="translateUi('uiMessages.m7ed244e99207')"></canvas>
+              <span>{{ translateUi('uiMessages.m72b708ed3323') }}</span>
             </div>
             <p v-if="recordError" class="clone-error">{{ recordError }}</p>
             <div v-if="recordedBlob" class="clone-save-form">
-              <input v-model.trim="cloneName" type="text" placeholder="为音色命名" class="clone-name-input" />
+              <input v-model.trim="cloneName" type="text" :placeholder="translateUi('uiMessages.mff0e2d630faf')" class="clone-name-input" />
               <button type="button" class="clone-save-button" :disabled="!canSaveClone" @click="saveCloneVoice">
-                {{ cloneSaving ? '保存中…' : '保存音色' }}
+                {{ cloneSaving ? translateUi('uiMessages.mff509c9ba052') : translateUi('uiMessages.m0956175192de') }}
               </button>
             </div>
             <div v-if="(isMiniMax || isFish) && recordedBlob" class="minimax-clone-billing">
-              <strong>本次复刻将消耗 {{ formatClonePoints(clonePointsCost) }} 积分</strong>
-              <label><input v-model="cloneAuthorized" type="checkbox" /> 我确认拥有该声音的合法授权</label>
+              <strong>{{ translateUi('uiMessages.m0b7f798d5bde', { value1: (formatClonePoints(clonePointsCost)) }) }}</strong>
+              <label><input v-model="cloneAuthorized" type="checkbox" /> {{ translateUi('uiMessages.m41af1648f0e5') }}</label>
             </div>
             <p v-if="cloneError" class="clone-error">{{ cloneError }}</p>
           </div>
@@ -66,30 +66,30 @@
       <div v-else-if="activeTab === 'mine'" class="voice-picker-list">
         <div v-if="!isMiniMax && !isFish" class="mine-upload">
           <input ref="mineAudioInput" type="file" accept="audio/mpeg,.mp3" class="mine-upload-input" @change="handleMineAudioUpload" />
-          <button type="button" class="mine-upload-button" :disabled="mineUploading" @click="openMineAudioUpload">{{ mineUploading ? '上传中…' : '上传 MP3' }}</button>
-          <span>仅支持大于 3 秒且小于 35 秒的 MP3 文件</span>
+          <button type="button" class="mine-upload-button" :disabled="mineUploading" @click="openMineAudioUpload">{{ mineUploading ? translateUi('uiMessages.mce1c9d61565f') : translateUi('uiMessages.m0dc94b186f5f') }}</button>
+          <span>{{ translateUi('uiMessages.ma065e851f2b7') }}</span>
         </div>
         <p v-if="mineUploadError" class="clone-error">{{ mineUploadError }}</p>
-        <p v-if="mineLoading" class="voice-empty">正在加载我的音色…</p>
+        <p v-if="mineLoading" class="voice-empty">{{ translateUi('uiMessages.m4506bd1f51da') }}</p>
         <p v-else-if="mineError" class="voice-empty">{{ mineError }}</p>
-        <p v-else-if="!mineVoices.length" class="voice-empty">{{ isMiniMax ? '还没有保存的 MiniMax 设计音色，先使用“音色设计”创建并保存吧' : isFish ? '还没有个人 Fish 音色，先使用“音色设计”或“克隆新音色”创建吧' : '还没有个人音色，去“克隆新音色”创建一个吧' }}</p>
+        <p v-else-if="!mineVoices.length" class="voice-empty">{{ isMiniMax ? translateUi('uiMessages.m9c4a6ddcedf8') : isFish ? translateUi('uiMessages.m340fa08d341a') : translateUi('uiMessages.m568220ae30ea') }}</p>
         <article v-for="voice in mineVoices" :key="voice.id" class="voice-row" :class="{ selected: modelValue?.id === voice.id }">
-          <button type="button" class="preview-button" :disabled="!voice.hasPreview" :title="voice.hasPreview ? '试听音色' : '试听素材准备中'" @click="togglePreview(voice)">
+          <button type="button" class="preview-button" :disabled="!voice.hasPreview" :title="voice.hasPreview ? translateUi('uiMessages.m7bd037a4c443') : translateUi('uiMessages.m2e17cf356090')" @click="togglePreview(voice)">
             {{ playingId === voice.id ? '■' : '▶' }}
           </button>
           <div class="voice-main">
             <strong>{{ voice.name }}</strong>
             <small v-if="voice.transcript">{{ voice.transcript }}</small>
-            <small v-if="isMiniMax && voice.cloneExpiresAt && !voice.cloneActivatedAt" class="minimax-clone-expiry">请在 {{ formatCloneExpiry(voice.cloneExpiresAt) }} 前首次使用该音色合成</small>
+            <small v-if="isMiniMax && voice.cloneExpiresAt && !voice.cloneActivatedAt" class="minimax-clone-expiry">{{ translateUi('uiMessages.m95f8b71150a0', { value1: (formatCloneExpiry(voice.cloneExpiresAt)) }) }}</small>
           </div>
-          <button type="button" class="select-button" :disabled="!voice.hasPreview && !isMiniMax && !isFish" @click="emit('select', voice)">{{ modelValue?.id === voice.id ? '已选' : '选择' }}</button>
-          <button type="button" class="favorite-button delete-button" title="删除" @click="requestDeleteMineVoice(voice)">删除</button>
+          <button type="button" class="select-button" :disabled="!voice.hasPreview && !isMiniMax && !isFish" @click="emit('select', voice)">{{ modelValue?.id === voice.id ? translateUi('uiMessages.m7ecf1cde6486') : translateUi('uiMessages.mc11330b85234') }}</button>
+          <button type="button" class="favorite-button delete-button" :title="translateUi('common.delete')" @click="requestDeleteMineVoice(voice)">{{ translateUi('common.delete') }}</button>
         </article>
       </div>
       <div v-else class="voice-picker-list">
-        <p v-if="loading" class="voice-empty">正在加载音色库…</p>
+        <p v-if="loading" class="voice-empty">{{ translateUi('uiMessages.m57ea117cf39a') }}</p>
         <p v-else-if="error" class="voice-empty">{{ error }}</p>
-        <p v-else-if="!filteredVoices.length" class="voice-empty">没有符合条件的音色</p>
+        <p v-else-if="!filteredVoices.length" class="voice-empty">{{ translateUi('uiMessages.mde6a50beb8cf') }}</p>
         <article v-for="voice in paginatedVoices" :key="voice.id" class="voice-row" :class="{ selected: modelValue?.id === voice.id }">
           <button type="button" class="preview-button" :disabled="previewLoadingId === voice.id || (!voice.hasPreview && !(isMiniMax && voice.isSystem))" :title="previewButtonTitle(voice)" @click="togglePreview(voice)">
             {{ previewLoadingId === voice.id ? '…' : playingId === voice.id ? '■' : '▶' }}
@@ -99,34 +99,34 @@
             <small v-if="voice.description">{{ voice.description }}</small>
             <span>{{ voice.tags?.join(' · ') }}</span>
             <div v-if="voice.sourceVoice" class="voice-id">
-              <span>音色ID：{{ voice.sourceVoice }}</span>
-              <button type="button" @click.stop="copyVoiceId(voice.sourceVoice)">{{ copiedVoiceId === voice.sourceVoice ? '已复制' : '复制' }}</button>
+              <span>{{ translateUi('uiMessages.m37562774b74c', { value1: (voice.sourceVoice) }) }}</span>
+              <button type="button" @click.stop="copyVoiceId(voice.sourceVoice)">{{ copiedVoiceId === voice.sourceVoice ? translateUi('common.copied') : translateUi('common.copy') }}</button>
             </div>
           </div>
           <div class="voice-meta"><span>{{ localeLabels[voice.locale] || voice.locale }}</span><span>{{ genderLabel(voice.gender) }}</span><span>{{ styleLabels[voice.style] || voice.style }}</span></div>
-          <button type="button" class="select-button" :disabled="!voice.hasPreview && !isMiniMax && !isFish" @click="emit('select', voice)">{{ modelValue?.id === voice.id ? '已选' : '选择' }}</button>
-          <button v-if="!isMiniMax && !isFish" type="button" class="favorite-button" :class="{ active: voice.isFavorite }" :title="voice.isFavorite ? '取消收藏' : '收藏'" @click="toggleFavorite(voice)">{{ voice.isFavorite ? '★' : '☆' }}</button>
+          <button type="button" class="select-button" :disabled="!voice.hasPreview && !isMiniMax && !isFish" @click="emit('select', voice)">{{ modelValue?.id === voice.id ? translateUi('uiMessages.m7ecf1cde6486') : translateUi('uiMessages.mc11330b85234') }}</button>
+          <button v-if="!isMiniMax && !isFish" type="button" class="favorite-button" :class="{ active: voice.isFavorite }" :title="voice.isFavorite ? translateUi('uiMessages.mdca60869e7d2') : translateUi('canvas.assetPanel.favorite')" @click="toggleFavorite(voice)">{{ voice.isFavorite ? '★' : '☆' }}</button>
         </article>
       </div>
-      <footer v-if="activeTab !== 'clone' && activeTab !== 'mine' && pageCount > 1" class="voice-picker-pagination" aria-label="音色分页">
-        <button type="button" :disabled="currentPage === 1" @click="currentPage -= 1">上一页</button>
+      <footer v-if="activeTab !== 'clone' && activeTab !== 'mine' && pageCount > 1" class="voice-picker-pagination" :aria-label="translateUi('uiMessages.m5b691b13fc0b')">
+        <button type="button" :disabled="currentPage === 1" @click="currentPage -= 1">{{ translateUi('uiMessages.mc9b9ae7a6144') }}</button>
         <template v-for="item in visiblePageItems" :key="item.key">
           <span v-if="item.type === 'ellipsis'" class="voice-pagination-ellipsis" aria-hidden="true">…</span>
           <button v-else type="button" :class="{ active: currentPage === item.page }" :aria-current="currentPage === item.page ? 'page' : undefined" @click="currentPage = item.page">{{ item.page }}</button>
         </template>
-        <button type="button" :disabled="currentPage === pageCount" @click="currentPage += 1">下一页</button>
-        <span class="voice-pagination-summary">第 {{ currentPage }} / {{ pageCount }} 页</span>
+        <button type="button" :disabled="currentPage === pageCount" @click="currentPage += 1">{{ translateUi('uiMessages.m8a8542f69648') }}</button>
+        <span class="voice-pagination-summary">{{ translateUi('uiMessages.m494b82c0e36c', { value1: (currentPage), value2: (pageCount) }) }}</span>
       </footer>
     </section>
     <div v-if="voicePendingDeletion" class="delete-confirm-backdrop" @click.self="cancelDeleteMineVoice">
       <section class="delete-confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="delete-confirm-title">
         <div class="delete-confirm-icon" aria-hidden="true">!</div>
-        <h2 id="delete-confirm-title">删除音色？</h2>
-        <p>确定要删除“{{ voicePendingDeletion.name }}”吗？</p>
-        <p class="delete-confirm-warning">删除后无法恢复</p>
+        <h2 id="delete-confirm-title">{{ translateUi('uiMessages.m1b9bb66c6062') }}</h2>
+        <p>{{ translateUi('uiMessages.m3a70201e1e24', { value1: (voicePendingDeletion.name) }) }}</p>
+        <p class="delete-confirm-warning">{{ translateUi('uiMessages.mee185bcc30b0') }}</p>
         <div class="delete-confirm-actions">
-          <button type="button" class="delete-confirm-cancel" :disabled="mineDeleting" @click="cancelDeleteMineVoice">取消</button>
-          <button type="button" class="delete-confirm-submit" :disabled="mineDeleting" @click="confirmDeleteMineVoice">{{ mineDeleting ? '删除中…' : '确认删除' }}</button>
+          <button type="button" class="delete-confirm-cancel" :disabled="mineDeleting" @click="cancelDeleteMineVoice">{{ translateUi('common.cancel') }}</button>
+          <button type="button" class="delete-confirm-submit" :disabled="mineDeleting" @click="confirmDeleteMineVoice">{{ mineDeleting ? translateUi('uiMessages.m5e8e7af57abb') : translateUi('uiMessages.ma3ea3c17b401') }}</button>
         </div>
       </section>
     </div>
@@ -134,6 +134,8 @@
 </template>
 
 <script setup>
+import { t as translateUi, currentLanguage as uiLanguage } from '@/i18n'
+
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import apiClient, { apiRequest } from '@/api/client'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
@@ -167,26 +169,26 @@ const currentPage = ref(1)
 const pageSize = 12
 let previewAudio = null
 
-const styleLabels = { narration: '旁白', conversational: '对话', advertising: '广告', emotional: '情感', news: '资讯' }
+const styleLabels = { get narration() { return translateUi('uiMessages.m101f6e6d6095') }, get conversational() { return translateUi('uiMessages.m6bf6d3f3d626') }, get advertising() { return translateUi('uiMessages.m5f9f1409615a') }, get emotional() { return translateUi('uiMessages.m3e741dd4830a') }, get news() { return translateUi('uiMessages.m71d9a93075be') } }
 const localeLabels = {
-  'zh-CN': '中文（简体）',
-  'zh-TW': '中文（台湾）',
-  'yue-HK': '粤语（港澳）',
-  'en-US': '英语（美国）',
-  'ja-JP': '日语',
-  'ko-KR': '韩语',
-  'es-ES': '西班牙语（西班牙）',
-  'es-MX': '西班牙语（墨西哥）',
-  'es-AR': '西班牙语（阿根廷）',
-  'fr-FR': '法语',
-  'de-DE': '德语',
-  'pt-BR': '葡萄牙语（巴西）',
-  'pt-PT': '葡萄牙语（葡萄牙）',
-  'ru-RU': '俄语',
-  'ar-SA': '阿拉伯语',
-  'hi-IN': '印地语',
-  'id-ID': '印度尼西亚语',
-  'tr-TR': '土耳其语'
+  'zh-CN': translateUi('uiMessages.m4eaa632ed776'),
+  'zh-TW': translateUi('uiMessages.me1c18b74f239'),
+  'yue-HK': translateUi('uiMessages.md896f2009d96'),
+  'en-US': translateUi('uiMessages.m95072679248b'),
+  'ja-JP': translateUi('uiMessages.m3a944ddb3868'),
+  'ko-KR': translateUi('uiMessages.m259cdcf75199'),
+  'es-ES': translateUi('uiMessages.ma559a3e8e474'),
+  'es-MX': translateUi('uiMessages.madb88f66f1a1'),
+  'es-AR': translateUi('uiMessages.m5761f2a6dafc'),
+  'fr-FR': translateUi('uiMessages.m99cdf164a814'),
+  'de-DE': translateUi('uiMessages.m7566092dce72'),
+  'pt-BR': translateUi('uiMessages.m949a18a9deda'),
+  'pt-PT': translateUi('uiMessages.md165352d62b9'),
+  'ru-RU': translateUi('uiMessages.mbdb6608a4dc8'),
+  'ar-SA': translateUi('uiMessages.mfc9a0bdeb77f'),
+  'hi-IN': translateUi('uiMessages.m99012cae1587'),
+  'id-ID': translateUi('uiMessages.m7d4387ca81dd'),
+  'tr-TR': translateUi('uiMessages.m3c647ca8d8cc')
 }
 const locales = computed(() => [...new Set(voices.value.map(item => item.locale))])
 const styles = computed(() => [...new Set(voices.value.map(item => item.style))])
@@ -214,7 +216,7 @@ watch(pageCount, count => {
 })
 
 function genderLabel(value) {
-  return value === 'female' ? '女' : value === 'male' ? '男' : value
+  return value === 'female' ? translateUi('uiMessages.m0ab4610b9257') : value === 'male' ? translateUi('uiMessages.m4e79758a9900') : value
 }
 
 function getVisiblePageItems(total, current) {
@@ -246,7 +248,7 @@ async function copyVoiceId(voiceId) {
       if (copiedVoiceId.value === voiceId) copiedVoiceId.value = ''
     }, 1600)
   } catch {
-    error.value = '复制音色 ID 失败，请检查浏览器权限'
+    error.value = translateUi('uiMessages.meb43fe89bee6')
   }
 }
 
@@ -261,7 +263,7 @@ async function loadVoices() {
         : await apiClient.get('/api/audio/voice-presets')
     voices.value = response.data || []
   } catch (requestError) {
-    error.value = requestError?.message || '音色库加载失败，请稍后重试'
+    error.value = requestError?.message || translateUi('uiMessages.m36b51d2a84f9')
   } finally {
     loading.value = false
   }
@@ -274,9 +276,9 @@ function stopPreview() {
 }
 
 function previewButtonTitle(voice) {
-  if (previewLoadingId.value === voice.id) return '正在生成试听…'
-  if (voice.hasPreview) return '试听音色'
-  return isMiniMax.value && voice.isSystem ? '生成试听' : '试听素材准备中'
+  if (previewLoadingId.value === voice.id) return translateUi('uiMessages.m12001224a3f1')
+  if (voice.hasPreview) return translateUi('uiMessages.m7bd037a4c443')
+  return isMiniMax.value && voice.isSystem ? translateUi('uiMessages.m82b8bc672848') : translateUi('uiMessages.m2e17cf356090')
 }
 
 function playPreview(voice) {
@@ -291,8 +293,8 @@ function playPreview(voice) {
 async function requestMiniMaxSystemPreview(voice, attempts = 0) {
   const response = await apiClient.post(`/api/audio/minimax/system-voices/${encodeURIComponent(voice.sourceVoice)}/preview`, { model: props.model })
   if (response.status === 'completed' && response.data?.audio_url) return response.data.audio_url
-  if (response.status === 'failed') throw new Error(response.data?.error_message || '试听生成失败，请稍后重试')
-  if (attempts >= 18) throw new Error('试听生成时间较长，请稍后再试')
+  if (response.status === 'failed') throw new Error(response.data?.error_message || translateUi('uiMessages.m4a36119a9cda'))
+  if (attempts >= 18) throw new Error(translateUi('uiMessages.m2872dbf2d56e'))
   await new Promise(resolve => window.setTimeout(resolve, Number(response.retry_after_ms) || 2500))
   return requestMiniMaxSystemPreview(voice, attempts + 1)
 }
@@ -309,7 +311,7 @@ async function togglePreview(voice) {
     voice.hasPreview = true
     playPreview(voice)
   } catch (requestError) {
-    error.value = requestError?.message || '试听生成失败，请稍后重试'
+    error.value = requestError?.message || translateUi('uiMessages.m4a36119a9cda')
   } finally {
     if (previewLoadingId.value === voice.id) previewLoadingId.value = ''
   }
@@ -320,7 +322,7 @@ async function toggleFavorite(voice) {
     const response = await apiClient.post(`/api/audio/voice-presets/${encodeURIComponent(voice.id)}/favorite`)
     voice.isFavorite = Boolean(response.isFavorite)
   } catch (requestError) {
-    error.value = requestError?.message || '收藏音色失败，请稍后重试'
+    error.value = requestError?.message || translateUi('uiMessages.mc674b208ca0c')
   }
 }
 
@@ -402,7 +404,7 @@ async function loadMineVoices(attempt = 0) {
       await new Promise(resolve => window.setTimeout(resolve, 300))
       return loadMineVoices(attempt + 1)
     }
-    mineError.value = message || '加载个人音色失败，请稍后重试'
+    mineError.value = message || translateUi('uiMessages.mebfc94d55883')
   } finally {
     mineLoading.value = false
   }
@@ -432,7 +434,7 @@ function getAudioDuration(file) {
     }
     audio.onerror = () => {
       URL.revokeObjectURL(audioUrl)
-      reject(new Error('无法读取音频文件时长'))
+      reject(new Error(translateUi('uiMessages.m1618c1b742c5')))
     }
     audio.src = audioUrl
   })
@@ -458,23 +460,23 @@ async function handleMiniMaxCloneAudioUpload(event) {
   if (!file) return
   cloneError.value = ''
   if (!/\.(mp3|m4a|wav)$/i.test(file.name)) {
-    cloneError.value = '请上传 MP3、M4A 或 WAV 文件'
+    cloneError.value = translateUi('uiMessages.m7ebccbe10d88')
     return
   }
   if (file.size > 20 * 1024 * 1024) {
-    cloneError.value = '复刻音频不能超过20MB'
+    cloneError.value = translateUi('uiMessages.ma58811bc72e9')
     return
   }
   try {
     const durationSeconds = await getAudioDuration(file)
     if (durationSeconds < 10 || durationSeconds > 300) {
-      cloneError.value = '复刻音频时长需在10秒至5分钟之间'
+      cloneError.value = translateUi('uiMessages.m30beb3ad969b')
       return
     }
     setMiniMaxCloneFile(file, durationSeconds)
     if (!cloneName.value) cloneName.value = file.name.replace(/\.(mp3|m4a|wav)$/i, '').trim().slice(0, 120)
   } catch (requestError) {
-    cloneError.value = requestError?.message || '无法读取复刻音频'
+    cloneError.value = requestError?.message || translateUi('uiMessages.m48207f8eb6e9')
   }
 }
 
@@ -485,7 +487,7 @@ function formatClonePoints(value) {
 
 function formatCloneExpiry(value) {
   const date = new Date(value)
-  return Number.isFinite(date.getTime()) ? date.toLocaleString('zh-CN', { hour12: false }) : '7天内'
+  return Number.isFinite(date.getTime()) ? date.toLocaleString(uiLanguage.value, { hour12: false }) : translateUi('uiMessages.mb794d5e76145')
 }
 
 async function handleMineAudioUpload(event) {
@@ -495,22 +497,22 @@ async function handleMineAudioUpload(event) {
 
   mineUploadError.value = ''
   if (!file.name.toLowerCase().endsWith('.mp3')) {
-    mineUploadError.value = '请上传 MP3 文件'
+    mineUploadError.value = translateUi('uiMessages.mc20ea07961b4')
     return
   }
 
   try {
     const duration = await getAudioDuration(file)
     if (!(duration > 3 && duration < 35)) {
-      mineUploadError.value = 'MP3 文件时长需大于 3 秒且小于 35 秒'
+      mineUploadError.value = translateUi('uiMessages.m176aaa53e0ee')
       return
     }
 
     mineUploading.value = true
     const uploadResult = await uploadCanvasMedia(file, 'audio', { nodeId: 'user-voice-' + Date.now() })
     const audioUrl = uploadResult?.url || uploadResult?.result?.url
-    if (!audioUrl) throw new Error('上传 MP3 失败，未获取到音频地址')
-    const name = file.name.replace(/\.mp3$/i, '').trim().slice(0, 120) || '我的音色'
+    if (!audioUrl) throw new Error(translateUi('uiMessages.mc2f31c9ed349'))
+    const name = file.name.replace(/\.mp3$/i, '').trim().slice(0, 120) || translateUi('uiMessages.m3eb9b0316310')
     await apiClient.post('/api/audio/user-voices', {
       name,
       reference_audio_url: audioUrl,
@@ -518,7 +520,7 @@ async function handleMineAudioUpload(event) {
     })
     await loadMineVoices()
   } catch (requestError) {
-    mineUploadError.value = requestError?.message || '上传 MP3 失败，请稍后重试'
+    mineUploadError.value = requestError?.message || translateUi('uiMessages.mc368414725c1')
   } finally {
     mineUploading.value = false
   }
@@ -542,7 +544,7 @@ async function confirmDeleteMineVoice() {
     mineVoices.value = mineVoices.value.filter(item => item.id !== voice.id)
     voicePendingDeletion.value = null
   } catch (requestError) {
-    mineError.value = requestError?.message || '删除音色失败，请稍后重试'
+    mineError.value = requestError?.message || translateUi('uiMessages.md4cb2ba34b87')
   } finally {
     mineDeleting.value = false
   }
@@ -551,7 +553,7 @@ async function confirmDeleteMineVoice() {
 function startRecording() {
   recordError.value = ''
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-    recordError.value = '当前浏览器不支持录音功能，请使用最新版 Chrome 或 Edge'
+    recordError.value = translateUi('uiMessages.macd7d1fca1ad')
     return
   }
   recordChunks = []
@@ -580,7 +582,7 @@ function startRecording() {
         stopStreamTracks()
       }
       mediaRecorder.onerror = () => {
-        recordError.value = '录音失败，请检查麦克风权限'
+        recordError.value = translateUi('uiMessages.mbe28dce35515')
         isRecording.value = false
         stopRecordTimer()
         stopWaveform()
@@ -599,7 +601,7 @@ function startRecording() {
       })
     })
     .catch(requestError => {
-      recordError.value = '无法访问麦克风，请检查浏览权限或使用 HTTPS 环境'
+      recordError.value = translateUi('uiMessages.mcecdaa5f2217')
       isRecording.value = false
       stopWaveform()
       stopStreamTracks()
@@ -700,7 +702,7 @@ async function saveCloneVoice() {
   try {
     if (isMiniMax.value || isFish.value) {
       if (cloneDurationSeconds.value < 10 || cloneDurationSeconds.value > 300) {
-        throw new Error('复刻音频时长需在10秒至5分钟之间')
+        throw new Error(translateUi('uiMessages.m30beb3ad969b'))
       }
       const form = new FormData()
       form.append('file', cloneFile.value)
@@ -720,7 +722,7 @@ async function saveCloneVoice() {
     const file = new File([recordedBlob.value], `recording-${Date.now()}.mp3`, { type: 'audio/mpeg' })
     const uploadResult = await uploadCanvasMedia(file, 'audio', { nodeId: 'voice-clone-' + Date.now() })
     const audioUrl = uploadResult?.url || uploadResult?.result?.url
-    if (!audioUrl) throw new Error('上传录音失败，未获取到音频地址')
+    if (!audioUrl) throw new Error(translateUi('uiMessages.ma23ce45df172'))
     await apiClient.post('/api/audio/user-voices', {
       name: cloneName.value,
       reference_audio_url: audioUrl,
@@ -734,7 +736,7 @@ async function saveCloneVoice() {
     // 切到"我的音色"并刷新
     switchToMine()
   } catch (requestError) {
-    cloneError.value = requestError?.message || '保存音色失败，请稍后重试'
+    cloneError.value = requestError?.message || translateUi('uiMessages.m2c3eb1fda63a')
   } finally {
     cloneSaving.value = false
   }
@@ -810,5 +812,35 @@ onBeforeUnmount(() => {
 .delete-confirm-actions button:hover:not(:disabled) { filter: brightness(1.12); }
 .delete-confirm-actions button:disabled { cursor: wait; opacity: .55; }
 .voice-picker-pagination { display: flex; gap: 5px; align-items: center; justify-content: center; padding: 0 20px 15px; }.voice-picker-pagination button { min-width: 28px; padding: 5px 8px; color: #ccc; font-size: 12px; background: #343434; border: 1px solid rgba(255,255,255,.08); border-radius: 6px; cursor: pointer; }.voice-picker-pagination button.active { color: #202020; background: #fff; }.voice-picker-pagination button:disabled { cursor: not-allowed; opacity: .4; }.voice-pagination-ellipsis { width: 18px; color: #888; font-size: 15px; line-height: 1; text-align: center; }.voice-pagination-summary { margin-left: 4px; color: #999; font-size: 11px; white-space: nowrap; }
+:root.canvas-theme-light .voice-picker-backdrop { background: rgba(0, 0, 0, .28); }
+:root.canvas-theme-light .voice-picker { color: #171717; background: #fff; border-color: #dedede; box-shadow: 0 24px 72px rgba(0,0,0,.16); }
+:root.canvas-theme-light .voice-picker-header { border-bottom-color: #ededed; }
+:root.canvas-theme-light .close-button { color: #777; }
+:root.canvas-theme-light .close-button:hover { color: #171717; }
+:root.canvas-theme-light .voice-picker-tabs, :root.canvas-theme-light .voice-search, :root.canvas-theme-light .voice-picker-filters select, :root.canvas-theme-light .clone-name-input, :root.canvas-theme-light .voice-picker-pagination button { color: #303030; background: #f2f2f2; border-color: #dedede; }
+:root.canvas-theme-light .voice-picker-tabs button { color: #777; }
+:root.canvas-theme-light .voice-picker-tabs button.active { color: #171717; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+:root.canvas-theme-light .voice-search input { color: #171717; }
+:root.canvas-theme-light .voice-row, :root.canvas-theme-light .clone-reading-text { color: #303030; background: #f7f7f7; }
+:root.canvas-theme-light .voice-row.selected { background: #ededed; border-color: #cfcfcf; }
+:root.canvas-theme-light .preview-button { color: #171717; background: #e5e5e5; }
+:root.canvas-theme-light .voice-main small { color: #656565; }
+:root.canvas-theme-light .voice-main span, :root.canvas-theme-light .voice-meta span, :root.canvas-theme-light .voice-id span, :root.canvas-theme-light .favorite-button, :root.canvas-theme-light .voice-empty, :root.canvas-theme-light .clone-upload-hint, :root.canvas-theme-light .mine-upload span, :root.canvas-theme-light .voice-pagination-summary { color: #777; }
+:root.canvas-theme-light .voice-meta span, :root.canvas-theme-light .voice-id button, :root.canvas-theme-light .clone-refresh-button { color: #303030; background: #ededed; border-color: #dedede; }
+:root.canvas-theme-light .voice-id button:hover, :root.canvas-theme-light .clone-refresh-button:hover:not(:disabled) { color: #171717; background: #e0e0e0; }
+:root.canvas-theme-light .select-button, :root.canvas-theme-light .clone-record-button, :root.canvas-theme-light .clone-save-button, :root.canvas-theme-light .mine-upload-button, :root.canvas-theme-light .voice-picker-pagination button.active { color: #fff; background: #171717; }
+:root.canvas-theme-light .select-button:disabled, :root.canvas-theme-light .clone-record-button:disabled, :root.canvas-theme-light .clone-save-button:disabled, :root.canvas-theme-light .mine-upload-button:disabled { color: #999; background: #e5e5e5; }
+:root.canvas-theme-light .clone-reading h3 { color: #171717; }
+:root.canvas-theme-light .minimax-clone-billing { color: #8a6116; background: #fdf6e3; border-color: #f1dfb0; }
+:root.canvas-theme-light .minimax-clone-billing label { color: #303030; }
+:root.canvas-theme-light .minimax-clone-expiry { color: #8a6116 !important; }
+:root.canvas-theme-light .clone-waveform { background: #eef8f2; border-color: #c8ead6; }
+:root.canvas-theme-light .clone-waveform span { color: #2f7d55; }
+:root.canvas-theme-light .delete-button { color: #b42318; border-color: #dedede; }
+:root.canvas-theme-light .delete-button:hover { color: #fff; background: #c83f3f; }
+:root.canvas-theme-light .delete-confirm-backdrop { background: rgba(0,0,0,.28); }
+:root.canvas-theme-light .delete-confirm-card { color: #171717; background: #fff; border-color: #dedede; box-shadow: 0 20px 50px rgba(0,0,0,.16); }
+:root.canvas-theme-light .delete-confirm-card p { color: #656565; }
+:root.canvas-theme-light .delete-confirm-cancel { color: #303030; background: #f2f2f2; border-color: #dedede; }
 @media (max-width: 760px) { .voice-picker-backdrop { padding: 12px; }.voice-picker-header, .voice-picker-toolbar, .voice-picker-filters, .voice-picker-list { padding-left: 16px; padding-right: 16px; }.voice-picker-toolbar { align-items: stretch; flex-direction: column; }.voice-picker-tabs { overflow-x: auto; }.voice-picker-tabs button { flex: 0 0 auto; }.voice-row { gap: 10px; padding: 12px; }.voice-meta { display: none; }.voice-main strong { font-size: 15px; } }
 </style>

@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import { strict as assert } from 'node:assert'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -17,12 +18,12 @@ assert.match(src, /mode:\s*\{[\s\S]*default:\s*'create'/, '弹窗必须支持 cr
 assert.match(src, /schedules:\s*\{[\s\S]*type:\s*Array/, '弹窗必须接收定时任务记录列表')
 assert.match(src, /canCancelSchedule\(/, '弹窗必须只允许取消未执行的 scheduled 任务')
 assert.match(src, /emit\('cancel-schedule'/, '弹窗必须向父组件发出取消定时任务事件')
-assert.match(src, /定时记录/, '弹窗必须提供定时记录视图')
-assert.match(src, /任务记录/, '弹窗必须在标题或空状态中说明任务记录')
+assert.match(src, localizedPattern(/定时记录/), '弹窗必须提供定时记录视图')
+assert.match(src, localizedPattern(/任务记录/), '弹窗必须在标题或空状态中说明任务记录')
 assert.match(src, /v-for="schedule in schedules"/, '弹窗必须渲染任务记录列表')
 assert.match(src, /formatScheduleTime/, '弹窗必须格式化执行时间')
 assert.match(src, /statusLabel/, '弹窗必须把任务状态显示为用户可读文案')
-assert.match(src, /取消任务/, '弹窗必须为未执行任务提供取消按钮')
+assert.match(src, localizedPattern(/取消任务/), '弹窗必须为未执行任务提供取消按钮')
 assert.match(src, /<Teleport\s+to="body">[\s\S]*group-schedule-backdrop[\s\S]*<\/Teleport>/, '弹窗必须 Teleport 到 body，避免被 Vue Flow 节点层级遮挡')
 assert.match(src, /z-index:\s*(?:1000[1-9]|100[1-9]\d|10[1-9]\d{2}|1[1-9]\d{3}|[2-9]\d{4,})/, '弹窗层级必须高于画布节点与工具栏')
 assert.doesNotMatch(src, /--canvas-panel-bg|--canvas-input-bg/, '弹窗不能使用未定义的主题变量导致暗色模式回退白底')
@@ -39,7 +40,7 @@ assert.match(groupNodeSrc, /loadGroupSchedules/, 'GroupNode 必须封装加载�
 assert.match(groupNodeSrc, /groupSchedules/, 'GroupNode 必须保存当前编组任务记录')
 assert.match(groupNodeSrc, /schedule\.group_id\s*===\s*props\.id|schedule\.groupId\s*===\s*props\.id/, 'GroupNode 必须只展示当前编组的定时任务')
 assert.match(groupNodeSrc, /getScheduleSnapshot/, 'GroupNode 必须从当前画布创建快照')
-assert.match(groupNodeSrc, /定时执行/, 'GroupNode 工具栏必须出现定时执行入口')
-assert.match(groupNodeSrc, /定时记录/, 'GroupNode 工具栏必须出现定时记录入口')
+assert.match(groupNodeSrc, localizedPattern(/定时执行/), 'GroupNode 工具栏必须出现定时执行入口')
+assert.match(groupNodeSrc, localizedPattern(/定时记录/), 'GroupNode 工具栏必须出现定时记录入口')
 
 console.log('GroupScheduleDialog contract tests passed')

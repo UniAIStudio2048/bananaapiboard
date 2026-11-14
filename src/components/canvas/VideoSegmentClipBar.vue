@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Check, Keyboard, Loader2, Magnet, Pause, Play, Repeat, X } from '@lucide/vue'
 import { adjustClipRangeByKey, getClipBarPosition, initialClipRange, moveClipRange, resizeClipRange } from '@/utils/videoSegmentClip'
@@ -190,9 +192,9 @@ function updatePosition() {
 
 function waitForVideoEvent(element, name) {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => finish(new Error('视频缩略图加载超时')), 5000)
+    const timer = setTimeout(() => finish(new Error(translateUi('uiMessages.mb74737f1dda0'))), 5000)
     const success = () => finish()
-    const failure = () => finish(new Error('视频缩略图不可用'))
+    const failure = () => finish(new Error(translateUi('uiMessages.mfe55851be44f')))
     function finish(error) {
       clearTimeout(timer)
       element.removeEventListener(name, success)
@@ -220,7 +222,7 @@ async function loadThumbnails() {
     canvas.width = 120
     canvas.height = Math.max(1, Math.round(120 * (element.videoHeight || 9) / (element.videoWidth || 16)))
     const context = canvas.getContext('2d')
-    if (!context) throw new Error('无法读取视频画面')
+    if (!context) throw new Error(translateUi('uiMessages.m640cec1bb8c3'))
     const frames = []
     for (let index = 0; index < 12 && !cancelled; index++) {
       const target = Math.min(element.duration - 0.001, (index + 0.5) / 12 * element.duration)
@@ -267,25 +269,25 @@ onUnmounted(() => {
 
 <template>
   <div ref="bar" class="segment-clip-bar nodrag nopan" :style="position ? { left: position.left + 'px', top: position.top + 'px', width: position.width + 'px' } : { visibility: 'hidden' }" @pointerdown.stop @click.stop @wheel.stop>
-    <div v-if="showShortcuts" class="shortcuts" role="dialog" aria-label="片段截取快捷键">
-      <div class="shortcuts-heading"><strong>快捷键</strong><button type="button" title="关闭快捷键" @click="showShortcuts = false"><X :size="16" /></button></div>
+    <div v-if="showShortcuts" class="shortcuts" role="dialog" :aria-label="translateUi('uiMessages.m6c7c6c5a4992')">
+      <div class="shortcuts-heading"><strong>{{ translateUi('directorStudio.shortcuts.title') }}</strong><button type="button" :title="translateUi('directorStudio.shortcuts.close')" @click="showShortcuts = false"><X :size="16" /></button></div>
       <div class="shortcuts-grid">
-        <span>移动选区 <kbd>←</kbd> <kbd>→</kbd></span><span>精确刻度 <kbd>Shift</kbd></span>
-        <span>扩展/收缩选区 <kbd>↑</kbd> <kbd>↓</kbd></span><span>快速调整 <kbd>⌘ / Ctrl</kbd> + 方向键</span>
-        <span>设置出点入点 <kbd>I</kbd> <kbd>O</kbd></span><span>播放/暂停 <kbd>Space</kbd></span>
-        <span>退出 <kbd>Esc</kbd></span><span>确认剪辑 <kbd>Enter</kbd></span>
+        <span>{{ translateUi('uiMessages.mae82a68962c2') }} <kbd>←</kbd> <kbd>→</kbd></span><span>{{ translateUi('uiMessages.mbed0d7ddf1a8') }} <kbd>Shift</kbd></span>
+        <span>{{ translateUi('uiMessages.m0dc97f2a47dc') }} <kbd>↑</kbd> <kbd>↓</kbd></span><span>{{ translateUi('uiMessages.m1072416e1cac') }} <kbd>⌘ / Ctrl</kbd> {{ translateUi('uiMessages.m68d1dc598bb4') }}</span>
+        <span>{{ translateUi('uiMessages.m311f3bb4f692') }} <kbd>I</kbd> <kbd>O</kbd></span><span>{{ translateUi('uiMessages.m5d5e4c8a568f') }} <kbd>Space</kbd></span>
+        <span>{{ translateUi('uiMessages.m498e1d59b4d7') }} <kbd>Esc</kbd></span><span>{{ translateUi('uiMessages.md5241bf02a00') }} <kbd>Enter</kbd></span>
       </div>
     </div>
     <div class="clip-controls">
-      <button type="button" class="clip-icon" data-tooltip="取消截取" aria-label="取消截取" :disabled="busy" @click="emit('cancel')"><X :size="18" /></button>
+      <button type="button" class="clip-icon" data-tooltip="取消截取" :aria-label="translateUi('uiMessages.m6595346c40be')" :disabled="busy" @click="emit('cancel')"><X :size="18" /></button>
       <span class="divider"></span>
-      <button type="button" class="clip-icon" data-tooltip="快捷键" aria-label="快捷键" :aria-pressed="showShortcuts" @click="showShortcuts = !showShortcuts"><Keyboard :size="18" /></button>
-      <button type="button" class="clip-icon" :data-tooltip="playing ? '暂停' : '播放'" :aria-label="playing ? '暂停' : '播放'" :disabled="!ready" @click="togglePlay"><Pause v-if="playing" :size="17" /><Play v-else :size="17" /></button>
-      <div ref="track" class="clip-track" :class="{ disabled: !ready }" aria-label="视频片段时间轴" @pointerdown.stop.prevent="ready && seek(timeAt($event.clientX))">
+      <button type="button" class="clip-icon" data-tooltip="快捷键" :aria-label="translateUi('directorStudio.shortcuts.title')" :aria-pressed="showShortcuts" @click="showShortcuts = !showShortcuts"><Keyboard :size="18" /></button>
+      <button type="button" class="clip-icon" :data-tooltip="playing ? '暂停' : '播放'" :aria-label="playing ? translateUi('common.pause') : translateUi('uiMessages.mc3396195e91c')" :disabled="!ready" @click="togglePlay"><Pause v-if="playing" :size="17" /><Play v-else :size="17" /></button>
+      <div ref="track" class="clip-track" :class="{ disabled: !ready }" :aria-label="translateUi('uiMessages.m985b1aaf6164')" @pointerdown.stop.prevent="ready && seek(timeAt($event.clientX))">
         <div class="frames">
-          <img v-for="(frame, index) in thumbnails" :key="index" :src="frame" alt="视频缩略图" draggable="false" />
-          <img v-if="!thumbnails.length && posterUrl" :src="posterUrl" alt="视频封面" draggable="false" />
-          <span v-if="!thumbnails.length && !posterUrl">{{ thumbnailState === 'loading' ? '正在加载视频缩略图' : '视频缩略图不可用' }}</span>
+          <img v-for="(frame, index) in thumbnails" :key="index" :src="frame" :alt="translateUi('uiMessages.ma0581c5cba73')" draggable="false" />
+          <img v-if="!thumbnails.length && posterUrl" :src="posterUrl" :alt="translateUi('uiMessages.mcd088db2247a')" draggable="false" />
+          <span v-if="!thumbnails.length && !posterUrl">{{ thumbnailState === 'loading' ? translateUi('uiMessages.meef9f4c17dac') : translateUi('uiMessages.mfe55851be44f') }}</span>
         </div>
         <div class="track-mask" :style="{ width: startPercent + '%' }"></div>
         <div class="track-mask right" :style="{ width: (100 - endPercent) + '%' }"></div>
@@ -293,13 +295,13 @@ onUnmounted(() => {
         <div class="clip-selection" :style="{ left: startPercent + '%', width: (endPercent - startPercent) + '%' }" @pointerdown.stop.prevent="startDrag($event, 'region')">
           <span class="clip-length">{{ selectionDuration.toFixed(2) }} s</span>
         </div>
-        <div class="clip-handle start" :style="{ left: startPercent + '%' }" role="slider" title="拖动设置开始时间" aria-label="截取开始时间" :aria-valuenow="range.start" :aria-valuemin="0" :aria-valuemax="range.end" tabindex="0" @pointerdown.stop.prevent="startDrag($event, 'start')"><span></span></div>
-        <div class="clip-handle end" :style="{ left: endPercent + '%' }" role="slider" title="拖动设置结束时间" aria-label="截取结束时间" :aria-valuenow="range.end" :aria-valuemin="range.start" :aria-valuemax="duration" tabindex="0" @pointerdown.stop.prevent="startDrag($event, 'end')"><span></span></div>
+        <div class="clip-handle start" :style="{ left: startPercent + '%' }" role="slider" :title="translateUi('uiMessages.me5d2b80bbaab')" :aria-label="translateUi('uiMessages.m39ad36bdf6c1')" :aria-valuenow="range.start" :aria-valuemin="0" :aria-valuemax="range.end" tabindex="0" @pointerdown.stop.prevent="startDrag($event, 'start')"><span></span></div>
+        <div class="clip-handle end" :style="{ left: endPercent + '%' }" role="slider" :title="translateUi('uiMessages.m25ffcc5e714d')" :aria-label="translateUi('uiMessages.md22fda42dfec')" :aria-valuenow="range.end" :aria-valuemin="range.start" :aria-valuemax="duration" tabindex="0" @pointerdown.stop.prevent="startDrag($event, 'end')"><span></span></div>
         <div class="playhead" :style="{ left: playheadPercent + '%' }"></div>
       </div>
-      <button type="button" class="clip-icon" :class="{ active: snap }" :data-tooltip="snap ? '关闭整数秒吸附' : '开启整数秒吸附'" :aria-label="snap ? '关闭整数秒吸附' : '开启整数秒吸附'" :aria-pressed="snap" :disabled="!ready" @click="toggleSnap"><span class="toggle-symbol" :class="{ 'is-off': !snap }"><Magnet :size="18" /></span></button>
-      <button type="button" class="clip-icon tooltip-right" :class="{ active: loop }" :data-tooltip="loop ? '关闭选区循环播放' : '开启选区循环播放'" :aria-label="loop ? '关闭选区循环播放' : '开启选区循环播放'" :aria-pressed="loop" :disabled="!ready" @click="loop = !loop"><span class="toggle-symbol" :class="{ 'is-off': !loop }"><Repeat :size="18" /></span></button>
-      <button type="button" class="clip-confirm tooltip-right" data-tooltip="确认截取" aria-label="确认截取" :disabled="!ready" @click="emit('confirm', { ...range })"><Loader2 v-if="busy" :size="20" class="spin" /><Check v-else :size="20" /></button>
+      <button type="button" class="clip-icon" :class="{ active: snap }" :data-tooltip="snap ? '关闭整数秒吸附' : '开启整数秒吸附'" :aria-label="snap ? translateUi('uiMessages.m8c4df69f8fed') : translateUi('uiMessages.m915acc327a38')" :aria-pressed="snap" :disabled="!ready" @click="toggleSnap"><span class="toggle-symbol" :class="{ 'is-off': !snap }"><Magnet :size="18" /></span></button>
+      <button type="button" class="clip-icon tooltip-right" :class="{ active: loop }" :data-tooltip="loop ? '关闭选区循环播放' : '开启选区循环播放'" :aria-label="loop ? translateUi('uiMessages.m52252fd148a6') : translateUi('uiMessages.mc4d99b0680f7')" :aria-pressed="loop" :disabled="!ready" @click="loop = !loop"><span class="toggle-symbol" :class="{ 'is-off': !loop }"><Repeat :size="18" /></span></button>
+      <button type="button" class="clip-confirm tooltip-right" data-tooltip="确认截取" :aria-label="translateUi('uiMessages.m7d71add637f3')" :disabled="!ready" @click="emit('confirm', { ...range })"><Loader2 v-if="busy" :size="20" class="spin" /><Check v-else :size="20" /></button>
     </div>
   </div>
 </template>

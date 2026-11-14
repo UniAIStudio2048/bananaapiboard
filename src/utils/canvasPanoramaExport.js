@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 export const PANORAMA_RATIO_OPTIONS = [
   { id: '16:9', label: '16:9 (1920x1080)', width: 1920, height: 1080 },
   { id: '9:16', label: '9:16 (1080x1920)', width: 1080, height: 1920 },
@@ -11,10 +12,10 @@ export const PANORAMA_RATIO_OPTIONS = [
 ]
 
 export const PROJECTION_OPTIONS = [
-  { id: 'rectilinear', label: '直线投影' },
+  { id: 'rectilinear', get label() { return translateUi('uiMessages.mbc6bf591e16d') } },
   { id: 'pannini', label: 'Pannini' },
-  { id: 'stereographic', label: '立体投影' },
-  { id: 'little-planet', label: '小行星' }
+  { id: 'stereographic', get label() { return translateUi('uiMessages.mb62e4a106b97') } },
+  { id: 'little-planet', get label() { return translateUi('uiMessages.m68cf5e71c2b2') } }
 ]
 
 const PROJECTION_CAMERA_SETTINGS = {
@@ -50,25 +51,25 @@ export function getProjectionCameraSettings(projectionId) {
 export function getPresetPanoramaViews(count) {
   if (count === 4) {
     return [
-      { label: '全景-前', yaw: 0, pitch: 0 },
-      { label: '全景-右', yaw: 90, pitch: 0 },
-      { label: '全景-后', yaw: 180, pitch: 0 },
-      { label: '全景-左', yaw: 270, pitch: 0 }
+      { get label() { return translateUi('uiMessages.m78f096aa7e7c') }, yaw: 0, pitch: 0 },
+      { get label() { return translateUi('uiMessages.mc02bc65f4458') }, yaw: 90, pitch: 0 },
+      { get label() { return translateUi('uiMessages.mc8af5f19e607') }, yaw: 180, pitch: 0 },
+      { get label() { return translateUi('uiMessages.mde227c24b639') }, yaw: 270, pitch: 0 }
     ]
   }
 
   if (count === 12) {
     const horizontal = Array.from({ length: 8 }, (_, index) => ({
-      label: `全景-${index + 1}`,
+      get label() { return translateUi('uiMessages.m39b5c3473102', { value1: (index + 1) }) },
       yaw: index * 45,
       pitch: 0
     }))
     return [
       ...horizontal,
-      { label: '全景-上-1', yaw: 45, pitch: 35 },
-      { label: '全景-上-2', yaw: 225, pitch: 35 },
-      { label: '全景-下-1', yaw: 135, pitch: -35 },
-      { label: '全景-下-2', yaw: 315, pitch: -35 }
+      { get label() { return translateUi('uiMessages.m956fe4f06dfb') }, yaw: 45, pitch: 35 },
+      { get label() { return translateUi('uiMessages.m9da041ea6dc0') }, yaw: 225, pitch: 35 },
+      { get label() { return translateUi('uiMessages.me11c8b7972c9') }, yaw: 135, pitch: -35 },
+      { get label() { return translateUi('uiMessages.m1f2755146a3b') }, yaw: 315, pitch: -35 }
     ]
   }
 

@@ -1,3 +1,7 @@
+import { uiTextIndex } from '../../../i18n/sourceAssertions.mjs'
+import * as i18nTestRuntime from '../../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
@@ -16,14 +20,14 @@ function installModeOptions(state) {
   const modesStart = source.indexOf('const MINIMAX_H3_MODES = [')
   const modesEnd = source.indexOf('const minimaxH3Modes =', modesStart)
   state.minimaxH3Modes = ref(['text2video', 'image2video_first', 'multimodal_ref'].map(value => ({ value })))
-  state.atlasCloudModeOptions = runInNewContext(`${source.slice(modesStart, modesEnd)}; ${source.slice(start, end)}; atlasCloudModeOptions`, state)
+  state.atlasCloudModeOptions = runInNewContext(`${source.slice(modesStart, modesEnd)}; ${source.slice(start, end)}; atlasCloudModeOptions`, Object.assign(state, { translateUi, uiLanguage }))
 }
 
 test('素材处理期间切换到 RouterBee，已排队的 AtlasCloud 请求仍使用原模型 ID', () => {
   const start = source.indexOf('  // VEO 模型：使用实际的模型名称', source.indexOf('async function sendGenerateRequest('))
   const end = source.indexOf('\n  if (selectedAspectRatio.value)', start)
   const formData = new FormData()
-  runInNewContext(source.slice(start, end), {
+  runInNewContext(source.slice(start, end), { translateUi, uiLanguage,
     formData, capturedState: { model: modelName, apiType: modelConfig.apiType, modelConfig },
     currentModelConfig: ref({ apiType: 'routerbee-wan3', actualModel: 'wan-3.0' }),
     selectedModel: ref('routerbee-wan3'), resolveVideoRequestModel,
@@ -42,7 +46,7 @@ test('AtlasCloud 随连线素材切换文生、图生和参考模式，保留选
     selectedMinimaxH3Mode: ref('text2video'), selectedWan3Mode: ref('text2video')
   }
   installModeOptions(state)
-  const stop = runInNewContext(source.slice(start, end), state)
+  const stop = runInNewContext(source.slice(start, end), Object.assign(state, { translateUi, uiLanguage }))
   for (const [images, videos, audios, mode] of [
     [0, 0, 0, 'text2video'], [1, 0, 0, 'image2video_first'],
     [2, 0, 0, 'multimodal_ref'], [0, 1, 0, 'multimodal_ref'],
@@ -63,7 +67,7 @@ test('只有音频输入的 AtlasCloud 参考任务可以通过素材校验', as
   const start = source.indexOf('    const h3Mode =', source.indexOf('// MiniMax H3 官方直连：模式输入校验'))
   const end = source.indexOf("    if (h3Mode === 'multimodal_ref') {", start)
   const alerts = []
-  await runInNewContext(`(async () => { ${source.slice(start, end)} })()`, {
+  await runInNewContext(`(async () => { ${source.slice(start, end)} })()`, { translateUi, uiLanguage,
     selectedMinimaxH3Mode: ref('multimodal_ref'), minimaxH3DefaultMode: ref('text2video'),
     finalImages: [], referenceVideos: ref([]), referenceAudios: ref(['https://example.com/ref.mp3']),
     isAtlasCloudVideoModel: ref(true), showAlert: message => alerts.push(message)
@@ -80,7 +84,7 @@ test('单图时人工选择参考模式不会被监听器覆盖', async () => {
     selectedMinimaxH3Mode: ref('image2video_first'), selectedWan3Mode: ref('text2video')
   }
   installModeOptions(state)
-  const stop = runInNewContext(source.slice(start, end), state)
+  const stop = runInNewContext(source.slice(start, end), Object.assign(state, { translateUi, uiLanguage }))
   state.selectedMinimaxH3Mode.value = 'multimodal_ref'
   await nextTick()
   assert.equal(state.selectedMinimaxH3Mode.value, 'multimodal_ref')
@@ -113,7 +117,7 @@ test('模式选择器拒绝被禁用的选项', () => {
   const start = source.indexOf('function setActiveVideoMode(')
   const end = source.indexOf('function setActiveVideoSubmode(', start)
   const selectedMinimaxH3Mode = ref('text2video')
-  const select = runInNewContext(`${source.slice(start, end)}; setActiveVideoMode`, {
+  const select = runInNewContext(`${source.slice(start, end)}; setActiveVideoMode`, { translateUi, uiLanguage,
     activeVideoModeSelector: ref({ key: 'minimax-h3', options: [
       { value: 'text2video', disabled: false }, { value: 'image2video_first', disabled: true }
     ] }), selectedMinimaxH3Mode
@@ -123,10 +127,10 @@ test('模式选择器拒绝被禁用的选项', () => {
 })
 
 test('排队的 AtlasCloud 参考任务在切换模型后仍携带原视频与音频', () => {
-  const start = source.indexOf('  // MiniMax H3 官方直连：模式参数')
+  const start = uiTextIndex(source, '  // MiniMax H3 官方直连：模式参数')
   const end = source.indexOf('\n  // ', start + 5)
   const formData = new FormData()
-  runInNewContext(source.slice(start, end), {
+  runInNewContext(source.slice(start, end), { translateUi, uiLanguage,
     formData, finalImages: ['https://example.com/ref.png'],
     capturedState: { isMinimaxH3: true, minimaxH3Mode: 'multimodal_ref', minimaxH3Resolution: '720p',
       referenceVideos: ['https://example.com/ref.mp4'], referenceAudios: ['https://example.com/ref.mp3'] },
@@ -141,7 +145,7 @@ test('视频上传使用捕获素材；失败可重试且不会修改原列表',
   const start = source.indexOf('async function ensureReferenceVideoUrlsAccessible(')
   const end = source.indexOf('// 后台执行生成的重操作', start)
   let failUpload = true
-  const upload = runInNewContext(`${source.slice(start, end)}; ensureReferenceVideoUrlsAccessible`, {
+  const upload = runInNewContext(`${source.slice(start, end)}; ensureReferenceVideoUrlsAccessible`, { translateUi, uiLanguage,
     referenceVideos: ref(['https://example.com/new.mp4']),
     canvasStore: { updateNodeData() {}, edges: [], nodes: [] }, console: { log() {}, error() {} },
     fetch: async () => ({ ok: true, blob: async () => ({ type: 'video/mp4' }) }),

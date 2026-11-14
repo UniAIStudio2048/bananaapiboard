@@ -1,10 +1,11 @@
+import { t as translateUi } from '../i18n/index.js'
 export const VOICE_DESIGN_STYLES = [
-  { value: 'general', label: '通用' },
-  { value: 'narration', label: '旁白' },
-  { value: 'conversational', label: '对话' },
-  { value: 'advertising', label: '广告' },
-  { value: 'character', label: '角色' },
-  { value: 'emotional', label: '情感' }
+  { value: 'general', get label() { return translateUi('uiMessages.m835b700e028c') } },
+  { value: 'narration', get label() { return translateUi('uiMessages.m101f6e6d6095') } },
+  { value: 'conversational', get label() { return translateUi('uiMessages.m6bf6d3f3d626') } },
+  { value: 'advertising', get label() { return translateUi('uiMessages.m5f9f1409615a') } },
+  { value: 'character', get label() { return translateUi('user.role') } },
+  { value: 'emotional', get label() { return translateUi('uiMessages.m3e741dd4830a') } }
 ]
 
 export function normalizeAudioModels(models = [], groups = []) {

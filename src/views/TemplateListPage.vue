@@ -12,7 +12,7 @@
             class="flex items-center gap-2 hover:opacity-80 transition-opacity"
             @click="showUserMenu = !showUserMenu"
           >
-            <img v-if="userAvatar" :src="userAvatar" alt="头像" class="w-8 h-8 rounded-full object-cover" />
+            <img v-if="userAvatar" :src="userAvatar" :alt="translateUi('uiMessages.m3ea2d23c902c')" class="w-8 h-8 rounded-full object-cover" />
             <div v-else class="w-8 h-8 rounded-full bg-neutral-800 flex items-center justify-center">
               <span class="text-sm text-gray-300">{{ (userName || '?')[0] }}</span>
             </div>
@@ -35,14 +35,14 @@
                 @click="goToProfile"
               >
                 <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                个人中心
+                {{ translateUi('nav.user') }}
               </button>
               <button
                 class="w-full px-4 py-3 text-left text-sm text-gray-200 hover:bg-neutral-800 flex items-center gap-2.5 transition-colors"
                 @click="goToCanvas"
               >
                 <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
-                开始创作
+                {{ translateUi('landing.startCreating') }}
               </button>
               <div class="border-t border-neutral-700/60" />
               <button
@@ -50,7 +50,7 @@
                 @click="handleLogout"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-                退出登录
+                {{ translateUi('nav.logout') }}
               </button>
             </div>
           </Transition>
@@ -60,7 +60,7 @@
           class="px-5 py-1.5 rounded-full border border-neutral-600 bg-neutral-900 hover:bg-neutral-800 text-sm text-neutral-300 hover:text-white font-medium transition-all"
           @click="communityStore.showLoginModal = true"
         >
-          登录
+          {{ translateUi('nav.login') }}
         </button>
       </div>
     </nav>
@@ -70,7 +70,7 @@
       <!-- 返回链接 + 标题 -->
       <router-link to="/community" class="inline-flex items-center gap-1 text-sm text-neutral-400 hover:text-white transition-colors mb-4">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-        返回社区
+        {{ translateUi('uiMessages.m939bc79bd1c9') }}
       </router-link>
       <h1 class="text-3xl font-bold mb-6">{{ communityStore.sectionNames.templates }}</h1>
 
@@ -94,7 +94,7 @@
             <!-- Hover overlay -->
             <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
               <span class="px-3 py-1.5 bg-white text-black text-xs font-medium rounded-full">
-                预览工作流
+                {{ translateUi('uiMessages.m76583f3157df') }}
               </span>
             </div>
           </div>
@@ -108,7 +108,7 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
             d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
         </svg>
-        <p class="text-sm">暂无模板</p>
+        <p class="text-sm">{{ translateUi('canvas.templates.noTemplates') }}</p>
       </div>
 
       <!-- 加载更多 -->
@@ -117,7 +117,7 @@
       </div>
 
       <!-- 没有更多 -->
-      <div v-if="noMore && templates.length" class="text-center py-6 text-neutral-700 text-sm">已经到底了</div>
+      <div v-if="noMore && templates.length" class="text-center py-6 text-neutral-700 text-sm">{{ translateUi('uiMessages.mb7c1cdefd7e1') }}</div>
 
       <!-- 无限滚动哨兵 -->
       <div ref="sentinelRef" class="h-1" />
@@ -142,6 +142,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, computed, onMounted, onUnmounted, nextTick, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import { clearAuthSession } from '@/api/client'

@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 import { getSeedanceRecyclingStatus } from './seedanceAssetRecycling.js'
 
 export function getSeedanceMediaType(data = {}) {
@@ -66,7 +67,7 @@ export function buildSeedanceCharacterData(asset) {
 export function getSeedanceMediaFileInfo(mimeType, mediaType, url = '') {
   const extensions = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/flac': 'flac', 'audio/x-flac': 'flac', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/webm': 'webm' }
   const normalizedMime = String(mimeType || '').split(';')[0].toLowerCase()
-  if (normalizedMime && normalizedMime !== 'application/octet-stream' && !normalizedMime.startsWith(`${mediaType}/`)) throw new Error('文件类型与素材类型不一致')
+  if (normalizedMime && normalizedMime !== 'application/octet-stream' && !normalizedMime.startsWith(`${mediaType}/`)) throw new Error(translateUi('uiMessages.md4dbe7e05c7a'))
   const urlExtension = url.split(/[?#]/)[0].match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase()
   const inferredMime = Object.keys(extensions).find(key => key.startsWith(`${mediaType}/`) && extensions[key] === urlExtension)
   const defaultMime = mediaType === 'video' ? 'video/mp4' : mediaType === 'audio' ? 'audio/mpeg' : 'image/png'

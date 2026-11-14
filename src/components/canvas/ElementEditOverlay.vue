@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   Brush,
@@ -50,9 +52,9 @@ const props = defineProps({
 const emit = defineEmits(['close', 'generate'])
 
 const TOOLS = [
-  { tool: 'point', label: '点选', icon: MapPin },
-  { tool: 'box', label: '框选', icon: SquareDashed },
-  { tool: 'brush', label: '画笔', icon: Brush }
+  { tool: 'point', get label() { return translateUi('uiMessages.m9aeee277a8bb') }, icon: MapPin },
+  { tool: 'box', get label() { return translateUi('uiMessages.m840a04872a89') }, icon: SquareDashed },
+  { tool: 'brush', get label() { return translateUi('uiMessages.m05731b92ad31') }, icon: Brush }
 ]
 
 const rootRef = ref(null)
@@ -87,7 +89,7 @@ const currentBrushSize = computed(() => brushSizePx.value / Math.max(1, Math.min
 const showBrushSize = computed(() => tool.value === 'brush' || draft.value?.source.type === 'brush')
 const canUndo = computed(() => !props.busy && (!!draft.value || records.value.length > 0))
 const showInitialGuide = computed(() => !records.value.length && !draft.value && !preview.sourceRect && !preview.strokes)
-const guideText = computed(() => tool.value === 'box' ? '框选你想要修改的对象' : tool.value === 'brush' ? '画出你想要修改的对象' : '标记你想要修改的对象')
+const guideText = computed(() => tool.value === 'box' ? translateUi('uiMessages.mcd52f60e9c61') : tool.value === 'brush' ? translateUi('uiMessages.m2f11c150066d') : translateUi('uiMessages.m46b1dace5b65'))
 const sliderOffset = computed(() => (brushSizePx.value - ELEMENT_EDIT_LIMITS.brushMin) / (ELEMENT_EDIT_LIMITS.brushMax - ELEMENT_EDIT_LIMITS.brushMin) * 44)
 
 const draftBounds = computed(() => {
@@ -108,7 +110,7 @@ const cardBounds = computed(() => renderedTargetRect.value ?? renderedDraftBound
 const previewStrokes = computed(() => preview.strokes ?? (draft.value?.source.type === 'brush' ? draft.value.source.strokes : null))
 const editingExisting = computed(() => !!draft.value && records.value.some(record => record.id === draft.value.id))
 const pointCandidates = computed(() => draft.value?.source.type === 'point' ? draft.value.source.candidates || [] : [])
-const subjectName = computed(() => draft.value?.source.type === 'point' ? draft.value.source.subjectName || '选区' : '选区')
+const subjectName = computed(() => draft.value?.source.type === 'point' ? draft.value.source.subjectName || translateUi('uiMessages.mc44dca9aefa4') : translateUi('uiMessages.mc44dca9aefa4'))
 const referenceLimitReached = computed(() => {
   const urls = new Set(records.value.filter(record => record.id !== draft.value?.id && record.referenceImage).map(record => record.referenceImage.url))
   return urls.size >= Math.max(0, props.maxInputImages - 1)
@@ -259,11 +261,11 @@ function completeDraft() {
   if (!value || uploading.value) return
   if (value.recognizing || value.recognitionFailed || !value.action) return
   if (value.action === 'modify' && !value.prompt.trim()) {
-    draftError.value = '请输入修改描述'
+    draftError.value = translateUi('uiMessages.ma0eafdec4a64')
     return
   }
   if (value.action === 'move' && !value.target) {
-    draftError.value = '请选择移动目标位置'
+    draftError.value = translateUi('uiMessages.m0535d65a04ab')
     return
   }
   const source = clone(value.source)
@@ -339,7 +341,7 @@ function loadImage(src, cors) {
     const image = new Image()
     if (cors) image.crossOrigin = 'anonymous'
     image.onload = () => resolve(image)
-    image.onerror = () => reject(new Error('图片加载失败'))
+    image.onerror = () => reject(new Error(translateUi('uiMessages.m572993f5820a')))
     image.src = src
   })
 }
@@ -349,7 +351,7 @@ function loadDrawableImage() {
     const url = props.imageUrl
     drawableImagePromise = loadImage(url, true).catch(async () => {
       const response = await fetch(url)
-      if (!response.ok) throw new Error('图片加载失败')
+      if (!response.ok) throw new Error(translateUi('uiMessages.m572993f5820a'))
       const objectUrl = URL.createObjectURL(await response.blob())
       try { return await loadImage(objectUrl, false) } finally { URL.revokeObjectURL(objectUrl) }
     })
@@ -387,7 +389,7 @@ async function markedPointImage(point) {
 async function recognizePoint(point) {
   const recognizingPoint = draft.value?.recognizing && draft.value.source.type === 'point'
   if (props.busy || records.value.length >= ELEMENT_EDIT_LIMITS.maxCount || (draft.value && !recognizingPoint)) {
-    if (records.value.length >= ELEMENT_EDIT_LIMITS.maxCount) notice.value = `最多添加 ${ELEMENT_EDIT_LIMITS.maxCount} 处编辑`
+    if (records.value.length >= ELEMENT_EDIT_LIMITS.maxCount) notice.value = translateUi('uiMessages.mfa5bc58ac3fb', { value1: (ELEMENT_EDIT_LIMITS.maxCount) })
     return
   }
   const token = ++recognitionToken
@@ -496,9 +498,9 @@ function stagePointerUp(event) {
     const rect = preview.sourceRect
     preview.sourceRect = null
     if (!rect || !boxLargeEnough(rect, mediaPx.value)) {
-      notice.value = '选区太小，请扩大标记范围'
+      notice.value = translateUi('uiMessages.mc2efd174e8df')
     } else if (!canBegin()) {
-      notice.value = `最多添加 ${ELEMENT_EDIT_LIMITS.maxCount} 处编辑`
+      notice.value = translateUi('uiMessages.mfa5bc58ac3fb', { value1: (ELEMENT_EDIT_LIMITS.maxCount) })
     } else {
       draft.value = createDraft({ type: 'box', rect: clampRect(rect) })
       redoStack.value = []
@@ -510,7 +512,7 @@ function stagePointerUp(event) {
     if (draft.value?.source.type === 'brush') {
       draft.value.source.strokes = strokes
     } else if (!canBegin()) {
-      notice.value = `最多添加 ${ELEMENT_EDIT_LIMITS.maxCount} 处编辑`
+      notice.value = translateUi('uiMessages.mfa5bc58ac3fb', { value1: (ELEMENT_EDIT_LIMITS.maxCount) })
     } else {
       draft.value = createDraft({ type: 'brush', brushSize: Math.min(1, Math.max(1e-4, currentBrushSize.value)), strokes })
       redoStack.value = []
@@ -583,12 +585,12 @@ async function handleReferenceFile(event) {
   uploading.value = true
   try {
     const url = await props.uploadReference(file)
-    if (!url) throw new Error('上传失败')
+    if (!url) throw new Error(translateUi('errors.uploadFailed'))
     const dot = file.name.lastIndexOf('.')
     const name = (dot > 0 ? file.name.slice(0, dot) : file.name).trim() || file.name
     if (draft.value?.id === draftId && draft.value.action === 'modify') draft.value.referenceImage = { name, url }
   } catch {
-    notice.value = '参考图上传失败，请重试'
+    notice.value = translateUi('uiMessages.m3c83d616b372')
   } finally {
     uploading.value = false
   }
@@ -607,7 +609,7 @@ function openHistoryGallery() {
       onSelect(item) {
         const url = String(item?.url || '').trim()
         if (!url || draft.value?.id !== draftId || draft.value.action !== 'modify') return
-        let name = '历史图库'
+        let name = translateUi('uiMessages.m9b5436ddf410')
         try {
           const file = decodeURIComponent(new URL(url, window.location.origin).pathname.split('/').filter(Boolean).at(-1) || '')
           const dot = file.lastIndexOf('.')
@@ -739,10 +741,10 @@ onBeforeUnmount(() => {
       @keydown.stop
     >
       <!-- 顶部工具栏 -->
-      <div class="ee-toolbar" data-ee-hit role="toolbar" aria-label="元素编辑工具" @pointerdown.stop @wheel.stop.prevent>
-        <button type="button" class="ee-close" title="关闭" aria-label="关闭" :disabled="busy" @click="close">
+      <div class="ee-toolbar" data-ee-hit role="toolbar" :aria-label="translateUi('uiMessages.m626745fc01f4')" @pointerdown.stop @wheel.stop.prevent>
+        <button type="button" class="ee-close" :title="translateUi('common.close')" :aria-label="translateUi('common.close')" :disabled="busy" @click="close">
           <X :size="12" :stroke-width="2" />
-          <span>元素编辑</span>
+          <span>{{ translateUi('uiMessages.med01d6ef6071') }}</span>
         </button>
         <div class="ee-divider" />
         <button
@@ -768,7 +770,7 @@ onBeforeUnmount(() => {
               <div class="ee-slider-fill" :style="{ width: `${sliderOffset + 7}px` }" />
               <input
                 type="range"
-                aria-label="画笔大小"
+                :aria-label="translateUi('uiMessages.m667f2d7b34e2')"
                 :min="ELEMENT_EDIT_LIMITS.brushMin"
                 :max="ELEMENT_EDIT_LIMITS.brushMax"
                 step="1"
@@ -781,7 +783,7 @@ onBeforeUnmount(() => {
           </div>
         </template>
         <div class="ee-divider" />
-        <button type="button" class="ee-icon-btn" title="撤销" aria-label="撤销" :disabled="!canUndo" @click="undo">
+        <button type="button" class="ee-icon-btn" :title="translateUi('canvas.undo')" :aria-label="translateUi('canvas.undo')" :disabled="!canUndo" @click="undo">
           <Undo2 :size="18" :stroke-width="1.6" />
         </button>
       </div>
@@ -869,7 +871,7 @@ onBeforeUnmount(() => {
             v-if="draft.action === 'move' || canAdjustSource"
             type="button"
             class="ee-move-area"
-            aria-label="选区"
+            :aria-label="translateUi('uiMessages.mc44dca9aefa4')"
             :style="percentStyle(handleRect)"
             @pointerdown="startTargetGesture($event, canAdjustSource ? 'moveSource' : 'moveTarget')"
             @pointermove="showMoveHintAt"
@@ -879,7 +881,7 @@ onBeforeUnmount(() => {
               v-if="draft.action === 'move' && !draft.target && !preview.targetRect"
               class="ee-move-hint"
               :style="{ opacity: moveHint.visible ? 1 : 0, transform: `translate3d(${moveHint.x}px, ${moveHint.y}px, 0)` }"
-            >拖动对象到想要的位置</span>
+            >{{ translateUi('uiMessages.mb0d764336c42') }}</span>
           </button>
           <template v-for="[corner, x, y] in corners(handleRect)" :key="corner">
             <button
@@ -887,7 +889,7 @@ onBeforeUnmount(() => {
               type="button"
               class="ee-corner"
               :class="corner === 'nw' || corner === 'se' ? 'nwse' : 'nesw'"
-              aria-label="缩放选区"
+              :aria-label="translateUi('uiMessages.m382f72c48dd2')"
               :style="{ left: `${x * 100}%`, top: `${y * 100}%` }"
               @pointerdown="startTargetGesture($event, canAdjustSource ? 'resizeSource' : 'resizeTarget', corner)"
             ><i /></button>
@@ -907,10 +909,10 @@ onBeforeUnmount(() => {
           @pointerdown.stop
           @wheel.stop
         >
-          <div v-if="draft.recognizing" class="ee-recognizing"><span class="ee-spinner" />识别中...</div>
+          <div v-if="draft.recognizing" class="ee-recognizing"><span class="ee-spinner" />{{ translateUi('uiMessages.m52369f3bf87d') }}</div>
           <div v-else class="ee-failed">
-            <span>未识别到主体，请改用框选或画笔</span>
-            <button type="button" class="ee-ghost-btn" @click="cancelDraft">取消</button>
+            <span>{{ translateUi('uiMessages.m097aa581daf4') }}</span>
+            <button type="button" class="ee-ghost-btn" @click="cancelDraft">{{ translateUi('common.cancel') }}</button>
           </div>
         </div>
 
@@ -956,8 +958,8 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <div class="ee-actions">
-            <button type="button" class="ee-text-btn" @click="setDraftAction('modify')"><SquarePen :size="18" :stroke-width="1.6" />修改</button>
-            <button v-if="draft.source.type !== 'brush'" type="button" class="ee-text-btn" @click="setDraftAction('move')"><Move :size="18" :stroke-width="1.6" />移动</button>
+            <button type="button" class="ee-text-btn" @click="setDraftAction('modify')"><SquarePen :size="18" :stroke-width="1.6" />{{ translateUi('uiMessages.m37090f456516') }}</button>
+            <button v-if="draft.source.type !== 'brush'" type="button" class="ee-text-btn" @click="setDraftAction('move')"><Move :size="18" :stroke-width="1.6" />{{ translateUi('directorStudio.toolbar.move') }}</button>
           </div>
         </div>
 
@@ -973,12 +975,12 @@ onBeforeUnmount(() => {
             v-model="draft.prompt"
             data-ee-autofocus
             class="ee-move-input"
-            placeholder="补充移动说明"
+            :placeholder="translateUi('uiMessages.m7c5baeb98fbf')"
             maxlength="300"
             @keydown.enter="!$event.isComposing && completeDraft()"
           />
-          <button v-if="editingExisting" type="button" class="ee-round-icon" title="删除" aria-label="删除" @click="deleteRecord(draft.id)"><Trash2 :size="16" :stroke-width="1.6" /></button>
-          <button type="button" class="ee-primary-pill" @click="completeDraft">{{ editingExisting ? '保存' : '添加' }}</button>
+          <button v-if="editingExisting" type="button" class="ee-round-icon" :title="translateUi('common.delete')" :aria-label="translateUi('common.delete')" @click="deleteRecord(draft.id)"><Trash2 :size="16" :stroke-width="1.6" /></button>
+          <button type="button" class="ee-primary-pill" @click="completeDraft">{{ editingExisting ? translateUi('common.save') : translateUi('common.add') }}</button>
         </div>
 
         <div
@@ -993,7 +995,7 @@ onBeforeUnmount(() => {
           <div v-if="draft.referenceImage" class="ee-reference-row">
             <div class="ee-reference-preview">
               <img :src="draft.referenceImage.url" alt="" />
-              <button type="button" title="删除" aria-label="删除参考图" :disabled="uploading" @click.stop="removeReference"><Trash2 :size="12" /></button>
+              <button type="button" :title="translateUi('common.delete')" :aria-label="translateUi('uiMessages.m27a32abc164d')" :disabled="uploading" @click.stop="removeReference"><Trash2 :size="12" /></button>
             </div>
           </div>
           <div class="ee-modify-body">
@@ -1009,7 +1011,7 @@ onBeforeUnmount(() => {
               class="ee-modify-input"
               :rows="modifyCompact || draft.referenceImage ? 1 : 3"
               maxlength="500"
-              placeholder="描述你想如何修改"
+              :placeholder="translateUi('uiMessages.m46e84d835f60')"
               @input="draftError = ''"
               @keydown.enter="modifyCompact && !$event.isComposing && $event.preventDefault()"
             />
@@ -1021,8 +1023,8 @@ onBeforeUnmount(() => {
               <button
                 type="button"
                 class="ee-round-icon"
-                title="上传图片"
-                aria-label="上传图片"
+                :title="translateUi('imageGen.uploadImage')"
+                :aria-label="translateUi('imageGen.uploadImage')"
                 aria-haspopup="menu"
                 :aria-expanded="uploadMenuOpen"
                 :disabled="uploading || referenceLimitReached"
@@ -1033,15 +1035,15 @@ onBeforeUnmount(() => {
               </button>
               <div v-if="uploadMenuOpen && !uploading && !referenceLimitReached" class="ee-upload-menu" role="menu">
                 <div class="ee-upload-menu-inner">
-                  <button type="button" role="menuitem" :disabled="!uploadReference" @click="openLocalUpload"><Upload :size="14" />本地上传</button>
-                  <button type="button" role="menuitem" @click="openHistoryGallery"><History :size="14" />历史图库</button>
+                  <button type="button" role="menuitem" :disabled="!uploadReference" @click="openLocalUpload"><Upload :size="14" />{{ translateUi('uiMessages.m02413a69d5ca') }}</button>
+                  <button type="button" role="menuitem" @click="openHistoryGallery"><History :size="14" />{{ translateUi('uiMessages.m9b5436ddf410') }}</button>
                 </div>
               </div>
             </div>
             <div class="ee-footer-actions">
-              <button v-if="draft.referenceImage" type="button" class="ee-round-icon" title="删除" aria-label="删除参考图" :disabled="uploading" @click="removeReference"><Trash2 :size="14" /></button>
-              <button v-if="editingExisting" type="button" class="ee-round-icon" title="删除" aria-label="删除" @click="deleteRecord(draft.id)"><Trash2 :size="16" :stroke-width="1.6" /></button>
-              <button type="button" class="ee-primary-pill" :disabled="uploading || !draft.prompt.trim()" @click="completeDraft">{{ editingExisting ? '保存' : '添加' }}</button>
+              <button v-if="draft.referenceImage" type="button" class="ee-round-icon" :title="translateUi('common.delete')" :aria-label="translateUi('uiMessages.m27a32abc164d')" :disabled="uploading" @click="removeReference"><Trash2 :size="14" /></button>
+              <button v-if="editingExisting" type="button" class="ee-round-icon" :title="translateUi('common.delete')" :aria-label="translateUi('common.delete')" @click="deleteRecord(draft.id)"><Trash2 :size="16" :stroke-width="1.6" /></button>
+              <button type="button" class="ee-primary-pill" :disabled="uploading || !draft.prompt.trim()" @click="completeDraft">{{ editingExisting ? translateUi('common.save') : translateUi('common.add') }}</button>
             </div>
           </div>
         </div>
@@ -1052,8 +1054,8 @@ onBeforeUnmount(() => {
       <!-- 编辑内容面板 -->
       <div class="ee-panel" data-ee-hit :style="{ height: `${panelHeight}px` }" @pointerdown.stop @wheel.stop>
         <div class="ee-panel-head" :class="{ filled: records.length }">
-          <span class="ee-panel-title"><List :size="16" :stroke-width="1.6" />编辑内容</span>
-          <span class="ee-panel-count">{{ records.length ? `${records.length} 处` : '待添加' }}</span>
+          <span class="ee-panel-title"><List :size="16" :stroke-width="1.6" />{{ translateUi('uiMessages.m2203dc909afe') }}</span>
+          <span class="ee-panel-count">{{ records.length ? translateUi('uiMessages.m572768927443', { value1: (records.length) }) : translateUi('uiMessages.m6b1e97b8c4d0') }}</span>
         </div>
         <div v-if="records.length" class="ee-records">
           <div v-for="(record, index) in records" :key="record.id" class="ee-record">
@@ -1062,27 +1064,27 @@ onBeforeUnmount(() => {
                 <svg v-if="recordSourceRect(record)" class="ee-thumb small" :viewBox="thumbViewBox(recordSourceRect(record))" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
                   <image :href="imageUrl" x="0" y="0" :width="naturalOrMedia.width" :height="naturalOrMedia.height" preserveAspectRatio="none" />
                 </svg>
-                <span class="ee-truncate">{{ record.source.type === 'point' ? record.source.subjectName : '选区' }}</span>
+                <span class="ee-truncate">{{ record.source.type === 'point' ? record.source.subjectName : translateUi('uiMessages.mc44dca9aefa4') }}</span>
               </span>
               <span v-if="record.referenceImage" class="ee-record-tag">
                 <img :src="record.referenceImage.url" alt="" class="ee-thumb small" />
                 <span class="ee-truncate">{{ record.referenceImage.name }}</span>
               </span>
-              <span class="ee-record-text">{{ record.prompt || (record.action === 'modify' ? '修改' : '移动') }}</span>
+              <span class="ee-record-text">{{ record.prompt || (record.action === 'modify' ? translateUi('uiMessages.m37090f456516') : translateUi('directorStudio.toolbar.move')) }}</span>
             </button>
             <div v-if="!draft && !busy" class="ee-record-actions">
-              <button type="button" title="编辑" aria-label="编辑" @click="reopenRecord(record.id)"><PencilLine :size="16" :stroke-width="1.6" /></button>
-              <button type="button" class="muted" aria-label="删除" :title="`正在编辑第 ${index + 1} 处`" @click="deleteRecord(record.id)"><Trash2 :size="14" :stroke-width="1.6" /></button>
+              <button type="button" :title="translateUi('common.edit')" :aria-label="translateUi('common.edit')" @click="reopenRecord(record.id)"><PencilLine :size="16" :stroke-width="1.6" /></button>
+              <button type="button" class="muted" :aria-label="translateUi('common.delete')" :title="translateUi('uiMessages.mf233f02f6592', { value1: (index + 1) })" @click="deleteRecord(record.id)"><Trash2 :size="14" :stroke-width="1.6" /></button>
             </div>
           </div>
         </div>
         <div v-if="submitError" class="ee-submit-error">{{ submitError }}</div>
         <div v-if="records.length" class="ee-panel-footer">
-          <button type="button" class="ee-cancel-btn" :disabled="busy" @click="close">取消</button>
+          <button type="button" class="ee-cancel-btn" :disabled="busy" @click="close">{{ translateUi('common.cancel') }}</button>
           <button type="button" class="ee-generate-btn" :disabled="!canGenerate" @click="generate">
             <Zap :size="12" fill="currentColor" :stroke-width="0" />
             <span v-if="pointsCost !== ''">{{ pointsCost }}</span>
-            {{ busy ? '生成中...' : submitError ? '重试' : '生成' }}
+            {{ busy ? translateUi('imageGen.generating') : submitError ? translateUi('common.retry') : translateUi('nav.generate') }}
           </button>
         </div>
       </div>

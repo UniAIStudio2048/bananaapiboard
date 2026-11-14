@@ -1,3 +1,6 @@
+import * as i18nTestRuntime from '../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -11,7 +14,7 @@ const { descriptor } = parse(source)
 const script = compileScript(descriptor, { id: 'audio-preview-test' }).content
 const compiled = transformSync(script, { format: 'cjs' }).code
 const vue = { ...require('vue'), onUnmounted() {} }
-const runtimeRequire = id => id === 'vue' ? vue : require(id)
+const runtimeRequire = id => id === '@/i18n' ? i18nTestRuntime : id === 'vue' ? vue : require(id)
 
 function createEditor() {
   const frames = new Map()

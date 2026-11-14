@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * ImageEditMode.vue - 图片编辑模式容器
  * 
@@ -224,16 +226,16 @@ const initialTool = computed(() => {
 // 工具标题
 const toolTitle = computed(() => {
   const titles = {
-    repaint: '重绘蒙版',
-    erase: '擦除区域',
-    'spot-heal': '污点修复',
-    annotate: '涂鸦标注',
-    crop: '裁剪图片',
-    enhance: '调色混色器',
-    cutout: '智能抠图',
-    expand: '智能扩图'
+    get repaint() { return translateUi('uiMessages.m9a14bcabc9bb') },
+    get erase() { return translateUi('uiMessages.mc2569d0d8aa5') },
+    'spot-heal': translateUi('uiMessages.m53e5c49eed70'),
+    get annotate() { return translateUi('uiMessages.m91af626a1e8b') },
+    get crop() { return translateUi('uiMessages.mcf301e9e27f8') },
+    get enhance() { return translateUi('uiMessages.mcc7b0e57861d') },
+    get cutout() { return translateUi('canvas.nodeConfig.imageCutout.label') },
+    get expand() { return translateUi('uiMessages.mb030e22c7c2d') }
   }
-  return titles[currentTool.value] || '图片编辑'
+  return titles[currentTool.value] || translateUi('uiMessages.md721fd5257b8')
 })
 
 // 计算编辑区域尺寸
@@ -358,10 +360,10 @@ function createSpotHealResultNode(sourceNode, data) {
     type: 'image',
     position: newNodePosition,
     data: {
-      title: '污点修复',
-      label: '污点修复',
+      title: translateUi('uiMessages.m53e5c49eed70'),
+      label: translateUi('uiMessages.m53e5c49eed70'),
       status: 'processing',
-      progress: '污点修复中...',
+      progress: translateUi('uiMessages.mc2e51357430b'),
       taskType: 'spot-heal',
       sourceType: 'spot-heal',
       localProcessing: 'spot-heal',
@@ -387,7 +389,7 @@ async function processSpotHealInBackground(nodeId, nodeSnapshot, data, sourceIma
 
   try {
     if (!data?.hasMask || !data.mask) {
-      throw new Error('请先涂抹要修复的污点区域')
+      throw new Error(translateUi('uiMessages.m03165026dd29'))
     }
 
     const result = await inpaintImageLocal({
@@ -400,7 +402,7 @@ async function processSpotHealInBackground(nodeId, nodeSnapshot, data, sourceIma
     })
 
     if (!result?.url) {
-      throw new Error('污点修复完成但未返回图片')
+      throw new Error(translateUi('uiMessages.me55c7f28f248'))
     }
 
     canvasStore.updateNodeData(resultNodeId, {
@@ -418,16 +420,16 @@ async function processSpotHealInBackground(nodeId, nodeSnapshot, data, sourceIma
       }
     })
 
-    showToast('污点修复完成', 'success')
+    showToast(translateUi('uiMessages.m959370d04231'), 'success')
   } catch (error) {
     console.error('[ImageEditMode] 污点修复失败:', error)
     canvasStore.updateNodeData(resultNodeId, {
       status: 'error',
       progress: null,
       localProcessing: null,
-      error: error.message || '污点修复失败'
+      error: error.message || translateUi('uiMessages.m47c0b2fb88fd')
     })
-    showToast(error.message || '污点修复失败', 'error', 3000)
+    showToast(error.message || translateUi('uiMessages.m47c0b2fb88fd'), 'error', 3000)
   }
 }
 
@@ -515,7 +517,7 @@ async function uploadAndSaveMaskForNode(nodeId, nodeSnapshot, maskDataUrl) {
       type: 'image',
       position: newNodePosition,
       data: {
-        title: '蒙版',
+        title: translateUi('uiMessages.me7c802f4a183'),
         sourceImages: [maskUrl],
         nodeRole: 'source',
         isMask: true,
@@ -523,7 +525,7 @@ async function uploadAndSaveMaskForNode(nodeId, nodeSnapshot, maskDataUrl) {
       }
     })
   } else {
-    throw new Error('上传蒙版失败')
+    throw new Error(translateUi('uiMessages.m3cf7965130bd'))
   }
 }
 
@@ -562,7 +564,7 @@ async function uploadAndSaveMask(maskDataUrl) {
       type: 'image',
       position: newNodePosition,
       data: {
-        title: '蒙版',
+        title: translateUi('uiMessages.me7c802f4a183'),
         sourceImages: [maskUrl],
         nodeRole: 'source', // 设置为源节点以正确显示图片
         isMask: true, // 标记为蒙版节点
@@ -573,7 +575,7 @@ async function uploadAndSaveMask(maskDataUrl) {
     console.log('[ImageEditMode] 蒙版节点已创建:', maskUrl)
   } else {
     console.error('[ImageEditMode] 上传蒙版失败')
-    throw new Error('上传蒙版失败')
+    throw new Error(translateUi('uiMessages.m3cf7965130bd'))
   }
 }
 
@@ -595,7 +597,7 @@ async function updateNodeImage(dataUrl, exportInfo = null) {
 
   if (!result?.url) {
     console.error('[ImageEditMode] 上传图片失败，没有返回 URL')
-    throw new Error('上传图片失败')
+    throw new Error(translateUi('uiMessages.mdbd401fec5cd'))
   }
 
   console.log('[ImageEditMode] 图片已上传（覆盖原图）:', result.url)
@@ -658,16 +660,16 @@ onUnmounted(() => {
           <!-- 头部 -->
           <div class="edit-mode-header">
             <div class="header-left">
-              <button class="close-btn" @click="handleCancel" title="关闭 (ESC)">
+              <button class="close-btn" @click="handleCancel" :title="translateUi('uiMessages.ma0168ae06f99')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
               </button>
               <span class="edit-title">{{ toolTitle }}</span>
-              <span v-if="cachedState" class="restore-badge">已恢复编辑记录</span>
+              <span v-if="cachedState" class="restore-badge">{{ translateUi('uiMessages.me6f1f3019bed') }}</span>
             </div>
             <div class="header-right">
-              <span class="edit-hint">全功能图片编辑 · 按 ESC 退出</span>
+              <span class="edit-hint">{{ translateUi('uiMessages.me6f00999fb22') }}</span>
             </div>
           </div>
           

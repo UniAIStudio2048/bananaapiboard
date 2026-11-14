@@ -1,10 +1,11 @@
+import { t as translateUi } from '../i18n/index.js'
 export function createCheckoutController({ api, onChange = () => {}, onPaid = () => {}, now = Date.now, schedule = setTimeout, cancel = clearTimeout }) {
   const state = { open: false, methods: [], order: null, attempt: null, selected: null, busy: false, error: '' }
   let input, requestKey, timer, polling, generation = 0, abort, failures = 0, delivered = false
   const key = () => {
     const crypto = globalThis.crypto
     if (typeof crypto?.randomUUID === 'function') return crypto.randomUUID()
-    if (typeof crypto?.getRandomValues !== 'function') throw new Error('当前浏览器不支持安全支付请求，请升级浏览器后重试')
+    if (typeof crypto?.getRandomValues !== 'function') throw new Error(translateUi('uiMessages.m003024924a0e'))
     const bytes = crypto.getRandomValues(new Uint8Array(16))
     bytes[6] = (bytes[6] & 0x0f) | 0x40
     bytes[8] = (bytes[8] & 0x3f) | 0x80

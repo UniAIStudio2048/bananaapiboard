@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * CropOverlay.vue - 原生裁剪编辑器
  * 
@@ -61,7 +63,7 @@ const selectedRatio = ref(null)
 
 // 预设比例
 const aspectRatios = [
-  { value: null, label: '自由' },
+  { value: null, get label() { return translateUi('uiMessages.md1047eed5dd5') } },
   { value: 1, label: '1:1' },
   { value: 16/9, label: '16:9' },
   { value: 9/16, label: '9:16' },
@@ -387,7 +389,7 @@ defineExpose({
     <div class="crop-toolbar">
       <!-- 比例选择 -->
       <div class="toolbar-section">
-        <span class="toolbar-label">比例</span>
+        <span class="toolbar-label">{{ translateUi('directorStudio.inspector.aspect') }}</span>
         <div class="ratio-options">
           <button
             v-for="ratio in aspectRatios"
@@ -403,7 +405,7 @@ defineExpose({
       
       <div class="toolbar-divider"></div>
       
-      <button class="tool-btn" title="重置" @click="reset">
+      <button class="tool-btn" :title="translateUi('common.reset')" @click="reset">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
           <path d="M3 3v5h5"/>
@@ -414,8 +416,8 @@ defineExpose({
       
       <!-- 操作按钮 -->
       <div class="toolbar-section">
-        <button class="action-btn cancel" @click="handleCancel">取消</button>
-        <button class="action-btn confirm" @click="handleSave">确定裁剪</button>
+        <button class="action-btn cancel" @click="handleCancel">{{ translateUi('common.cancel') }}</button>
+        <button class="action-btn confirm" @click="handleSave">{{ translateUi('uiMessages.m7fed57c4aafd') }}</button>
       </div>
     </div>
   </div>

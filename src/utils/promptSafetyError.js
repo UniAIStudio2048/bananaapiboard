@@ -1,9 +1,10 @@
+import { t as translateUi } from '../i18n/index.js'
 const PROMPT_SAFETY_CODE = 'prompt_safety_blocked'
 
 const COPY = {
   zh: {
-    title: '安全审核未通过',
-    message: '请修改提示词中不符合安全规则的内容后重试。',
+    get title() { return translateUi('uiMessages.mad171df05714') },
+    get message() { return translateUi('uiMessages.m2ded08a97e1d') },
     editLabel: '需要修改的内容',
     categoryLabel: '风险类别',
     fallbackBlockedContent: '包含不符合安全规则的内容',
@@ -22,35 +23,35 @@ const COPY = {
 }
 
 const ZH_CATEGORY_LABELS = {
-  sexual_minors: '未成年人性安全',
-  sexual_explicit: '露骨性内容',
-  sexual_suggestive: '成人暗示',
-  violence_threat: '暴力威胁',
-  violence_graphic: '血腥暴力',
-  self_harm: '自伤自杀',
-  hate_slur: '仇恨歧视',
-  illegal_drugs: '违禁药物',
-  weapons_explosives: '武器爆炸物',
-  fraud_scam: '诈骗钓鱼',
-  privacy_doxxing: '隐私泄露',
-  cyber_abuse: '网络滥用',
-  profanity: '粗口脏话',
-  political_persuasion: '政治劝服',
-  custom: '自定义',
-  violent: '暴力',
-  violence: '暴力',
-  'sexual content or sexual acts': '性内容或性行为',
-  sexual: '性内容',
-  politics: '政治敏感',
-  political: '政治敏感',
-  hate: '仇恨或歧视',
-  harassment: '骚扰',
-  illegal: '违法行为',
-  'self-harm': '自伤',
-  selfharm: '自伤',
-  weapons: '武器',
-  drugs: '毒品',
-  privacy: '隐私'
+  get sexual_minors() { return translateUi('uiMessages.ma9602bb59d95') },
+  get sexual_explicit() { return translateUi('uiMessages.mfb7a77487a41') },
+  get sexual_suggestive() { return translateUi('uiMessages.mded40f3d77de') },
+  get violence_threat() { return translateUi('uiMessages.m7301efc56ea4') },
+  get violence_graphic() { return translateUi('uiMessages.m41e1fd79433d') },
+  get self_harm() { return translateUi('uiMessages.m331d24328dd9') },
+  get hate_slur() { return translateUi('uiMessages.m9b6c36e73b60') },
+  get illegal_drugs() { return translateUi('uiMessages.mde5be8aac4f5') },
+  get weapons_explosives() { return translateUi('uiMessages.m2471baeb9cca') },
+  get fraud_scam() { return translateUi('uiMessages.mff62fe8247dd') },
+  get privacy_doxxing() { return translateUi('uiMessages.m919470833d4c') },
+  get cyber_abuse() { return translateUi('uiMessages.me22f012f28b9') },
+  get profanity() { return translateUi('uiMessages.ma028d0104cb1') },
+  get political_persuasion() { return translateUi('uiMessages.m03ac81cd9c98') },
+  get custom() { return translateUi('uiMessages.m4eafa9e925b3') },
+  get violent() { return translateUi('uiMessages.m67aa918d767a') },
+  get violence() { return translateUi('uiMessages.m67aa918d767a') },
+  'sexual content or sexual acts': translateUi('uiMessages.mf40d79cb2009'),
+  get sexual() { return translateUi('uiMessages.m10e9899501db') },
+  get politics() { return translateUi('uiMessages.mf5780893836c') },
+  get political() { return translateUi('uiMessages.mf5780893836c') },
+  get hate() { return translateUi('uiMessages.ma4e8f178f7e1') },
+  get harassment() { return translateUi('uiMessages.m7416bb197855') },
+  get illegal() { return translateUi('uiMessages.md643b4438172') },
+  get 'self-harm'() { return translateUi('uiMessages.m1379f06040a1') },
+  get selfharm() { return translateUi('uiMessages.m1379f06040a1') },
+  get weapons() { return translateUi('uiMessages.m4fe131173e23') },
+  get drugs() { return translateUi('uiMessages.mf3a91642809e') },
+  get privacy() { return translateUi('uiMessages.m86651d17a401') }
 }
 
 const EN_CATEGORY_LABELS = {

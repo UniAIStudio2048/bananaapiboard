@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 
 function headers(json = false) {
@@ -29,7 +30,7 @@ export async function getCodexSessions(spaceParams) {
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || '加载会话列表失败')
+    throw new Error(error.message || translateUi('uiMessages.m8259146c53f3'))
   }
   return response.json()
 }
@@ -42,7 +43,7 @@ export async function getCodexSession(threadId) {
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || '加载会话失败')
+    throw new Error(error.message || translateUi('uiMessages.m1e2831c52f6d'))
   }
   return response.json()
 }
@@ -56,7 +57,7 @@ export async function getCodexSessionMessages(threadId, spaceParams) {
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || '加载会话消息失败')
+    throw new Error(error.message || translateUi('uiMessages.m1646eb209420'))
   }
   return response.json()
 }
@@ -70,7 +71,7 @@ export async function deleteCodexSession(threadId) {
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || '删除会话失败')
+    throw new Error(error.message || translateUi('uiMessages.mf039e402f489'))
   }
   return response.json()
 }
@@ -101,7 +102,7 @@ export async function subscribeCodexStream(threadId, callbacks = {}) {
     })
     if (!response.ok) {
       const error = await response.json().catch(() => ({}))
-      throw new Error(error.message || error.error || 'Codex agent 重连失败')
+      throw new Error(error.message || error.error || translateUi('uiMessages.mcdf3ae0f742c'))
     }
     const reader = response.body.getReader()
     const decoder = new TextDecoder('utf-8')
@@ -115,7 +116,7 @@ export async function subscribeCodexStream(threadId, callbacks = {}) {
         // 终态前 EOF（代理重置、服务端提前断流）视为 stream_incomplete，
         // 由调用方进入退避重连，不得静默当作成功。
         if (ended) break
-        const err = new Error('连接中断，正在恢复（stream_incomplete）')
+        const err = new Error(translateUi('uiMessages.mbeb1845cbd3c'))
         err.code = 'stream_incomplete'
         throw err
       }
@@ -178,7 +179,7 @@ export async function subscribeCodexStream(threadId, callbacks = {}) {
               if (onTaskEvent) onTaskEvent({ type: eventName, ...json })
               break
             case 'turn.failed':
-              throw new Error(json.error?.message || 'Codex agent 执行失败')
+              throw new Error(json.error?.message || translateUi('uiMessages.ma0b80f3997cf'))
           }
         } catch (e) {
           if (e && e.message && !e.message.includes('JSON')) throw e
@@ -261,7 +262,7 @@ export async function sendCodexMessage(params) {
     })
     if (!response.ok) {
       const error = await response.json().catch(() => ({}))
-      const err = new Error(error.message || error.error || 'Codex agent 请求失败')
+      const err = new Error(error.message || error.error || translateUi('uiMessages.mc182ae0d5481'))
       err.code = error.error || response.status
       throw err
     }
@@ -306,7 +307,7 @@ export async function sendCodexMessage(params) {
           if (onDone) onDone(result)
           return result
         }
-        const err = new Error('连接中断，回复未完成（stream_incomplete）')
+        const err = new Error(translateUi('uiMessages.m61391f825161'))
         err.code = 'stream_incomplete'
         throw err
       }
@@ -401,7 +402,7 @@ export async function sendCodexMessage(params) {
               completedTurn = json
               break
             case 'turn.failed':
-              throw new Error(json.error?.message || 'Codex agent 执行失败')
+              throw new Error(json.error?.message || translateUi('uiMessages.ma0b80f3997cf'))
             case 'done':
               if (json.thread_id) threadId = json.thread_id
               {
@@ -442,7 +443,7 @@ export async function cancelCodexTurn(threadId, turnId, { reason = 'user_stop', 
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    const err = new Error(error.message || error.error || '取消回合失败')
+    const err = new Error(error.message || error.error || translateUi('uiMessages.m0c6a3668512e'))
     err.code = error.error || response.status
     throw err
   }
@@ -463,7 +464,7 @@ export async function deleteQueuedCodexMessage(threadId, turnId) {
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || error.error || '删除队列消息失败')
+    throw new Error(error.message || error.error || translateUi('uiMessages.mf71d44b4f49b'))
   }
   return response.json()
 }
@@ -484,7 +485,7 @@ export async function promoteQueuedCodexMessage(threadId, turnId) {
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || error.error || '置顶队列消息失败')
+    throw new Error(error.message || error.error || translateUi('uiMessages.m7e9ca66562ff'))
   }
   return response.json()
 }

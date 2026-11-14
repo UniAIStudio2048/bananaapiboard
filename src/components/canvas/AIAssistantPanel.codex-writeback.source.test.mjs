@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -18,7 +19,7 @@ test('enhanced Codex mode writes completed media back through the existing canva
   assert.match(source, /handleToolEvent\(message, event, \{\s*messageText,\s*onGeneratedResult: applyGeneratedResult\s*\}\)/)
   assert.match(source, /const generated = extractCodexGeneratedMediaResult\(event\.tool, event\.result\)/)
   assert.match(source, /if \(generated && opts\.onGeneratedResult\) opts\.onGeneratedResult\(generated\)/)
-  assert.match(source, /function buildMediaTurnInstruction\([\s\S]*?task-status 获取 completed 和 result_urls[\s\S]*?canvas-write[\s\S]*?\n}/)
+  assert.match(source, localizedPattern(/function buildMediaTurnInstruction\([\s\S]*?task-status 获取 completed 和 result_urls[\s\S]*?canvas-write[\s\S]*?\n}/))
   assert.match(source, /const turnHint = \[[\s\S]*?buildMediaTurnInstruction\(\)[\s\S]*?\]\.filter\(Boolean\)\.join\('\\n'\)/)
   assert.match(source, /if \(!hasCanvasWriteTarget\(\)\) \{[\s\S]*?emit\('canvas-writeback'/)
   assert.match(source, /await sendCodexMessage\(\{[\s\S]*?content: messageText,[\s\S]*?hint: turnHint/)

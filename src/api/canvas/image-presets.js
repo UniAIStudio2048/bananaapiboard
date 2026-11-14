@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../i18n/index.js'
 /**
  * Canvas Image Presets API Client
  * 图像预设 API 客户端
@@ -144,7 +145,7 @@ export async function getImagePresetById(presetId) {
 
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.error || '获取预设失败')
+    throw new Error(error.error || translateUi('uiMessages.m956b9138dd97'))
   }
 
   const data = await response.json()
@@ -178,7 +179,7 @@ export async function createImagePreset(presetData) {
 
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.error || '创建预设失败')
+    throw new Error(error.error || translateUi('uiMessages.m40f41d4c928d'))
   }
 
   const data = await response.json()
@@ -207,7 +208,7 @@ export async function updateImagePreset(presetId, presetData) {
 
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.error || '更新预设失败')
+    throw new Error(error.error || translateUi('uiMessages.m5f996ae4293e'))
   }
 
   const data = await response.json()
@@ -233,7 +234,7 @@ export async function deleteImagePreset(presetId) {
 
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.error || '删除预设失败')
+    throw new Error(error.error || translateUi('uiMessages.m5a3b750e4f52'))
   }
 
   invalidateImagePresetsCache()

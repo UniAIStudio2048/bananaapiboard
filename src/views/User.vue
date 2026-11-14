@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi, currentLanguage as uiLanguage } from '@/i18n'
+
 import { openCheckout } from '@/utils/openCheckout'
 import CheckoutOrders from '@/components/payment/CheckoutOrders.vue'
 import { streamVideo as vStreamVideo } from '@/directives/streamVideo'
@@ -143,7 +145,7 @@ const voucherError = ref('')
 const voucherSuccess = ref('')
 const externalLinkConfig = ref({
   enabled: false,
-  button_text: '获取兑换券',
+  get button_text() { return translateUi('voucher.getVoucher') },
   url: '',
   open_in_new_tab: true
 })
@@ -271,7 +273,7 @@ const getImageModelName = (modelKey) => {
     'nano-banana-hd': 'Nano Banana HD',
     'nano-banana-2': 'Nano Banana 2'
   }
-  return defaultNames[modelKey] || '未知模型'
+  return defaultNames[modelKey] || translateUi('uiMessages.m0a9156766e0a')
 }
 
 // 获取模型显示名称（视频）
@@ -287,10 +289,10 @@ const getVideoModelName = (modelKey) => {
     'sora-2': 'Sora 2',
     'sora-2-pro': 'Sora 2 Pro',
     'veo3.1-components': 'VEO 3.1',
-    'veo3.1': 'VEO 3.1 标准',
+    'veo3.1': translateUi('uiMessages.md16c42eba9bb'),
     'veo3.1-pro': 'VEO 3.1 Pro'
   }
-  return defaultNames[modelKey] || '未知模型'
+  return defaultNames[modelKey] || translateUi('uiMessages.m0a9156766e0a')
 }
 
 const generationHistorySpaceQuery = 'spaceType=all'
@@ -346,7 +348,7 @@ async function load() {
     if (pointsStatsRes.ok) pointsStats.value = (await pointsStatsRes.json()).stats
     
   } catch (e) {
-    error.value = '未登录或加载失败'
+    error.value = translateUi('uiMessages.m0f9346d56868')
   } finally {
     loading.value = false
   }
@@ -569,7 +571,7 @@ async function downloadFile(url, filename) {
 // 批量下载图片
 async function batchDownloadImages() {
   if (selectedImages.value.size === 0) {
-    showToast('请先选择要下载的图片', 'error')
+    showToast(translateUi('uiMessages.m9b6ff97d4200'), 'error')
     return
   }
   
@@ -595,11 +597,11 @@ async function batchDownloadImages() {
       }
     }
     
-    showToast(`成功下载 ${selectedList.length} 张图片`, 'success')
+    showToast(translateUi('uiMessages.mccb2d712d590', { value1: (selectedList.length) }), 'success')
     imageSelectMode.value = false
     selectedImages.value = new Set()
   } catch (e) {
-    showToast('批量下载失败', 'error')
+    showToast(translateUi('uiMessages.mf5cfbf6b4244'), 'error')
   } finally {
     imageDownloading.value = false
   }
@@ -608,7 +610,7 @@ async function batchDownloadImages() {
 // 批量下载视频
 async function batchDownloadVideos() {
   if (selectedVideos.value.size === 0) {
-    showToast('请先选择要下载的视频', 'error')
+    showToast(translateUi('uiMessages.mad052fe3b79a'), 'error')
     return
   }
   
@@ -634,11 +636,11 @@ async function batchDownloadVideos() {
       }
     }
     
-    showToast(`成功下载 ${selectedList.length} 个视频`, 'success')
+    showToast(translateUi('uiMessages.m99d6817c5bc1', { value1: (selectedList.length) }), 'success')
     videoSelectMode.value = false
     selectedVideos.value = new Set()
   } catch (e) {
-    showToast('批量下载失败', 'error')
+    showToast(translateUi('uiMessages.mf5cfbf6b4244'), 'error')
   } finally {
     videoDownloading.value = false
   }
@@ -664,11 +666,11 @@ async function updateImageRating(imageId, rating) {
       if (idx !== -1) {
         recentImages.value[idx].rating = rating
       }
-      showToast(rating > 0 ? '已添加星标' : '已取消星标', 'success')
+      showToast(rating > 0 ? translateUi('uiMessages.m3d66d184d134') : translateUi('uiMessages.m9b9f6672bb6b'), 'success')
     }
   } catch (e) {
     console.error('更新星标失败:', e)
-    showToast('更新失败', 'error')
+    showToast(translateUi('uiMessages.mec99e5c45d64'), 'error')
   }
 }
 
@@ -692,11 +694,11 @@ async function updateVideoRating(videoId, rating) {
       if (idx !== -1) {
         recentVideos.value[idx].rating = rating
       }
-      showToast(rating > 0 ? '已添加星标' : '已取消星标', 'success')
+      showToast(rating > 0 ? translateUi('uiMessages.m3d66d184d134') : translateUi('uiMessages.m9b9f6672bb6b'), 'success')
     }
   } catch (e) {
     console.error('更新星标失败:', e)
-    showToast('更新失败', 'error')
+    showToast(translateUi('uiMessages.mec99e5c45d64'), 'error')
   }
 }
 
@@ -740,13 +742,13 @@ async function saveNote() {
           recentVideos.value[idx].note = note
         }
       }
-      showToast('备注已保存', 'success')
+      showToast(translateUi('uiMessages.m2d59e320f223'), 'success')
       editingNote.value = null
       noteInput.value = ''
     }
   } catch (e) {
     console.error('保存备注失败:', e)
-    showToast('保存失败', 'error')
+    showToast(translateUi('errors.saveFailed'), 'error')
   }
 }
 
@@ -781,7 +783,7 @@ function handleVideoScroll(event) {
 function copyInvite() {
   const url = `${location.origin}/?invite=${invite.value.invite_code}`
   navigator.clipboard.writeText(url)
-  showToast('邀请链接已复制到剪贴板！', 'success')
+  showToast(translateUi('uiMessages.mdd856c9fa774'), 'success')
 }
 
 // ==================== 返利中心 ====================
@@ -868,11 +870,11 @@ function formatCommunityDate(ts) {
 
 // 作品状态配置
 const workStatusConfig = {
-  pending: { label: '待审核', class: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
-  approved: { label: '已通过', class: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
-  rejected: { label: '已拒绝', class: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
-  draft: { label: '草稿', class: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300' },
-  offline: { label: '已下架', class: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300' }
+  pending: { get label() { return translateUi('uiMessages.m7bf25421c6df') }, class: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
+  approved: { get label() { return translateUi('uiMessages.m3fa9b684903a') }, class: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
+  rejected: { get label() { return translateUi('uiMessages.mf098218a3032') }, class: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
+  draft: { get label() { return translateUi('uiMessages.m2a2fd29bd27a') }, class: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300' },
+  offline: { get label() { return translateUi('uiMessages.m88e7b1ccfff8') }, class: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300' }
 }
 
 function getWorkVisibilityState(work) {
@@ -897,11 +899,11 @@ function getWorkVisibilityState(work) {
 }
 
 function getVisibilityButtonLabel(work) {
-  return getWorkVisibilityState(work) ? '隐藏' : '公开'
+  return getWorkVisibilityState(work) ? translateUi('onboarding.settings.edgeStyleHidden') : translateUi('uiMessages.m7a73baf0ce9a')
 }
 
 function getVisibilityBadgeLabel(work) {
-  return getWorkVisibilityState(work) ? '公开' : '隐藏'
+  return getWorkVisibilityState(work) ? translateUi('uiMessages.m7a73baf0ce9a') : translateUi('onboarding.settings.edgeStyleHidden')
 }
 
 function getVisibilityBadgeClass(work) {
@@ -912,16 +914,16 @@ function getVisibilityBadgeClass(work) {
 
 async function handleDeleteCommunityWork(work) {
   if (!work?.id) return
-  const title = work.title || '该作品'
-  if (!window.confirm(`确定删除“${title}”吗？删除后不可恢复。`)) return
+  const title = work.title || translateUi('uiMessages.m8c6614932aca')
+  if (!window.confirm(translateUi('uiMessages.m396d2bfb82fc', { value1: (title) }))) return
 
   try {
     await deleteWork(work.id)
-    showToast('作品已删除', 'success')
+    showToast(translateUi('uiMessages.mf53a0f76ecbc'), 'success')
     await loadCommunityWorks(true)
   } catch (e) {
     console.error('删除社区作品失败:', e)
-    showToast(e?.message || '删除失败', 'error')
+    showToast(e?.message || translateUi('errors.deleteFailed'), 'error')
   }
 }
 
@@ -931,11 +933,11 @@ async function handleToggleCommunityWorkVisibility(work) {
 
   try {
     await toggleWorkVisibility(work.id, { is_public: nextVisible })
-    showToast(nextVisible ? '作品已设为公开' : '作品已设为隐藏', 'success')
+    showToast(nextVisible ? translateUi('uiMessages.m76d4f0a023e3') : translateUi('uiMessages.m8f0c703a915e'), 'success')
     await loadCommunityWorks(true)
   } catch (e) {
     console.error('切换作品可见性失败:', e)
-    showToast(e?.message || '切换可见性失败', 'error')
+    showToast(e?.message || translateUi('uiMessages.m42aef6e0402e'), 'error')
   }
 }
 
@@ -957,11 +959,11 @@ async function loadReferralData() {
 
 async function doReferralWithdraw() {
   const amt = Number(referralActionAmount.value)
-  if (!amt || amt <= 0) { showToast('请输入有效金额', 'error'); return }
-  if (!referralAlipayName.value.trim()) { showToast('请输入支付宝真实姓名', 'error'); return }
-  if (!referralAlipayAccount.value.trim()) { showToast('请输入支付宝账号', 'error'); return }
+  if (!amt || amt <= 0) { showToast(translateUi('uiMessages.maaf9196c9b53'), 'error'); return }
+  if (!referralAlipayName.value.trim()) { showToast(translateUi('uiMessages.mf8c543d10668'), 'error'); return }
+  if (!referralAlipayAccount.value.trim()) { showToast(translateUi('uiMessages.m9c42b89e096d'), 'error'); return }
   const amtFen = Math.round(amt * 100)
-  if (!confirm(`确定申请提现 ${currencySymbol.value}${amt.toFixed(2)} 到支付宝账号 ${referralAlipayAccount.value} 吗？提现需要审核通过后才能到账。`)) return
+  if (!confirm(translateUi('uiMessages.m118bed5879a9', { value1: (currencySymbol.value), value2: (amt.toFixed(2)), value3: (referralAlipayAccount.value) }))) return
   referralSubmitting.value = true
   try {
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
@@ -975,8 +977,8 @@ async function doReferralWithdraw() {
       })
     })
     const data = await res.json()
-    if (!res.ok) throw new Error(data.message || '提现失败')
-    showToast('提现申请已提交，等待审核', 'success')
+    if (!res.ok) throw new Error(data.message || translateUi('uiMessages.mc77b03159dce'))
+    showToast(translateUi('uiMessages.m331550be5683'), 'success')
     referralActionAmount.value = ''
     referralAlipayName.value = ''
     referralAlipayAccount.value = ''
@@ -990,16 +992,16 @@ async function doReferralWithdraw() {
 
 async function doReferralTransfer() {
   const amt = Number(referralActionAmount.value)
-  if (!amt || amt <= 0) { showToast('请输入有效金额', 'error'); return }
+  if (!amt || amt <= 0) { showToast(translateUi('uiMessages.maaf9196c9b53'), 'error'); return }
   const amtFen = Math.round(amt * 100)
-  if (!confirm(`确定将 ${currencySymbol.value}${amt.toFixed(2)} 划转到余额吗？划转后不可再提现。`)) return
+  if (!confirm(translateUi('uiMessages.m64f6ebdc6e36', { value1: (currencySymbol.value), value2: (amt.toFixed(2)) }))) return
   referralSubmitting.value = true
   try {
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
     const res = await fetch(getApiUrl('/api/user/referral/transfer'), { method: 'POST', headers, body: JSON.stringify({ amount: amtFen }) })
     const data = await res.json()
-    if (!res.ok) throw new Error(data.message || '划转失败')
-    showToast('划转成功，已到账余额', 'success')
+    if (!res.ok) throw new Error(data.message || translateUi('uiMessages.m035abb665e84'))
+    showToast(translateUi('uiMessages.m04b75ad2999a'), 'success')
     referralActionAmount.value = ''
     loadReferralData()
     // 刷新用户信息以更新余额
@@ -1018,7 +1020,7 @@ function formatRebateAmount(fen) {
 
 function formatRebateTime(ts) {
   if (!ts) return '-'
-  return new Date(ts).toLocaleString('zh-CN')
+  return new Date(ts).toLocaleString(uiLanguage.value)
 }
 
 function showToast(message, type = 'info') {
@@ -1054,14 +1056,14 @@ async function saveProfile() {
     invalidateMeCache()
     const updated = await res.json()
     me.value = { ...me.value, ...updated }
-    showToast('个人资料更新成功！', 'success')
+    showToast(translateUi('uiMessages.m3708430cc66d'), 'success')
   } catch (e) {
     if (e.message === 'username_taken') {
-      errorMessage.value = '用户名已被使用'
+      errorMessage.value = translateUi('uiMessages.mb003d15dd2be')
     } else if (e.message === 'email_taken') {
-      errorMessage.value = '邮箱已被使用'
+      errorMessage.value = translateUi('uiMessages.m7c7420d8c70a')
     } else {
-      errorMessage.value = '更新失败，请重试'
+      errorMessage.value = translateUi('uiMessages.m67a9f3bdbd88')
     }
   } finally {
     saveLoading.value = false
@@ -1070,12 +1072,12 @@ async function saveProfile() {
 
 async function changePassword() {
   if (passwordForm.value.newPassword !== passwordForm.value.confirmPassword) {
-    errorMessage.value = '两次输入的密码不一致'
+    errorMessage.value = translateUi('uiMessages.m58807745708e')
     return
   }
   
   if (passwordForm.value.newPassword.length < 6) {
-    errorMessage.value = '密码长度至少6位'
+    errorMessage.value = translateUi('uiMessages.m8eee17404155')
     return
   }
   
@@ -1102,14 +1104,14 @@ async function changePassword() {
     }
     
     passwordForm.value = { oldPassword: '', newPassword: '', confirmPassword: '' }
-    showToast('密码修改成功！', 'success')
+    showToast(translateUi('uiMessages.m878d350ab983'), 'success')
   } catch (e) {
     if (e.message === 'invalid_old_password') {
-      errorMessage.value = '原密码错误'
+      errorMessage.value = translateUi('uiMessages.m4281e3a054ef')
     } else if (e.message === 'password_too_short') {
-      errorMessage.value = '新密码长度至少6位'
+      errorMessage.value = translateUi('uiMessages.m74e77ac52162')
     } else {
-      errorMessage.value = '修改失败，请重试'
+      errorMessage.value = translateUi('uiMessages.m7e0bbb6c2b51')
     }
   } finally {
     saveLoading.value = false
@@ -1120,7 +1122,7 @@ function toggleTheme() {
   const newTheme = toggleThemeUtil()
   currentTheme.value = newTheme
   // setTheme已经会触发theme-changed事件，这里不需要重复触发
-  showToast(`已切换到${newTheme === 'dark' ? '深色' : '浅色'}模式`, 'success')
+  showToast(translateUi('uiMessages.m19a5ea071886', { value1: (newTheme === 'dark' ? translateUi('uiMessages.ma6b75d068032') : translateUi('uiMessages.maa0819dfc4d8')) }), 'success')
 }
 
 // 直接设置主题（用于点击主题卡片时）
@@ -1128,7 +1130,7 @@ function setThemeDirect(theme) {
   setTheme(theme)
   currentTheme.value = theme
   // setTheme已经会触发theme-changed事件，这里不需要重复触发
-  showToast(`已切换到${theme === 'dark' ? '深色' : '浅色'}模式`, 'success')
+  showToast(translateUi('uiMessages.m19a5ea071886', { value1: (theme === 'dark' ? translateUi('uiMessages.ma6b75d068032') : translateUi('uiMessages.maa0819dfc4d8')) }), 'success')
 }
 
 async function doCheckin() {
@@ -1150,7 +1152,7 @@ async function doCheckin() {
     
     if (!res.ok) {
       if (data.error === 'already_checked_in') {
-        showToast(data.message || '今天已经签到过了', 'info')
+        showToast(data.message || translateUi('uiMessages.m08880779e7bd'), 'info')
       } else {
         throw new Error(data.message || 'checkin_failed')
       }
@@ -1173,9 +1175,9 @@ async function doCheckin() {
       ledger.value = (await ledgerRes.json()).ledger
     }
     
-    showToast(data.message || '签到成功！', 'success')
+    showToast(data.message || translateUi('uiMessages.m836071e94f09'), 'success')
   } catch (e) {
-    showToast('签到失败，请重试', 'error')
+    showToast(translateUi('uiMessages.m673cb6100e6f'), 'error')
   } finally {
     checkinLoading.value = false
   }
@@ -1301,7 +1303,7 @@ async function downloadSelectedImageFromPreview(requireDirectory = false) {
   const url = getSelectedImageDownloadUrl()
   const filename = getSelectedImageDownloadFilename()
   if (!url) {
-    showToast('图片地址为空，无法下载', 'error')
+    showToast(translateUi('uiMessages.mdbd4d688f306'), 'error')
     return
   }
 
@@ -1309,20 +1311,20 @@ async function downloadSelectedImageFromPreview(requireDirectory = false) {
   try {
     if (requireDirectory) {
       if (!supportsDirectoryImageSave()) {
-        showToast('当前浏览器不支持选择保存路径，已使用默认下载', 'info')
+        showToast(translateUi('uiMessages.m4c1b995cce47'), 'info')
         await downloadFile(url, filename)
         return
       }
       historyImageDownloadDirectoryHandle.value = await window.showDirectoryPicker({ mode: 'readwrite' })
       await saveHistoryImageDownloadDirectoryHandle(historyImageDownloadDirectoryHandle.value)
       await saveSelectedImageToDirectory(historyImageDownloadDirectoryHandle.value)
-      showToast('图片已保存到所选路径', 'success')
+      showToast(translateUi('uiMessages.m597081555d27'), 'success')
       return
     }
 
     if (historyImageDownloadDirectoryHandle.value) {
       await saveSelectedImageToDirectory(historyImageDownloadDirectoryHandle.value)
-      showToast('图片已保存到上次选择的路径', 'success')
+      showToast(translateUi('uiMessages.mb11941a1da12'), 'success')
       return
     }
 
@@ -1332,7 +1334,7 @@ async function downloadSelectedImageFromPreview(requireDirectory = false) {
       return
     }
     console.error('预览图片保存失败:', e)
-    showToast('图片保存失败，请重试', 'error')
+    showToast(translateUi('uiMessages.m37a615195930'), 'error')
   } finally {
     historyImageSaving.value = false
   }
@@ -1416,15 +1418,15 @@ function isContentSafetyMsg(msg) {
 
 function formatVideoStatus(status) {
   const map = {
-    pending: '排队中',
-    processing: '生成中',
-    COMPLETED: '已完成',
-    SUCCESS: '已完成',
-    FAILURE: '生成失败',
-    failed: '生成失败',
-    completed: '已完成'
+    pending: translateUi('uiMessages.md6f766f2adf5'),
+    processing: translateUi('uiMessages.m969ef41f7e5b'),
+    COMPLETED: translateUi('canvas.assetPanel.tagCompleted'),
+    SUCCESS: translateUi('canvas.assetPanel.tagCompleted'),
+    FAILURE: translateUi('canvas.audioNode.generateFailed'),
+    failed: translateUi('canvas.audioNode.generateFailed'),
+    completed: translateUi('canvas.assetPanel.tagCompleted')
   }
-  return map[status] || status || '未知状态'
+  return map[status] || status || translateUi('uiMessages.mec0d9bdb00a4')
 }
 
 function displayVideoProgress(video) {
@@ -1473,7 +1475,7 @@ function closeVoucherModal() {
 
 async function submitVoucher() {
   if (!voucherCode.value || !voucherCode.value.trim()) {
-    voucherError.value = '请输入兑换码'
+    voucherError.value = translateUi('user.enterVoucherCode')
     return
   }
   
@@ -1496,46 +1498,38 @@ async function submitVoucher() {
       
       if (autoPurchaseResult.success) {
         // 自动购买成功 - 根据续费/升级/新购显示不同消息
-        let actionText = '已自动购买'
+        let actionText = translateUi('uiMessages.m70c8e4b8b88f')
         let detailText = ''
         if (autoPurchaseResult.isRenewal) {
-          actionText = '已自动续费'
-          detailText = `\n• 有效期延长：${autoPurchaseResult.durationDays}天\n• 累加积分：+${formatPoints(autoPurchaseResult.points)}\n• 并发限制：不变`
+          actionText = translateUi('uiMessages.m49b07b6addbb')
+          detailText = translateUi('uiMessages.mefbcdc2900ad', { value1: (autoPurchaseResult.durationDays), value2: (formatPoints(autoPurchaseResult.points)) })
         } else if (autoPurchaseResult.isUpgrade) {
-          actionText = '已自动升级'
-          detailText = `
-• 赠送积分：${formatPoints(autoPurchaseResult.points)}
-• 并发限制：${autoPurchaseResult.concurrentLimit}个
-• 有效期：${autoPurchaseResult.durationDays}天
-• 原套餐剩余价值已自动折抵`
+          actionText = translateUi('uiMessages.maf38b7044aa6')
+          detailText = translateUi('uiMessages.mc8fdf67881b2', { value1: (formatPoints(autoPurchaseResult.points)), value2: (autoPurchaseResult.concurrentLimit), value3: (autoPurchaseResult.durationDays) })
         } else {
-          detailText = `\n• 赠送积分：${formatPoints(autoPurchaseResult.points)}\n• 并发限制：${autoPurchaseResult.concurrentLimit}个\n• 有效期：${autoPurchaseResult.durationDays}天`
+          detailText = translateUi('uiMessages.m9cf21a388339', { value1: (formatPoints(autoPurchaseResult.points)), value2: (autoPurchaseResult.concurrentLimit), value3: (autoPurchaseResult.durationDays) })
         }
-        voucherSuccess.value = `✅ 兑换成功！获得 ${formatMoney(result.balance)} 余额
-
-🎉 ${actionText}「${autoPurchaseResult.packageName}」套餐${detailText}
-
-💰 剩余余额：${formatMoney(autoPurchaseResult.remainingBalance)}`
+        voucherSuccess.value = translateUi('uiMessages.m79f806059512', { value1: (formatMoney(result.balance)), value2: (actionText), value3: (autoPurchaseResult.packageName), value4: (detailText), value5: (formatMoney(autoPurchaseResult.remainingBalance)) })
         // 刷新用户信息
         await load()
       } else if (autoPurchaseResult.reason === 'no_package') {
         // 没有可购买的套餐
-        voucherSuccess.value = `✅ 兑换成功！获得 ${formatMoney(result.balance)} 余额\n\n💡 ${autoPurchaseResult.message}`
+        voucherSuccess.value = translateUi('uiMessages.mfe5a41b441af', { value1: (formatMoney(result.balance)), value2: (autoPurchaseResult.message) })
         await load() // 刷新用户信息
       } else if (autoPurchaseResult.reason === 'purchase_failed') {
         // 购买失败
-        voucherSuccess.value = `✅ 兑换成功！获得 ${formatMoney(result.balance)} 余额\n\n⚠️ 自动购买套餐失败：${autoPurchaseResult.message}\n请手动前往套餐页面购买`
+        voucherSuccess.value = translateUi('uiMessages.m8b4e0ba801e8', { value1: (formatMoney(result.balance)), value2: (autoPurchaseResult.message) })
         await load() // 刷新用户信息
       } else {
         // 其他情况（只兑换了积分没有余额等）
-        voucherSuccess.value = result.message || `成功兑换 ${formatPoints(result.points)} 积分！`
+        voucherSuccess.value = result.message || translateUi('uiMessages.m54d0432acd4c', { value1: (formatPoints(result.points)) })
         await load()
       }
     } else if (result.points > 0) {
-      voucherSuccess.value = `✅ 成功兑换 ${formatPoints(result.points)} 积分！`
+      voucherSuccess.value = translateUi('uiMessages.m9af7b466b352', { value1: (formatPoints(result.points)) })
       await load() // 刷新用户信息
     } else {
-      voucherSuccess.value = result.message || '兑换成功！'
+      voucherSuccess.value = result.message || translateUi('voucher.redeemSuccess')
       await load() // 刷新用户信息
     }
     
@@ -1547,7 +1541,7 @@ async function submitVoucher() {
       closeVoucherModal()
     }, 5000)
   } catch (e) {
-    voucherError.value = e.message || '兑换失败，请检查兑换码是否正确'
+    voucherError.value = e.message || translateUi('uiMessages.m5fbc20de118c')
   } finally {
     voucherLoading.value = false
   }
@@ -1557,7 +1551,7 @@ async function submitVoucher() {
 async function tryAutoPurchasePackage(voucherBalance) {
   try {
     if (!token) {
-      return { success: false, reason: 'no_token', message: '未登录' }
+      return { success: false, reason: 'no_token', message: translateUi('uiMessages.mc1f658373079') }
     }
     
     console.log('[User/tryAutoPurchasePackage] 兑换券面值:', voucherBalance, '分 (' + formatMoney(voucherBalance) + ')')
@@ -1569,7 +1563,7 @@ async function tryAutoPurchasePackage(voucherBalance) {
     })
     if (!pkgRes.ok) {
       console.log('[User/tryAutoPurchasePackage] 获取套餐列表失败')
-      return { success: false, reason: 'fetch_failed', message: '获取套餐列表失败' }
+      return { success: false, reason: 'fetch_failed', message: translateUi('uiMessages.m570ee0e20eed') }
     }
     const pkgData = await pkgRes.json()
     const packages = pkgData.packages || []
@@ -1577,7 +1571,7 @@ async function tryAutoPurchasePackage(voucherBalance) {
     console.log('[User/tryAutoPurchasePackage] 套餐列表:', packages.map(p => ({ name: p.name, price: p.price, type: p.type })))
     
     if (packages.length === 0) {
-      return { success: false, reason: 'no_package', message: '暂无可用套餐' }
+      return { success: false, reason: 'no_package', message: translateUi('packages.noPackages') }
     }
     
     // 获取当前用户套餐
@@ -1643,13 +1637,13 @@ async function tryAutoPurchasePackage(voucherBalance) {
       })
       const minSameOrHigherPrice = sameOrHigherPackages.reduce((min, p) => (!min || p.price < min.price) ? p : min, null)?.price || 0
       
-      let hint = '兑换券面值不足以购买套餐'
+      let hint = translateUi('uiMessages.mf61291b2b2f3')
       if (allDowngrade) {
-        hint = `您当前是${activePackage.package_name}，兑换券面值只能购买更低级别套餐，不支持降级`
+        hint = translateUi('uiMessages.m880343e40a8a', { value1: (activePackage.package_name) })
       } else if (minSameOrHigherPrice > 0 && voucherBalance < minSameOrHigherPrice) {
-        hint = `续费或升级套餐最低需要 ${formatMoney(minSameOrHigherPrice)}，兑换券面值 ${formatMoney(voucherBalance)} 不足`
+        hint = translateUi('uiMessages.mce127c09aa4e', { value1: (formatMoney(minSameOrHigherPrice)), value2: (formatMoney(voucherBalance)) })
       } else if (minPrice > 0 && voucherBalance < minPrice) {
-        hint = `最便宜的套餐需要 ${formatMoney(minPrice)}，兑换券面值 ${formatMoney(voucherBalance)}`
+        hint = translateUi('uiMessages.m0616278584c2', { value1: (formatMoney(minPrice)), value2: (formatMoney(voucherBalance)) })
       }
       return { success: false, reason: 'no_package', message: hint }
     }
@@ -1706,11 +1700,11 @@ async function tryAutoPurchasePackage(voucherBalance) {
         remainingBalance: remainingBalance
       }
     } else {
-      return { success: false, reason: 'purchase_failed', message: purchaseData.message || '购买失败' }
+      return { success: false, reason: 'purchase_failed', message: purchaseData.message || translateUi('uiMessages.m0f18b9ba38bf') }
     }
   } catch (e) {
     console.error('[User/tryAutoPurchasePackage] 异常:', e)
-    return { success: false, reason: 'error', message: e.message || '购买过程出错' }
+    return { success: false, reason: 'error', message: e.message || translateUi('uiMessages.m7707369dc11d') }
   }
 }
 
@@ -1726,11 +1720,11 @@ async function claimMilestoneReward(milestone) {
     
     if (!res.ok) {
       const errorData = await res.json()
-      throw new Error(errorData.error || '领取失败')
+      throw new Error(errorData.error || translateUi('uiMessages.m2c6aa560ba19'))
     }
     
     const data = await res.json()
-    showToast(`🎉 成功领取 ${formatPoints(data.points_awarded)} 积分奖励！`, 'success')
+    showToast(translateUi('uiMessages.m3f980c20452f', { value1: (formatPoints(data.points_awarded)) }), 'success')
     
     // 刷新用户信息和邀请进度
     await load()
@@ -1739,11 +1733,11 @@ async function claimMilestoneReward(milestone) {
     window.dispatchEvent(new CustomEvent('user-info-updated'))
   } catch (e) {
     if (e.message === 'already_claimed') {
-      showToast('该奖励已经领取过了', 'error')
+      showToast(translateUi('uiMessages.mb1af45131066'), 'error')
     } else if (e.message === 'milestone_not_reached') {
-      showToast('还未达到该邀请人数', 'error')
+      showToast(translateUi('uiMessages.m15abdf836f7a'), 'error')
     } else {
-      showToast(e.message || '领取失败，请重试', 'error')
+      showToast(e.message || translateUi('uiMessages.mcf5c4d2f4720'), 'error')
     }
   }
 }
@@ -1775,19 +1769,19 @@ async function submitTransfer() {
   const yuan = parseFloat(transferForm.value.amount)
   
   if (!yuan || yuan <= 0) {
-    transferError.value = '请输入有效的金额'
+    transferError.value = translateUi('uiMessages.m66f60bc8a056')
     return
   }
   
   if (yuan < 1) {
-    transferError.value = `最低划转金额为1${currencyUnitLabel.value}`
+    transferError.value = translateUi('uiMessages.ma05f75ffcb36', { value1: (currencyUnitLabel.value) })
     return
   }
   
   const amountInCents = Math.floor(yuan * 100) // 转换为分
   
   if (me.value.balance < amountInCents) {
-    transferError.value = `余额不足，当前余额 ${(me.value.balance / 100).toFixed(2)} ${currencyUnitLabel.value}`
+    transferError.value = translateUi('uiMessages.m0da544c506a5', { value1: ((me.value.balance / 100).toFixed(2)), value2: (currencyUnitLabel.value) })
     return
   }
   
@@ -1817,10 +1811,10 @@ async function submitTransfer() {
     const data = await res.json()
     
     if (!res.ok) {
-      throw new Error(data.message || '划转失败')
+      throw new Error(data.message || translateUi('uiMessages.m035abb665e84'))
     }
     
-    transferSuccess.value = data.message || `成功划转 ${yuan.toFixed(2)} ${currencyUnitLabel.value} 为 ${formatPoints(data.points)} 积分`
+    transferSuccess.value = data.message || translateUi('uiMessages.m0db3c48b482c', { value1: (yuan.toFixed(2)), value2: (currencyUnitLabel.value), value3: (formatPoints(data.points)) })
     
     // 立即使用API返回的最新数据更新本地状态（无需再次请求）
     if (data.newBalance !== undefined && data.newPoints !== undefined) {
@@ -1862,9 +1856,9 @@ async function submitTransfer() {
     
   } catch (e) {
     if (e.name === 'AbortError') {
-      transferError.value = '请求超时，请检查网络连接或稍后重试'
+      transferError.value = translateUi('uiMessages.m98d83d7cd4bf')
     } else {
-      transferError.value = e.message || '划转失败，请重试'
+      transferError.value = e.message || translateUi('user.transferFailed')
     }
   } finally {
     transferLoading.value = false
@@ -1896,7 +1890,7 @@ function handleRecipientSearch() {
   if (query.length < 3) {
     recipientSuggestions.value = []
     if (query.length > 0 && query.length < 3) {
-      pointsTransferForm.value.recipientError = '请至少输入3个字符'
+      pointsTransferForm.value.recipientError = translateUi('uiMessages.m4587b57f554b')
     }
     return
   }
@@ -1912,18 +1906,18 @@ function handleRecipientSearch() {
       const res = await fetch(getApiUrl(`/api/user/search-users?q=${encodeURIComponent(query)}`), { headers })
 
       if (!res.ok) {
-        throw new Error('搜索失败')
+        throw new Error(translateUi('uiMessages.m6b5dde6e3a59'))
       }
 
       const data = await res.json()
       recipientSuggestions.value = data.users || []
 
       if (data.users.length === 0) {
-        pointsTransferForm.value.recipientError = '未找到匹配的用户'
+        pointsTransferForm.value.recipientError = translateUi('uiMessages.me939c7818e0d')
       }
     } catch (e) {
       console.error('[search-users] error:', e)
-      pointsTransferForm.value.recipientError = '搜索失败，请重试'
+      pointsTransferForm.value.recipientError = translateUi('uiMessages.md7b6b97f66b2')
       recipientSuggestions.value = []
     }
   }, 300)
@@ -1952,19 +1946,19 @@ async function confirmTransfer() {
   pointsTransferForm.value.amountError = ''
 
   if (!pointsTransferForm.value.selectedRecipient) {
-    pointsTransferForm.value.recipientError = '请选择收款人'
+    pointsTransferForm.value.recipientError = translateUi('uiMessages.m6c10a219be9f')
     return
   }
 
   const rawAmount = Number(pointsTransferForm.value.amount)
   const amount = Number.isFinite(rawAmount) ? Math.round(rawAmount * 100) / 100 : 0
   if (amount <= 0) {
-    pointsTransferForm.value.amountError = '转让金额必须大于0'
+    pointsTransferForm.value.amountError = translateUi('uiMessages.m4f0f7eb286c2')
     return
   }
 
   if (amount > (me.value?.points || 0)) {
-    pointsTransferForm.value.amountError = '积分不足'
+    pointsTransferForm.value.amountError = translateUi('imageGen.insufficientPoints')
     return
   }
 
@@ -1999,14 +1993,14 @@ async function executeTransfer() {
     const data = await res.json()
 
     if (!res.ok) {
-      throw new Error(data.message || data.error || '转让失败')
+      throw new Error(data.message || data.error || translateUi('uiMessages.m078a1a9b0281'))
     }
 
     // 成功提示 - 使用美观的 Toast 通知
     showTransferToast(
       'success',
-      '转让成功',
-      data.message || `成功转让 ${formatPoints(amount)} 积分给 ${pointsTransferForm.value.selectedRecipient.username}`,
+      translateUi('uiMessages.mc5c09175e3b6'),
+      data.message || translateUi('uiMessages.md9503edda07f', { value1: (formatPoints(amount)), value2: (pointsTransferForm.value.selectedRecipient.username) }),
       4000
     )
 
@@ -2025,7 +2019,7 @@ async function executeTransfer() {
 
   } catch (e) {
     console.error('[transfer-points] error:', e)
-    showTransferToast('error', '转让失败', e.message, 4000)
+    showTransferToast('error', translateUi('uiMessages.m078a1a9b0281'), e.message, 4000)
   } finally {
     transferring.value = false
   }
@@ -2040,7 +2034,7 @@ async function openRechargeModal() {
   selectedRechargeCard.value = null
   try {
     const response = await fetch(getApiUrl('/api/recharge-cards'), { headers: getTenantHeaders() })
-    if (!response.ok) throw new Error('充值卡片加载失败')
+    if (!response.ok) throw new Error(translateUi('uiMessages.mc54d2d8aaf79'))
     rechargeCards.value = (await response.json()).recharge_cards || []
   } catch (e) { rechargeCards.value = []; rechargeError.value = e.message }
 }
@@ -2086,7 +2080,7 @@ function getFinalRechargeAmount() {
 async function submitRecharge() {
   const amount = getFinalRechargeAmount()
   if (amount < rechargeLimits.value.minAmount * 100 || amount > rechargeLimits.value.maxAmount * 100) {
-    rechargeError.value = `充值金额须在 ${rechargeLimits.value.minAmount}–${rechargeLimits.value.maxAmount}${currencyUnitLabel.value}之间`
+    rechargeError.value = translateUi('uiMessages.m726e1c06b4a0', { value1: (rechargeLimits.value.minAmount), value2: (rechargeLimits.value.maxAmount), value3: (currencyUnitLabel.value) })
     return
   }
   const input = { kind: 'recharge', amount, ...(selectedRechargeCard.value ? { recharge_card_id: selectedRechargeCard.value.id } : {}) }
@@ -2147,11 +2141,11 @@ async function loadBillOrders() {
 // 格式化订单状态
 function formatOrderStatus(status) {
   const map = {
-    'pending': '待支付',
-    'paid': '已支付',
-    'failed': '支付失败',
-    'cancelled': '已取消',
-    'expired': '已过期'
+    'pending': translateUi('uiMessages.m25f4ba580022'),
+    'paid': translateUi('uiMessages.m0a52f8af1bda'),
+    'failed': translateUi('packages.paymentFailed'),
+    'cancelled': translateUi('uiMessages.ma37778f17c5f'),
+    'expired': translateUi('packages.expired')
   }
   return map[status] || status
 }
@@ -2169,7 +2163,7 @@ function getOrderStatusColor(status) {
 }
 
 async function deleteImage(imageId) {
-  if (!confirm('确定要删除这张图片吗？')) return
+  if (!confirm(translateUi('uiMessages.m41248a1fc902'))) return
   
   try {
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
@@ -2181,14 +2175,14 @@ async function deleteImage(imageId) {
     if (!res.ok) throw new Error('delete_failed')
     
     recentImages.value = recentImages.value.filter(img => img.id !== imageId)
-    showToast('图片已删除', 'success')
+    showToast(translateUi('uiMessages.m74823b7d2807'), 'success')
   } catch (e) {
-    showToast('删除失败，请重试', 'error')
+    showToast(translateUi('uiMessages.m2026b0d30e91'), 'error')
   }
 }
 
 async function deleteVideo(videoId) {
-  if (!confirm('确定要删除这个视频吗？')) return
+  if (!confirm(translateUi('uiMessages.mfc1a83cd712e'))) return
 
   try {
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
@@ -2201,20 +2195,20 @@ async function deleteVideo(videoId) {
     
     recentVideos.value = recentVideos.value.filter(v => v.id !== videoId)
     videosTotal.value = Math.max(0, videosTotal.value - 1)
-    showToast('视频已删除', 'success')
+    showToast(translateUi('uiMessages.m97f7f74b0d07'), 'success')
   } catch (e) {
-    showToast('删除失败，请重试', 'error')
+    showToast(translateUi('uiMessages.m2026b0d30e91'), 'error')
   }
 }
 
 // 计算属性
 const memberLevel = computed(() => {
-  if (!stats.value) return { name: '新手', icon: '🌱', color: 'gray' }
+  if (!stats.value) return { get name() { return translateUi('uiMessages.mdcfce30c4577') }, icon: '🌱', color: 'gray' }
   const points = stats.value.totalPointsEarned
-  if (points >= 1000) return { name: '大师', icon: '👑', color: 'purple' }
-  if (points >= 500) return { name: '专家', icon: '💎', color: 'blue' }
-  if (points >= 100) return { name: '熟练', icon: '⭐', color: 'green' }
-  return { name: '新手', icon: '🌱', color: 'gray' }
+  if (points >= 1000) return { get name() { return translateUi('uiMessages.mb651da7324da') }, icon: '👑', color: 'purple' }
+  if (points >= 500) return { get name() { return translateUi('uiMessages.mc3a73c5eecea') }, icon: '💎', color: 'blue' }
+  if (points >= 100) return { get name() { return translateUi('uiMessages.m624e85f61389') }, icon: '⭐', color: 'green' }
+  return { get name() { return translateUi('uiMessages.mdcfce30c4577') }, icon: '🌱', color: 'gray' }
 })
 
 const daysRegistered = computed(() => {
@@ -2239,14 +2233,14 @@ function formatExpireTime(timestamp) {
   const now = Date.now()
   const diff = timestamp - now
   
-  if (diff <= 0) return '已过期'
+  if (diff <= 0) return translateUi('user.expired')
   
   const days = Math.floor(diff / (24 * 60 * 60 * 1000))
   const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000))
   
-  if (days > 0) return `${days}天`
-  if (hours > 0) return `${hours}小时`
-  return '即将过期'
+  if (days > 0) return translateUi('uiMessages.mb4baa30d48ff', { value1: (days) })
+  if (hours > 0) return translateUi('uiMessages.mf512482fac29', { value1: (hours) })
+  return translateUi('uiMessages.mf37e7d89f0d9')
 }
 
 // 检查并处理支付返回后的刷新
@@ -2284,7 +2278,7 @@ async function checkPaymentReturn() {
       }
       
       // 显示成功提示
-      successMessage.value = '充值成功！余额已到账'
+      successMessage.value = translateUi('uiMessages.m25335f32743f')
       setTimeout(() => {
         successMessage.value = ''
       }, 5000)
@@ -2326,7 +2320,7 @@ onMounted(async () => {
       if (configData.voucher_external_link) {
         externalLinkConfig.value = {
           enabled: !!configData.voucher_external_link.enabled,
-          button_text: configData.voucher_external_link.button_text || '获取兑换券',
+          button_text: configData.voucher_external_link.button_text || translateUi('voucher.getVoucher'),
           url: configData.voucher_external_link.url || '',
           open_in_new_tab: configData.voucher_external_link.open_in_new_tab !== false
         }
@@ -2442,7 +2436,7 @@ onUnmounted(() => {
                 <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{{ me.username }}</h1>
                 <p class="text-slate-500 dark:text-slate-400">{{ me.email }}</p>
                 <p class="text-sm text-slate-400 dark:text-slate-500 mt-1">
-                  已加入 {{ daysRegistered }} 天
+                  {{ translateUi('uiMessages.m46d5fb107bd0', { value1: (daysRegistered) }) }}
                 </p>
               </div>
             </div>
@@ -2450,10 +2444,10 @@ onUnmounted(() => {
             <!-- 快速操作按钮 -->
             <div class="flex space-x-3 mt-4 md:mt-0">
               <button @click="showSettingsModal = true" class="btn-secondary px-4 py-2 text-sm">
-                ⚙️ 设置
+                {{ translateUi('uiMessages.m6cebf2b41be8') }}
               </button>
               <button @click="$router.push('/')" class="btn-primary px-4 py-2 text-sm">
-                🎨 开始创作
+                {{ translateUi('uiMessages.m9929f3cdfaf0') }}
               </button>
             </div>
           </div>
@@ -2469,25 +2463,25 @@ onUnmounted(() => {
               <span class="text-2xl">💎</span>
             </div>
             <div>
-              <p class="text-sm font-medium text-slate-600 dark:text-slate-400">套餐积分</p>
+              <p class="text-sm font-medium text-slate-600 dark:text-slate-400">{{ translateUi('imageGen.packagePoints') }}</p>
               <p v-if="me.package_points_expires_at && me.package_points_expires_at > Date.now()" class="text-xs text-amber-600 dark:text-amber-400">
-                {{ formatExpireTime(me.package_points_expires_at) }}后过期
+                {{ translateUi('uiMessages.m0661973a2ebb', { value1: (formatExpireTime(me.package_points_expires_at)) }) }}
               </p>
             </div>
           </div>
           
           <div class="bg-white dark:bg-dark-700 rounded-lg p-4 space-y-3">
             <div class="flex items-center justify-between">
-              <span class="text-sm text-slate-600 dark:text-slate-400 flex-shrink-0">已获得</span>
+              <span class="text-sm text-slate-600 dark:text-slate-400 flex-shrink-0">{{ translateUi('uiMessages.ma3b8cf736df2') }}</span>
               <span class="text-lg font-bold text-green-600 dark:text-green-400 truncate min-w-0 ml-2 text-right" :title="'+' + formatPoints(toPointsNumber(pointsStats.package.earned))">+{{ formatPoints(toPointsNumber(pointsStats.package.earned)) }}</span>
             </div>
             <div class="flex items-center justify-between">
-              <span class="text-sm text-slate-600 dark:text-slate-400 flex-shrink-0">已使用</span>
+              <span class="text-sm text-slate-600 dark:text-slate-400 flex-shrink-0">{{ translateUi('uiMessages.m9845c165151d') }}</span>
               <span class="text-lg font-bold text-red-600 dark:text-red-400 truncate min-w-0 ml-2 text-right" :title="'-' + formatPoints(toPointsNumber(pointsStats.package.spent))">-{{ formatPoints(toPointsNumber(pointsStats.package.spent)) }}</span>
             </div>
             <div class="border-t-2 border-purple-200 dark:border-purple-700 pt-3">
               <div class="flex items-center justify-between">
-                <span class="text-base font-semibold text-purple-700 dark:text-purple-300 flex-shrink-0">当前余额</span>
+                <span class="text-base font-semibold text-purple-700 dark:text-purple-300 flex-shrink-0">{{ translateUi('uiMessages.m32cdac4f29d7') }}</span>
                 <span class="text-3xl font-bold text-purple-600 dark:text-purple-400 truncate min-w-0 ml-2 text-right" :title="formatPoints(toPointsNumber(me?.package_points))">{{ formatPoints(toPointsNumber(me?.package_points)) }}</span>
               </div>
             </div>
@@ -2501,26 +2495,26 @@ onUnmounted(() => {
               <span class="text-2xl">⭐</span>
             </div>
             <div>
-              <p class="text-sm font-medium text-slate-600 dark:text-slate-400">永久积分</p>
-              <p class="text-xs text-purple-600 dark:text-purple-400">{{ me.is_subuser ? '含主用户分配积分' : '永不过期' }}</p>
+              <p class="text-sm font-medium text-slate-600 dark:text-slate-400">{{ translateUi('imageGen.permanentPoints') }}</p>
+              <p class="text-xs text-purple-600 dark:text-purple-400">{{ me.is_subuser ? translateUi('uiMessages.m69f1b2587742') : translateUi('packages.neverExpires') }}</p>
             </div>
           </div>
           
           <div class="bg-white dark:bg-dark-700 rounded-lg p-4 space-y-3">
             <div class="flex items-center justify-between">
-              <span class="text-sm text-slate-600 dark:text-slate-400 flex-shrink-0">已获得</span>
+              <span class="text-sm text-slate-600 dark:text-slate-400 flex-shrink-0">{{ translateUi('uiMessages.ma3b8cf736df2') }}</span>
               <span class="text-lg font-bold text-green-600 dark:text-green-400 truncate min-w-0 ml-2 text-right" :title="'+' + formatPoints(toPointsNumber(pointsStats.permanent.earned))">+{{ formatPoints(toPointsNumber(pointsStats.permanent.earned)) }}</span>
             </div>
             <div class="flex items-center justify-between">
-              <span class="text-sm text-slate-600 dark:text-slate-400 flex-shrink-0">已使用</span>
+              <span class="text-sm text-slate-600 dark:text-slate-400 flex-shrink-0">{{ translateUi('uiMessages.m9845c165151d') }}</span>
               <span class="text-lg font-bold text-red-600 dark:text-red-400 truncate min-w-0 ml-2 text-right" :title="'-' + formatPoints(toPointsNumber(pointsStats.permanent.spent))">-{{ formatPoints(toPointsNumber(pointsStats.permanent.spent)) }}</span>
             </div>
             <div class="border-t-2 border-blue-200 dark:border-blue-700 pt-3">
               <div class="flex items-center justify-between">
-                <span class="text-base font-semibold text-blue-700 dark:text-blue-300 flex-shrink-0">当前余额</span>
+                <span class="text-base font-semibold text-blue-700 dark:text-blue-300 flex-shrink-0">{{ translateUi('uiMessages.m32cdac4f29d7') }}</span>
                 <span class="text-3xl font-bold text-blue-600 dark:text-blue-400 truncate min-w-0 ml-2 text-right" :title="formatPoints(getPermanentUserPoints(me))">{{ formatPoints(getPermanentUserPoints(me)) }}</span>
               </div>
-              <p v-if="me.is_subuser" class="text-xs text-slate-500 dark:text-slate-400 mt-2">其中分配 {{ formatPoints(me.subuser_points || 0) }}，按分配有效期使用；未消费部分可由主用户回收。</p>
+              <p v-if="me.is_subuser" class="text-xs text-slate-500 dark:text-slate-400 mt-2">{{ translateUi('uiMessages.m737109751ae2', { value1: (formatPoints(me.subuser_points || 0)) }) }}</p>
             </div>
           </div>
         </div>
@@ -2533,18 +2527,18 @@ onUnmounted(() => {
             </div>
             <div class="text-right">
               <p class="text-3xl font-bold text-green-600 dark:text-green-400">{{ formatMoney(me.balance) }}</p>
-              <p class="text-xs text-slate-500 dark:text-slate-400">可用余额</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.mffcbda29a59a') }}</p>
             </div>
           </div>
           <div class="flex items-center justify-between mb-3">
-            <p class="text-sm font-medium text-slate-700 dark:text-slate-300">账户余额</p>
+            <p class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ translateUi('packages.accountBalance') }}</p>
             <button
               @click="load"
               :disabled="loading"
               class="text-xs px-2 py-1 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 rounded transition-colors disabled:opacity-50"
-              title="刷新余额"
+              :title="translateUi('uiMessages.m6a676e75a839')"
             >
-              🔄 {{ loading ? '刷新中...' : '刷新' }}
+              🔄 {{ loading ? translateUi('uiMessages.m609140d9c661') : translateUi('common.refresh') }}
             </button>
           </div>
           <div class="space-y-2">
@@ -2552,13 +2546,13 @@ onUnmounted(() => {
               @click="openTransferModal"
               class="w-full px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm font-medium rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-300 shadow-md hover:shadow-lg"
             >
-              💎 划转到积分
+              {{ translateUi('uiMessages.m116dd2a3df6e') }}
             </button>
             <button
               @click="openRechargeModal"
               class="w-full px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-medium rounded-lg hover:from-amber-600 hover:to-orange-600 transition-all duration-300 shadow-md hover:shadow-lg"
             >
-              💳 立即充值
+              {{ translateUi('uiMessages.mcdc129558175') }}
             </button>
           </div>
         </div>
@@ -2571,10 +2565,10 @@ onUnmounted(() => {
             </div>
             <div class="text-right min-w-0 flex-1 ml-3 overflow-hidden">
               <p class="text-3xl font-bold text-white truncate" :title="formatPoints(getTotalUserPoints(me))">{{ formatPoints(getTotalUserPoints(me)) }}</p>
-              <p class="text-xs text-white/80">套餐 + 永久（有效）</p>
+              <p class="text-xs text-white/80">{{ translateUi('uiMessages.mdd4909c091ff') }}</p>
             </div>
           </div>
-          <p class="text-sm font-medium text-white">总积分</p>
+          <p class="text-sm font-medium text-white">{{ translateUi('uiMessages.m26849e6fee0c') }}</p>
         </div>
       </div>
 
@@ -2587,8 +2581,8 @@ onUnmounted(() => {
               <span class="text-2xl">🖼️</span>
             </div>
             <div class="flex-1">
-              <p class="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">生图数量</p>
-              <p class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ stats?.totalImages || 0 }} <span class="text-sm font-normal text-slate-500">张</span></p>
+              <p class="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">{{ translateUi('uiMessages.m4eb58a7a05cc') }}</p>
+              <p class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ stats?.totalImages || 0 }} <span class="text-sm font-normal text-slate-500">{{ translateUi('uiMessages.mf56a049fcc23') }}</span></p>
             </div>
           </div>
         </div>
@@ -2600,8 +2594,8 @@ onUnmounted(() => {
               <span class="text-2xl">🎬</span>
             </div>
             <div class="flex-1">
-              <p class="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">生视频数量</p>
-              <p class="text-2xl font-bold text-rose-600 dark:text-rose-400">{{ stats?.totalVideos || 0 }} <span class="text-sm font-normal text-slate-500">段</span></p>
+              <p class="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">{{ translateUi('uiMessages.m2eef611b9f07') }}</p>
+              <p class="text-2xl font-bold text-rose-600 dark:text-rose-400">{{ stats?.totalVideos || 0 }} <span class="text-sm font-normal text-slate-500">{{ translateUi('uiMessages.m0477dbbdee99') }}</span></p>
             </div>
           </div>
         </div>
@@ -2613,8 +2607,8 @@ onUnmounted(() => {
               <span class="text-2xl">🎁</span>
             </div>
             <div class="flex-1">
-              <p class="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">邀请好友</p>
-              <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ stats?.totalInvites || 0 }} <span class="text-sm font-normal text-slate-500">人</span></p>
+              <p class="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">{{ translateUi('user.inviteShort') }}</p>
+              <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ stats?.totalInvites || 0 }} <span class="text-sm font-normal text-slate-500">{{ translateUi('uiMessages.m50f5d65d5729') }}</span></p>
             </div>
           </div>
         </div>
@@ -2631,9 +2625,9 @@ onUnmounted(() => {
                 <span class="text-3xl">💎</span>
               </div>
               <div>
-                <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-1">购买套餐</h3>
+                <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-1">{{ translateUi('nav.packages') }}</h3>
                 <p class="text-sm text-slate-600 dark:text-slate-400">
-                  升级套餐，提升并发能力
+                  {{ translateUi('uiMessages.m27234624854f') }}
                 </p>
               </div>
             </div>
@@ -2656,9 +2650,9 @@ onUnmounted(() => {
                 <span class="text-3xl">🎫</span>
               </div>
               <div>
-                <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-1">兑换券入口</h3>
+                <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-1">{{ translateUi('nav.voucher') }}</h3>
                 <p class="text-sm text-slate-600 dark:text-slate-400">
-                  输入兑换码获取积分
+                  {{ translateUi('uiMessages.m2c45ee99d7fc') }}
                 </p>
               </div>
             </div>
@@ -2666,7 +2660,7 @@ onUnmounted(() => {
             <!-- 右侧：按钮 -->
           <div class="flex items-center">
             <button class="px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300">
-              立即兑换
+              {{ translateUi('user.redeemNow') }}
             </button>
           </div>
         </div>
@@ -2682,18 +2676,18 @@ onUnmounted(() => {
               <span class="text-3xl">📅</span>
             </div>
             <div>
-              <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-1">每日签到</h3>
+              <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-1">{{ translateUi('user.dailyCheckin') }}</h3>
               <div class="flex items-center space-x-4 text-sm">
                 <div class="flex items-center space-x-1">
-                  <span class="text-slate-600 dark:text-slate-400">连续</span>
+                  <span class="text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.m53b333e7b09d') }}</span>
                   <span class="font-bold text-orange-600 dark:text-orange-400">{{ checkinStatus.consecutiveDays }}</span>
-                  <span class="text-slate-600 dark:text-slate-400">天</span>
+                  <span class="text-slate-600 dark:text-slate-400">{{ translateUi('time.days') }}</span>
                 </div>
                 <div class="w-px h-4 bg-slate-300 dark:bg-slate-600"></div>
                 <div class="flex items-center space-x-1">
-                  <span class="text-slate-600 dark:text-slate-400">累计</span>
+                  <span class="text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.m23585a20337f') }}</span>
                   <span class="font-bold text-orange-600 dark:text-orange-400">{{ checkinStatus.totalDays }}</span>
-                  <span class="text-slate-600 dark:text-slate-400">天</span>
+                  <span class="text-slate-600 dark:text-slate-400">{{ translateUi('time.days') }}</span>
                 </div>
               </div>
             </div>
@@ -2710,9 +2704,9 @@ onUnmounted(() => {
               'bg-gray-400': checkinStatus.hasCheckedInToday
             }"
           >
-            <span v-if="checkinLoading">签到中...</span>
-            <span v-else-if="checkinStatus.hasCheckedInToday">✓ 今日已签到</span>
-            <span v-else>🎉 立即签到 +1积分</span>
+            <span v-if="checkinLoading">{{ translateUi('uiMessages.m8b95ce78c489') }}</span>
+            <span v-else-if="checkinStatus.hasCheckedInToday">{{ translateUi('uiMessages.m143e7826da46') }}</span>
+            <span v-else>{{ translateUi('uiMessages.m4925bd061bf7') }}</span>
           </button>
         </div>
 
@@ -2720,7 +2714,7 @@ onUnmounted(() => {
         <div class="mt-4 pt-4 border-t border-orange-200 dark:border-orange-800">
           <p class="text-xs text-slate-600 dark:text-slate-400 flex items-center">
             <span class="mr-2">💡</span>
-            每天签到可获得1积分奖励，连续签到越多天，积分积累越快！每日0点重置签到状态。
+            {{ translateUi('uiMessages.mcbce2820a860') }}
           </p>
         </div>
       </div>
@@ -2732,44 +2726,44 @@ onUnmounted(() => {
             @click="activeTab = 'overview'"
             :class="['tab-button', { active: activeTab === 'overview' }]"
           >
-            📊 概览
+            {{ translateUi('uiMessages.mb635a13efecb') }}
           </button>
           <button
             @click="activeTab = 'generation-records'; generationRecordTab = 'images'"
             :class="['tab-button', { active: activeTab === 'generation-records' }]"
           >
-            🗂️ 我的生成记录
+            {{ translateUi('uiMessages.m353b914156c6') }}
           </button>
           <button
             @click="activeTab = 'points'"
             :class="['tab-button', { active: activeTab === 'points' }]"
           >
-            💰 积分详情
+            {{ translateUi('uiMessages.m2938d6870a73') }}
           </button>
           <button
             @click="activeTab = 'bills'; loadBillOrders()"
             :class="['tab-button', { active: activeTab === 'bills' }]"
           >
-            📋 账单中心
+            {{ translateUi('uiMessages.ma4c734da1234') }}
           </button>
           <button
             @click="activeTab = 'invite'"
             :class="['tab-button', { active: activeTab === 'invite' }]"
           >
-            🎁 邀请中心
+            {{ translateUi('uiMessages.m9bcf101e1ace') }}
           </button>
           <button
             v-if="me?.referral_enabled"
             @click="activeTab = 'referral'; loadReferralData()"
             :class="['tab-button', { active: activeTab === 'referral' }]"
           >
-            💰 返利中心
+            {{ translateUi('uiMessages.m07eb9f15f061') }}
           </button>
           <button
             @click="activeTab = 'community'; switchCommunitySubTab(communitySubTab)"
             :class="['tab-button', { active: activeTab === 'community' }]"
           >
-            🌐 社区作品集
+            {{ translateUi('uiMessages.m340e180ae22c') }}
           </button>
         </div>
       </div>
@@ -2783,10 +2777,10 @@ onUnmounted(() => {
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center">
                 <span class="mr-2">🖼️</span>
-                最近作品
+                {{ translateUi('uiMessages.m71f8135a4eac') }}
               </h3>
               <button @click="activeTab = 'generation-records'; generationRecordTab = 'images'" class="text-sm text-primary-600 hover:text-primary-700">
-                查看全部 →
+                {{ translateUi('uiMessages.m5c5e7ecb6133') }}
               </button>
             </div>
             
@@ -2794,7 +2788,7 @@ onUnmounted(() => {
               <div class="w-16 h-16 mx-auto mb-3 bg-slate-100 dark:bg-dark-600 rounded-full flex items-center justify-center">
                 <span class="text-2xl">🎨</span>
               </div>
-              <p class="text-slate-500 dark:text-slate-400 text-sm">还没有生成作品</p>
+              <p class="text-slate-500 dark:text-slate-400 text-sm">{{ translateUi('uiMessages.me1f1b277b0cf') }}</p>
             </div>
             
             <div v-else class="grid grid-cols-3 gap-2">
@@ -2807,7 +2801,7 @@ onUnmounted(() => {
                 <CachedImage
                   :src="getImageDisplayUrl(image)"
                   :placeholder="makeHistoryImagePlaceholder(image)"
-                  :alt="image.prompt || '历史图片'"
+                  :alt="image.prompt || translateUi('uiMessages.m8e0a6fa69dca')"
                   wrapper-class="w-full h-full"
                   img-class="w-full h-full object-contain"
                   loading="lazy"
@@ -2821,15 +2815,15 @@ onUnmounted(() => {
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center">
                 <span class="mr-2">📈</span>
-                积分动态
+                {{ translateUi('uiMessages.md634d7bb0c5b') }}
               </h3>
               <button @click="activeTab = 'points'" class="text-sm text-primary-600 hover:text-primary-700">
-                查看详情 →
+                {{ translateUi('uiMessages.m786577183846') }}
               </button>
             </div>
             
             <div v-if="ledger.length === 0" class="text-center py-8">
-              <p class="text-slate-500 dark:text-slate-400 text-sm">暂无积分记录</p>
+              <p class="text-slate-500 dark:text-slate-400 text-sm">{{ translateUi('uiMessages.m23069a877b5d') }}</p>
             </div>
             
             <div v-else class="space-y-2">
@@ -2870,13 +2864,13 @@ onUnmounted(() => {
                 @click="generationRecordTab = 'images'"
                 :class="['w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors text-center whitespace-nowrap', generationRecordTab === 'images' ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-600']"
               >
-                图片生成记录
+                {{ translateUi('uiMessages.me8f01fdccb7d') }}
               </button>
               <button
                 @click="generationRecordTab = 'videos'"
                 :class="['w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors text-center whitespace-nowrap', generationRecordTab === 'videos' ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-600']"
               >
-                视频生成记录
+                {{ translateUi('uiMessages.mceeb6d5bd898') }}
               </button>
             </div>
           </div>
@@ -2886,10 +2880,10 @@ onUnmounted(() => {
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-xl font-bold gradient-text flex items-center">
                 <span class="mr-2">🖼️</span>
-                我的生成记录
+                {{ translateUi('uiMessages.m1aaf1ff935bf') }}
               </h3>
               <div class="text-sm text-slate-600 dark:text-slate-400">
-                共 {{ imagesTotal }} 张作品
+                {{ translateUi('uiMessages.mc8c04a35da48', { value1: (imagesTotal) }) }}
               </div>
             </div>
             
@@ -2901,15 +2895,14 @@ onUnmounted(() => {
                 </div>
                 <div class="flex-1">
                   <h4 class="font-bold text-amber-900 dark:text-amber-300 mb-1">
-                    重要提醒：作品保留期限由管理员设置
+                    {{ translateUi('uiMessages.m282accd29ee5') }}
                   </h4>
                   <p class="text-sm text-amber-800 dark:text-amber-400 leading-relaxed">
-                    生成作品的保留期限由管理员设置，过期后将自动清理。
-                    请及时下载并保存您喜欢的作品到本地设备，以免丢失！
+                    {{ translateUi('uiMessages.m95523ab1c909') }}
                   </p>
                   <div class="mt-2 flex items-center space-x-2 text-xs text-amber-700 dark:text-amber-500">
                     <span>💡</span>
-                    <span>提示：点击图片可查看详情并下载</span>
+                    <span>{{ translateUi('uiMessages.ma8e9edbe7280') }}</span>
                   </div>
                 </div>
               </div>
@@ -2928,19 +2921,19 @@ onUnmounted(() => {
                       : 'bg-white dark:bg-dark-600 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-dark-500'
                   ]"
                 >
-                  <option :value="0">⭐ 全部星级</option>
-                  <option :value="5">⭐⭐⭐⭐⭐ 5星</option>
-                  <option :value="4">⭐⭐⭐⭐ 4星</option>
-                  <option :value="3">⭐⭐⭐ 3星</option>
-                  <option :value="2">⭐⭐ 2星</option>
-                  <option :value="1">⭐ 1星</option>
+                  <option :value="0">{{ translateUi('uiMessages.m485e3f288c8d') }}</option>
+                  <option :value="5">{{ translateUi('uiMessages.m3746a4aa4d91') }}</option>
+                  <option :value="4">{{ translateUi('uiMessages.m4c0a7c502ce6') }}</option>
+                  <option :value="3">{{ translateUi('uiMessages.me1452b0f2927') }}</option>
+                  <option :value="2">{{ translateUi('uiMessages.m0ea2cdf0e832') }}</option>
+                  <option :value="1">{{ translateUi('uiMessages.md93883019383') }}</option>
                 </select>
                 
                 <!-- 关键词搜索 -->
                 <input
                   v-model="imageFilter.keyword"
                   type="text"
-                  placeholder="🔍 搜索提示词/备注..."
+                  :placeholder="translateUi('uiMessages.mf39e32dab749')"
                   class="w-full px-3 py-2 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
                   @keyup.enter="applyImageFilter"
                 />
@@ -2965,14 +2958,14 @@ onUnmounted(() => {
                   v-model="imageFilter.sortBy"
                   class="w-full px-2 py-2 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
                 >
-                  <option value="date">按日期</option>
-                  <option value="rating">按星标</option>
+                  <option value="date">{{ translateUi('uiMessages.mda59a7e8ebc6') }}</option>
+                  <option value="rating">{{ translateUi('uiMessages.m5a26c6329b61') }}</option>
                 </select>
                 <button
                   @click="imageFilter.sortOrder = imageFilter.sortOrder === 'desc' ? 'asc' : 'desc'"
                   class="w-full px-3 py-2 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-500 whitespace-nowrap"
                 >
-                  {{ imageFilter.sortOrder === 'desc' ? '↓ 降序' : '↑ 升序' }}
+                  {{ imageFilter.sortOrder === 'desc' ? translateUi('uiMessages.m3443ef9e6848') : translateUi('uiMessages.mb612a2ab4329') }}
                 </button>
                 
                 <!-- 查询按钮 -->
@@ -2980,7 +2973,7 @@ onUnmounted(() => {
                   @click="applyImageFilter"
                   class="w-full px-4 py-2 rounded-lg text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 transition-all flex items-center justify-center gap-1 whitespace-nowrap"
                 >
-                  🔍 查询
+                  {{ translateUi('uiMessages.mc2560260fc58') }}
                 </button>
                 
                 <!-- 重置按钮 -->
@@ -2988,7 +2981,7 @@ onUnmounted(() => {
                   @click="resetImageFilter"
                   class="w-full px-3 py-2 rounded-lg text-sm font-medium bg-slate-200 dark:bg-dark-500 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-dark-400 transition-all whitespace-nowrap"
                 >
-                  重置
+                  {{ translateUi('common.reset') }}
                 </button>
                 
                 <!-- 批量操作 -->
@@ -3001,7 +2994,7 @@ onUnmounted(() => {
                       : 'bg-white dark:bg-dark-600 text-slate-600 dark:text-slate-300 hover:bg-primary-50 dark:hover:bg-primary-900/20'
                   ]"
                 >
-                  ☑️ {{ imageSelectMode ? '取消选择' : '批量选择' }}
+                  ☑️ {{ imageSelectMode ? translateUi('uiMessages.m74966e20df2e') : translateUi('uiMessages.m9ab296886086') }}
                 </button>
               </div>
               
@@ -3011,18 +3004,18 @@ onUnmounted(() => {
                   @click="toggleAllImages"
                   class="px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-200 dark:bg-dark-500 text-slate-700 dark:text-slate-300 hover:bg-slate-300 transition-all"
                 >
-                  {{ selectedImages.size === recentImages.length ? '取消全选' : '全选' }}
+                  {{ selectedImages.size === recentImages.length ? translateUi('common.deselectAll') : translateUi('common.selectAll') }}
                 </button>
                 <span class="text-sm text-slate-500 dark:text-slate-400">
-                  已选择 {{ selectedImages.size }} 项
+                  {{ translateUi('uiMessages.mdb1c80d27797', { value1: (selectedImages.size) }) }}
                 </span>
                 <button
                   @click="batchDownloadImages"
                   :disabled="selectedImages.size === 0 || imageDownloading"
                   class="px-4 py-1.5 rounded-lg text-sm font-medium bg-green-500 text-white hover:bg-green-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                 >
-                  <span v-if="imageDownloading">⏳ 下载中...</span>
-                  <span v-else>⬇️ 批量下载</span>
+                  <span v-if="imageDownloading">{{ translateUi('uiMessages.m4387b3f472ea') }}</span>
+                  <span v-else>{{ translateUi('uiMessages.mec24282ffe3d') }}</span>
                 </button>
               </div>
             </div>
@@ -3031,9 +3024,9 @@ onUnmounted(() => {
               <div class="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-dark-600 dark:to-dark-700 rounded-full flex items-center justify-center">
                 <span class="text-3xl">🎨</span>
               </div>
-              <p class="text-slate-500 dark:text-slate-400 mb-4">还没有生成作品</p>
+              <p class="text-slate-500 dark:text-slate-400 mb-4">{{ translateUi('uiMessages.me1f1b277b0cf') }}</p>
               <button @click="$router.push('/')" class="btn-primary px-6 py-2">
-                开始创作
+                {{ translateUi('landing.startCreating') }}
               </button>
             </div>
             
@@ -3057,7 +3050,7 @@ onUnmounted(() => {
                     <CachedImage
                       :src="getImageDisplayUrl(image)"
                       :placeholder="makeHistoryImagePlaceholder(image)"
-                      :alt="image.prompt || '历史图片'"
+                      :alt="image.prompt || translateUi('uiMessages.m8e0a6fa69dca')"
                       wrapper-class="w-full h-full"
                       img-class="w-full h-full object-contain"
                       loading="lazy"
@@ -3092,12 +3085,12 @@ onUnmounted(() => {
                         </button>
                         <!-- 星级选择弹出 -->
                         <div class="absolute right-0 top-full mt-1 hidden group-hover/rating:flex flex-col bg-white dark:bg-dark-700 rounded-lg shadow-xl border border-slate-200 dark:border-dark-600 overflow-hidden z-20">
-                          <button @click.stop="updateImageRating(image.id, 5)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐⭐⭐⭐ 5星</button>
-                          <button @click.stop="updateImageRating(image.id, 4)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐⭐⭐ 4星</button>
-                          <button @click.stop="updateImageRating(image.id, 3)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐⭐ 3星</button>
-                          <button @click.stop="updateImageRating(image.id, 2)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐ 2星</button>
-                          <button @click.stop="updateImageRating(image.id, 1)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐ 1星</button>
-                          <button @click.stop="updateImageRating(image.id, 0)" class="px-3 py-1.5 text-xs hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 whitespace-nowrap">✕ 清除</button>
+                          <button @click.stop="updateImageRating(image.id, 5)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">{{ translateUi('uiMessages.m3746a4aa4d91') }}</button>
+                          <button @click.stop="updateImageRating(image.id, 4)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">{{ translateUi('uiMessages.m4c0a7c502ce6') }}</button>
+                          <button @click.stop="updateImageRating(image.id, 3)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">{{ translateUi('uiMessages.me1452b0f2927') }}</button>
+                          <button @click.stop="updateImageRating(image.id, 2)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">{{ translateUi('uiMessages.m0ea2cdf0e832') }}</button>
+                          <button @click.stop="updateImageRating(image.id, 1)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">{{ translateUi('uiMessages.md93883019383') }}</button>
+                          <button @click.stop="updateImageRating(image.id, 0)" class="px-3 py-1.5 text-xs hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 whitespace-nowrap">{{ translateUi('uiMessages.m21e4efe5fec4') }}</button>
                         </div>
                       </div>
                       <div v-if="image.note" class="w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs shadow-sm">
@@ -3110,7 +3103,7 @@ onUnmounted(() => {
                       <button
                         @click.stop="viewImage(image)"
                         class="p-2 bg-white/20 backdrop-blur rounded-lg hover:bg-white/30 transition-colors"
-                        title="查看"
+                        :title="translateUi('uiMessages.mdb8db0530432')"
                       >
                         <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
@@ -3120,7 +3113,7 @@ onUnmounted(() => {
                       <button
                         @click.stop="startEditNote('image', image.id, image.note)"
                         class="p-2 bg-blue-500/80 backdrop-blur rounded-lg hover:bg-blue-600 transition-colors"
-                        title="编辑备注"
+                        :title="translateUi('uiMessages.m2d22af42a79f')"
                       >
                         <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
@@ -3130,7 +3123,7 @@ onUnmounted(() => {
                         :href="getMediaUrl(image.url)"
                         :download="image.note ? `${sanitizeFilename(image.note)}.png` : `image-${image.id}.png`"
                         class="p-2 bg-green-500/80 backdrop-blur rounded-lg hover:bg-green-600 transition-colors"
-                        title="下载"
+                        :title="translateUi('common.download')"
                         @click.stop
                       >
                         <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3140,7 +3133,7 @@ onUnmounted(() => {
                       <button v-if="me && me.can_delete_history !== false"
                         @click.stop="deleteImage(image.id)"
                         class="p-2 bg-red-500/80 backdrop-blur rounded-lg hover:bg-red-600 transition-colors"
-                        title="删除"
+                        :title="translateUi('common.delete')"
                       >
                         <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
@@ -3152,7 +3145,7 @@ onUnmounted(() => {
                   <!-- 信息标签 -->
                   <div class="p-3 bg-white dark:bg-dark-700">
                     <p v-if="image.note" class="text-xs text-amber-600 dark:text-amber-300 font-medium line-clamp-2 mb-1">📝 {{ image.note }}</p>
-                    <p class="text-xs text-slate-700 dark:text-slate-200 line-clamp-3 break-words leading-relaxed">{{ image.prompt || '无提示词' }}</p>
+                    <p class="text-xs text-slate-700 dark:text-slate-200 line-clamp-3 break-words leading-relaxed">{{ image.prompt || translateUi('uiMessages.m827d156d9b4f') }}</p>
                   </div>
                 </div>
               </div>
@@ -3164,21 +3157,21 @@ onUnmounted(() => {
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span class="text-sm font-medium">加载中...</span>
+                  <span class="text-sm font-medium">{{ translateUi('common.loading') }}</span>
                 </div>
               </div>
               
               <!-- 没有更多数据 -->
               <div v-else-if="!imagesHasMore && recentImages.length > 0" class="text-center py-8">
                 <p class="text-sm text-slate-500 dark:text-slate-400">
-                  🎉 已加载全部作品
+                  {{ translateUi('uiMessages.m06d8dd7432c7') }}
                 </p>
               </div>
               
               <!-- 滚动提示 -->
               <div v-else-if="imagesHasMore" class="text-center py-4">
                 <p class="text-xs text-slate-400 dark:text-slate-500">
-                  向下滚动加载更多...
+                  {{ translateUi('uiMessages.m3cb3220f39ee') }}
                 </p>
               </div>
             </div>
@@ -3190,10 +3183,10 @@ onUnmounted(() => {
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-xl font-bold gradient-text flex items-center">
                 <span class="mr-2">🎬</span>
-                我的视频作品
+                {{ translateUi('uiMessages.m71976de9794c') }}
               </h3>
               <div class="text-sm text-slate-600 dark:text-slate-400">
-                共 {{ videosTotal }} 个视频
+                {{ translateUi('uiMessages.m8729d418390e', { value1: (videosTotal) }) }}
               </div>
             </div>
             
@@ -3205,15 +3198,14 @@ onUnmounted(() => {
                 </div>
                 <div class="flex-1">
                   <h4 class="font-bold text-amber-900 dark:text-amber-300 mb-1">
-                    重要提醒：视频保留期限由管理员设置
+                    {{ translateUi('uiMessages.mc671f98fe00a') }}
                   </h4>
                   <p class="text-sm text-amber-800 dark:text-amber-400 leading-relaxed">
-                    生成视频的保留期限由管理员设置，过期后将自动清理。
-                    请及时下载并保存您喜欢的视频到本地设备，以免丢失！
+                    {{ translateUi('uiMessages.meccfb5024ba5') }}
                   </p>
                   <div class="mt-2 flex items-center space-x-2 text-xs text-amber-700 dark:text-amber-500">
                     <span>💡</span>
-                    <span>提示：点击视频可查看详情并下载</span>
+                    <span>{{ translateUi('uiMessages.me69a8c525821') }}</span>
                   </div>
                 </div>
               </div>
@@ -3232,19 +3224,19 @@ onUnmounted(() => {
                       : 'bg-white dark:bg-dark-600 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-dark-500'
                   ]"
                 >
-                  <option :value="0">⭐ 全部星级</option>
-                  <option :value="5">⭐⭐⭐⭐⭐ 5星</option>
-                  <option :value="4">⭐⭐⭐⭐ 4星</option>
-                  <option :value="3">⭐⭐⭐ 3星</option>
-                  <option :value="2">⭐⭐ 2星</option>
-                  <option :value="1">⭐ 1星</option>
+                  <option :value="0">{{ translateUi('uiMessages.m485e3f288c8d') }}</option>
+                  <option :value="5">{{ translateUi('uiMessages.m3746a4aa4d91') }}</option>
+                  <option :value="4">{{ translateUi('uiMessages.m4c0a7c502ce6') }}</option>
+                  <option :value="3">{{ translateUi('uiMessages.me1452b0f2927') }}</option>
+                  <option :value="2">{{ translateUi('uiMessages.m0ea2cdf0e832') }}</option>
+                  <option :value="1">{{ translateUi('uiMessages.md93883019383') }}</option>
                 </select>
                 
                 <!-- 关键词搜索 -->
                 <input
                   v-model="videoFilter.keyword"
                   type="text"
-                  placeholder="🔍 搜索提示词/备注..."
+                  :placeholder="translateUi('uiMessages.mf39e32dab749')"
                   class="w-full px-3 py-2 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
                   @keyup.enter="applyVideoFilter"
                 />
@@ -3269,14 +3261,14 @@ onUnmounted(() => {
                   v-model="videoFilter.sortBy"
                   class="w-full px-2 py-2 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
                 >
-                  <option value="date">按日期</option>
-                  <option value="rating">按星标</option>
+                  <option value="date">{{ translateUi('uiMessages.mda59a7e8ebc6') }}</option>
+                  <option value="rating">{{ translateUi('uiMessages.m5a26c6329b61') }}</option>
                 </select>
                 <button
                   @click="videoFilter.sortOrder = videoFilter.sortOrder === 'desc' ? 'asc' : 'desc'"
                   class="w-full px-3 py-2 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-500 whitespace-nowrap"
                 >
-                  {{ videoFilter.sortOrder === 'desc' ? '↓ 降序' : '↑ 升序' }}
+                  {{ videoFilter.sortOrder === 'desc' ? translateUi('uiMessages.m3443ef9e6848') : translateUi('uiMessages.mb612a2ab4329') }}
                 </button>
                 
                 <!-- 查询按钮 -->
@@ -3284,7 +3276,7 @@ onUnmounted(() => {
                   @click="applyVideoFilter"
                   class="w-full px-4 py-2 rounded-lg text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 transition-all flex items-center justify-center gap-1 whitespace-nowrap"
                 >
-                  🔍 查询
+                  {{ translateUi('uiMessages.mc2560260fc58') }}
                 </button>
                 
                 <!-- 重置按钮 -->
@@ -3292,7 +3284,7 @@ onUnmounted(() => {
                   @click="resetVideoFilter"
                   class="w-full px-3 py-2 rounded-lg text-sm font-medium bg-slate-200 dark:bg-dark-500 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-dark-400 transition-all whitespace-nowrap"
                 >
-                  重置
+                  {{ translateUi('common.reset') }}
                 </button>
                 
                 <!-- 批量操作 -->
@@ -3305,7 +3297,7 @@ onUnmounted(() => {
                       : 'bg-white dark:bg-dark-600 text-slate-600 dark:text-slate-300 hover:bg-primary-50 dark:hover:bg-primary-900/20'
                   ]"
                 >
-                  ☑️ {{ videoSelectMode ? '取消选择' : '批量选择' }}
+                  ☑️ {{ videoSelectMode ? translateUi('uiMessages.m74966e20df2e') : translateUi('uiMessages.m9ab296886086') }}
                 </button>
               </div>
               
@@ -3315,18 +3307,18 @@ onUnmounted(() => {
                   @click="toggleAllVideos"
                   class="px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-200 dark:bg-dark-500 text-slate-700 dark:text-slate-300 hover:bg-slate-300 transition-all"
                 >
-                  {{ selectedVideos.size === recentVideos.filter(v => v.video_url).length ? '取消全选' : '全选已完成' }}
+                  {{ selectedVideos.size === recentVideos.filter(v => v.video_url).length ? translateUi('common.deselectAll') : translateUi('uiMessages.m52e1023ccc79') }}
                 </button>
                 <span class="text-sm text-slate-500 dark:text-slate-400">
-                  已选择 {{ selectedVideos.size }} 项
+                  {{ translateUi('uiMessages.mdb1c80d27797', { value1: (selectedVideos.size) }) }}
                 </span>
                 <button
                   @click="batchDownloadVideos"
                   :disabled="selectedVideos.size === 0 || videoDownloading"
                   class="px-4 py-1.5 rounded-lg text-sm font-medium bg-green-500 text-white hover:bg-green-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                 >
-                  <span v-if="videoDownloading">⏳ 下载中...</span>
-                  <span v-else>⬇️ 批量下载</span>
+                  <span v-if="videoDownloading">{{ translateUi('uiMessages.m4387b3f472ea') }}</span>
+                  <span v-else>{{ translateUi('uiMessages.mec24282ffe3d') }}</span>
                 </button>
               </div>
             </div>
@@ -3335,9 +3327,9 @@ onUnmounted(() => {
               <div class="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-dark-600 dark:to-dark-700 rounded-full flex items-center justify-center">
                 <span class="text-3xl">🎬</span>
               </div>
-              <p class="text-slate-500 dark:text-slate-400 mb-4">还没有生成视频</p>
+              <p class="text-slate-500 dark:text-slate-400 mb-4">{{ translateUi('uiMessages.md936df4dffc9') }}</p>
               <button @click="$router.push('/video')" class="btn-primary px-6 py-2">
-                开始创作
+                {{ translateUi('landing.startCreating') }}
               </button>
             </div>
             
@@ -3400,12 +3392,12 @@ onUnmounted(() => {
                         </button>
                         <!-- 星级选择弹出 -->
                         <div class="absolute right-0 top-full mt-1 hidden group-hover/rating:flex flex-col bg-white dark:bg-dark-700 rounded-lg shadow-xl border border-slate-200 dark:border-dark-600 overflow-hidden z-20">
-                          <button @click.stop="updateVideoRating(video.id, 5)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐⭐⭐⭐ 5星</button>
-                          <button @click.stop="updateVideoRating(video.id, 4)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐⭐⭐ 4星</button>
-                          <button @click.stop="updateVideoRating(video.id, 3)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐⭐ 3星</button>
-                          <button @click.stop="updateVideoRating(video.id, 2)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐ 2星</button>
-                          <button @click.stop="updateVideoRating(video.id, 1)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐ 1星</button>
-                          <button @click.stop="updateVideoRating(video.id, 0)" class="px-3 py-1.5 text-xs hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 whitespace-nowrap">✕ 清除</button>
+                          <button @click.stop="updateVideoRating(video.id, 5)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">{{ translateUi('uiMessages.m3746a4aa4d91') }}</button>
+                          <button @click.stop="updateVideoRating(video.id, 4)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">{{ translateUi('uiMessages.m4c0a7c502ce6') }}</button>
+                          <button @click.stop="updateVideoRating(video.id, 3)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">{{ translateUi('uiMessages.me1452b0f2927') }}</button>
+                          <button @click.stop="updateVideoRating(video.id, 2)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">{{ translateUi('uiMessages.m0ea2cdf0e832') }}</button>
+                          <button @click.stop="updateVideoRating(video.id, 1)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">{{ translateUi('uiMessages.md93883019383') }}</button>
+                          <button @click.stop="updateVideoRating(video.id, 0)" class="px-3 py-1.5 text-xs hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 whitespace-nowrap">{{ translateUi('uiMessages.m21e4efe5fec4') }}</button>
                         </div>
                       </div>
                       <div v-if="video.note" class="w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs">
@@ -3455,12 +3447,12 @@ onUnmounted(() => {
                         @click="viewVideo(video)"
                         class="flex-1 px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs rounded-lg transition-colors"
                       >
-                        👁️ 预览
+                        {{ translateUi('uiMessages.m7bb2fd299841') }}
                       </button>
                       <button
                         @click="startEditNote('video', video.id, video.note)"
                         class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition-colors"
-                        title="编辑备注"
+                        :title="translateUi('uiMessages.m2d22af42a79f')"
                       >
                         📝
                       </button>
@@ -3471,19 +3463,19 @@ onUnmounted(() => {
                         class="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-xs rounded-lg transition-colors text-center"
                         @click.stop
                       >
-                        ⬇️ 下载
+                        {{ translateUi('uiMessages.m0e08e4498c63') }}
                       </a>
                       <button
                         v-else
                         disabled
                         class="flex-1 px-3 py-2 bg-slate-300 dark:bg-slate-600 text-slate-500 dark:text-slate-400 text-xs rounded-lg cursor-not-allowed"
                       >
-                        ⬇️ 下载
+                        {{ translateUi('uiMessages.m0e08e4498c63') }}
                       </button>
                       <button v-if="me && me.can_delete_history !== false"
                         @click="deleteVideo(video.id)"
                         class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-xs rounded-lg transition-colors"
-                        title="删除视频"
+                        :title="translateUi('uiMessages.me2877981fea6')"
                       >
                         🗑️
                       </button>
@@ -3499,21 +3491,21 @@ onUnmounted(() => {
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span class="text-sm font-medium">加载中...</span>
+                  <span class="text-sm font-medium">{{ translateUi('common.loading') }}</span>
                 </div>
               </div>
               
               <!-- 没有更多数据 -->
               <div v-else-if="!videosHasMore && recentVideos.length > 0" class="text-center py-8">
                 <p class="text-sm text-slate-500 dark:text-slate-400">
-                  🎉 已加载全部视频
+                  {{ translateUi('uiMessages.mdd2de39ecfc6') }}
                 </p>
               </div>
               
               <!-- 滚动提示 -->
               <div v-else-if="videosHasMore" class="text-center py-4">
                 <p class="text-xs text-slate-400 dark:text-slate-500">
-                  向下滚动加载更多...
+                  {{ translateUi('uiMessages.m3cb3220f39ee') }}
                 </p>
               </div>
             </div>
@@ -3528,20 +3520,20 @@ onUnmounted(() => {
             <!-- 永久积分 -->
             <div class="card p-6 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-2 border-blue-200 dark:border-blue-700">
               <div class="flex items-center justify-between mb-4">
-                <h4 class="text-lg font-bold text-blue-900 dark:text-blue-100">💎 永久积分</h4>
+                <h4 class="text-lg font-bold text-blue-900 dark:text-blue-100">{{ translateUi('uiMessages.macd46c627535') }}</h4>
               </div>
               <div class="space-y-3 min-w-0">
                 <div class="flex justify-between items-center gap-2 min-w-0">
-                  <span class="text-sm text-blue-700 dark:text-blue-300 flex-shrink-0">当前余额</span>
+                  <span class="text-sm text-blue-700 dark:text-blue-300 flex-shrink-0">{{ translateUi('uiMessages.m32cdac4f29d7') }}</span>
                   <span class="text-2xl font-bold text-blue-900 dark:text-blue-100 truncate min-w-0 text-right" :title="formatPoints(getPermanentUserPoints(me))">{{ formatPoints(getPermanentUserPoints(me)) }}</span>
                 </div>
-                <p v-if="me.is_subuser" class="text-xs text-blue-700 dark:text-blue-300">其中分配 {{ formatPoints(me.subuser_points || 0) }}，按分配有效期使用；未消费部分可由主用户回收。</p>
+                <p v-if="me.is_subuser" class="text-xs text-blue-700 dark:text-blue-300">{{ translateUi('uiMessages.m737109751ae2', { value1: (formatPoints(me.subuser_points || 0)) }) }}</p>
                 <div class="flex justify-between items-center gap-2 min-w-0">
-                  <span class="text-sm text-blue-700 dark:text-blue-300 flex-shrink-0">累计获得</span>
+                  <span class="text-sm text-blue-700 dark:text-blue-300 flex-shrink-0">{{ translateUi('uiMessages.m3a1841c28ae2') }}</span>
                   <span class="text-lg font-semibold text-green-600 dark:text-green-400 truncate min-w-0 text-right" :title="'+' + formatPoints(toPointsNumber(pointsStats.permanent.earned))">+{{ formatPoints(toPointsNumber(pointsStats.permanent.earned)) }}</span>
                 </div>
                 <div class="flex justify-between items-center gap-2 min-w-0">
-                  <span class="text-sm text-blue-700 dark:text-blue-300 flex-shrink-0">累计消耗</span>
+                  <span class="text-sm text-blue-700 dark:text-blue-300 flex-shrink-0">{{ translateUi('uiMessages.m597ee20cfe3c') }}</span>
                   <span class="text-lg font-semibold text-red-600 dark:text-red-400 truncate min-w-0 text-right" :title="'-' + formatPoints(toPointsNumber(pointsStats.permanent.spent))">-{{ formatPoints(toPointsNumber(pointsStats.permanent.spent)) }}</span>
                 </div>
               </div>
@@ -3550,24 +3542,24 @@ onUnmounted(() => {
             <!-- 套餐积分 -->
             <div class="card p-6 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-2 border-purple-200 dark:border-purple-700">
               <div class="flex items-center justify-between mb-4">
-                <h4 class="text-lg font-bold text-purple-900 dark:text-purple-100">⚡ 套餐积分</h4>
+                <h4 class="text-lg font-bold text-purple-900 dark:text-purple-100">{{ translateUi('uiMessages.m16d206ccab6e') }}</h4>
               </div>
               <div class="space-y-3 min-w-0">
                 <div class="flex justify-between items-center gap-2 min-w-0">
-                  <span class="text-sm text-purple-700 dark:text-purple-300 flex-shrink-0">当前余额（有效）</span>
+                  <span class="text-sm text-purple-700 dark:text-purple-300 flex-shrink-0">{{ translateUi('uiMessages.m25f61f0a8d4c') }}</span>
                   <span class="text-2xl font-bold text-purple-900 dark:text-purple-100 truncate min-w-0 text-right" :title="formatPoints(getEffectivePackagePoints(me))">{{ formatPoints(getEffectivePackagePoints(me)) }}</span>
                 </div>
                 <div class="flex justify-between items-center gap-2 min-w-0">
-                  <span class="text-sm text-purple-700 dark:text-purple-300 flex-shrink-0">累计获得</span>
+                  <span class="text-sm text-purple-700 dark:text-purple-300 flex-shrink-0">{{ translateUi('uiMessages.m3a1841c28ae2') }}</span>
                   <span class="text-lg font-semibold text-green-600 dark:text-green-400 truncate min-w-0 text-right" :title="'+' + formatPoints(toPointsNumber(pointsStats.package.earned))">+{{ formatPoints(toPointsNumber(pointsStats.package.earned)) }}</span>
                 </div>
                 <div class="flex justify-between items-center gap-2 min-w-0">
-                  <span class="text-sm text-purple-700 dark:text-purple-300 flex-shrink-0">累计消耗</span>
+                  <span class="text-sm text-purple-700 dark:text-purple-300 flex-shrink-0">{{ translateUi('uiMessages.m597ee20cfe3c') }}</span>
                   <span class="text-lg font-semibold text-red-600 dark:text-red-400 truncate min-w-0 text-right" :title="'-' + formatPoints(toPointsNumber(pointsStats.package.spent))">-{{ formatPoints(toPointsNumber(pointsStats.package.spent)) }}</span>
                 </div>
                 <div v-if="me?.package_points_expires_at && me.package_points_expires_at > Date.now()" class="pt-2 border-t border-purple-200 dark:border-purple-700">
                   <span class="text-xs text-purple-600 dark:text-purple-400">
-                    过期时间: {{ new Date(me.package_points_expires_at).toLocaleString('zh-CN') }}
+                    {{ translateUi('uiMessages.m36f7e21b06bb', { value1: (new Date(me.package_points_expires_at).toLocaleString(uiLanguage)) }) }}
                   </span>
                 </div>
               </div>
@@ -3576,19 +3568,19 @@ onUnmounted(() => {
             <!-- 总计 -->
             <div class="card p-6 bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-800/20 border-2 border-amber-200 dark:border-amber-700">
               <div class="flex items-center justify-between mb-4">
-                <h4 class="text-lg font-bold text-amber-900 dark:text-amber-100">📊 总计</h4>
+                <h4 class="text-lg font-bold text-amber-900 dark:text-amber-100">{{ translateUi('uiMessages.mc92b8a561364') }}</h4>
               </div>
               <div class="space-y-3 min-w-0">
                 <div class="flex justify-between items-center gap-2 min-w-0">
-                  <span class="text-sm text-amber-700 dark:text-amber-300 flex-shrink-0">可用总额</span>
+                  <span class="text-sm text-amber-700 dark:text-amber-300 flex-shrink-0">{{ translateUi('uiMessages.ma5c27505762f') }}</span>
                   <span class="text-2xl font-bold text-amber-900 dark:text-amber-100 truncate min-w-0 text-right" :title="formatPoints(getTotalUserPoints(me))">{{ formatPoints(getTotalUserPoints(me)) }}</span>
                 </div>
                 <div class="flex justify-between items-center gap-2 min-w-0">
-                  <span class="text-sm text-amber-700 dark:text-amber-300 flex-shrink-0">累计获得</span>
+                  <span class="text-sm text-amber-700 dark:text-amber-300 flex-shrink-0">{{ translateUi('uiMessages.m3a1841c28ae2') }}</span>
                   <span class="text-lg font-semibold text-green-600 dark:text-green-400 truncate min-w-0 text-right" :title="'+' + formatPoints(toPointsNumber(pointsStats.permanent.earned) + toPointsNumber(pointsStats.package.earned))">+{{ formatPoints(toPointsNumber(pointsStats.permanent.earned) + toPointsNumber(pointsStats.package.earned)) }}</span>
                 </div>
                 <div class="flex justify-between items-center gap-2 min-w-0">
-                  <span class="text-sm text-amber-700 dark:text-amber-300 flex-shrink-0">累计消耗</span>
+                  <span class="text-sm text-amber-700 dark:text-amber-300 flex-shrink-0">{{ translateUi('uiMessages.m597ee20cfe3c') }}</span>
                   <span class="text-lg font-semibold text-red-600 dark:text-red-400 truncate min-w-0 text-right" :title="'-' + formatPoints(toPointsNumber(pointsStats.permanent.spent) + toPointsNumber(pointsStats.package.spent))">-{{ formatPoints(toPointsNumber(pointsStats.permanent.spent) + toPointsNumber(pointsStats.package.spent)) }}</span>
                 </div>
               </div>
@@ -3600,10 +3592,10 @@ onUnmounted(() => {
             <div class="flex items-center justify-between mb-6">
               <h3 class="text-xl font-bold text-emerald-900 dark:text-emerald-100 flex items-center">
                 <span class="mr-2">💸</span>
-                积分转让
+                {{ translateUi('uiMessages.m64bc2ecd40cc') }}
               </h3>
               <span class="text-sm text-emerald-700 dark:text-emerald-300">
-                仅支持永久积分转让
+                {{ translateUi('uiMessages.m5a588116bd7e') }}
               </span>
             </div>
 
@@ -3611,14 +3603,14 @@ onUnmounted(() => {
               <!-- 收款人选择 -->
               <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  收款人
+                  {{ translateUi('uiMessages.m207f3c8a23b4') }}
                 </label>
                 <div class="relative">
                   <input
                     v-model="pointsTransferForm.recipientQuery"
                     @input="handleRecipientSearch"
                     type="text"
-                    placeholder="输入用户名或邮箱（至少3个字符）"
+                    :placeholder="translateUi('uiMessages.m96018b29b4cf')"
                     class="w-full px-4 py-3 bg-white dark:bg-dark-700 border-2 border-slate-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
                     :class="{ 'border-red-500': pointsTransferForm.recipientError }"
                   />
@@ -3639,7 +3631,7 @@ onUnmounted(() => {
                         <p class="font-medium text-slate-900 dark:text-slate-100">{{ user.username }}</p>
                         <p class="text-sm text-slate-500 dark:text-slate-400">{{ user.email }}</p>
                       </div>
-                      <span class="text-emerald-600 dark:text-emerald-400">选择</span>
+                      <span class="text-emerald-600 dark:text-emerald-400">{{ translateUi('uiMessages.mc11330b85234') }}</span>
                     </button>
                   </div>
 
@@ -3669,14 +3661,14 @@ onUnmounted(() => {
               <!-- 转让金额 -->
               <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  转让金额
+                  {{ translateUi('uiMessages.m90f7255eaf66') }}
                 </label>
                 <input
                   v-model.number="pointsTransferForm.amount"
                   type="number"
                   min="1"
                   :max="me?.points || 0"
-                  placeholder="请输入转让积分数量"
+                  :placeholder="translateUi('uiMessages.mcf6650bf4071')"
                   class="w-full px-4 py-3 bg-white dark:bg-dark-700 border-2 border-slate-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
                   :class="{ 'border-red-500': pointsTransferForm.amountError }"
                 />
@@ -3685,7 +3677,7 @@ onUnmounted(() => {
                     {{ pointsTransferForm.amountError }}
                   </p>
                   <p class="text-sm text-slate-500 dark:text-slate-400 ml-auto">
-                    当前可用：{{ me?.points || 0 }} 积分
+                    {{ translateUi('uiMessages.m187f55bbbe5a', { value1: (me?.points || 0) }) }}
                   </p>
                 </div>
               </div>
@@ -3693,13 +3685,13 @@ onUnmounted(() => {
               <!-- 备注（可选） -->
               <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  备注（可选）
+                  {{ translateUi('uiMessages.mb405227c7e3f') }}
                 </label>
                 <input
                   v-model="pointsTransferForm.memo"
                   type="text"
                   maxlength="50"
-                  placeholder="如：感谢帮助、赠送积分等"
+                  :placeholder="translateUi('uiMessages.m966f297126c5')"
                   class="w-full px-4 py-3 bg-white dark:bg-dark-700 border-2 border-slate-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
                 />
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -3714,8 +3706,8 @@ onUnmounted(() => {
                 type="button"
                 class="w-full px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-bold rounded-lg hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 active:scale-95"
               >
-                <span v-if="!transferring">🚀 确认转让</span>
-                <span v-else>⏳ 处理中...</span>
+                <span v-if="!transferring">{{ translateUi('uiMessages.m88711a901135') }}</span>
+                <span v-else>{{ translateUi('uiMessages.mbac2af979848') }}</span>
               </button>
             </div>
           </div>
@@ -3727,7 +3719,7 @@ onUnmounted(() => {
               <div class="flex items-center justify-between mb-6">
                 <h3 class="text-xl font-bold gradient-text flex items-center">
                   <span class="mr-2">📊</span>
-                  积分流水
+                  {{ translateUi('user.pointsHistory') }}
                 </h3>
                 <!-- 筛选按钮 -->
                 <div class="flex space-x-2">
@@ -3736,21 +3728,21 @@ onUnmounted(() => {
                     :class="pointsStatsTab === 'all' ? 'bg-primary-500 text-white' : 'bg-slate-200 dark:bg-dark-600 text-slate-700 dark:text-slate-300'"
                     class="px-3 py-1 rounded-lg text-sm font-medium transition-colors"
                   >
-                    全部
+                    {{ translateUi('common.all') }}
                   </button>
                   <button
                     @click="pointsStatsTab = 'permanent'"
                     :class="pointsStatsTab === 'permanent' ? 'bg-blue-500 text-white' : 'bg-slate-200 dark:bg-dark-600 text-slate-700 dark:text-slate-300'"
                     class="px-3 py-1 rounded-lg text-sm font-medium transition-colors"
                   >
-                    永久
+                    {{ translateUi('canvas.contextMenu.permanent') }}
                   </button>
                   <button
                     @click="pointsStatsTab = 'package'"
                     :class="pointsStatsTab === 'package' ? 'bg-purple-500 text-white' : 'bg-slate-200 dark:bg-dark-600 text-slate-700 dark:text-slate-300'"
                     class="px-3 py-1 rounded-lg text-sm font-medium transition-colors"
                   >
-                    套餐
+                    {{ translateUi('uiMessages.mc1cfa1340c62') }}
                   </button>
                 </div>
               </div>
@@ -3759,7 +3751,7 @@ onUnmounted(() => {
                 <div class="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-dark-600 dark:to-dark-700 rounded-full flex items-center justify-center">
                   <span class="text-2xl">📈</span>
                 </div>
-                <p class="text-slate-500 dark:text-slate-400">暂无积分流水记录</p>
+                <p class="text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.meec0c715f8b0') }}</p>
               </div>
               
               <div v-else class="space-y-3 max-h-[600px] overflow-y-auto">
@@ -3781,14 +3773,14 @@ onUnmounted(() => {
                           :class="(item.points_type === 'package') ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'"
                           class="px-2 py-0.5 rounded text-xs font-medium"
                         >
-                          {{ item.points_type === 'subuser' ? '分配' : item.points_type === 'team' ? '团队' : item.points_type === 'package' ? '套餐' : '永久' }}
+                          {{ item.points_type === 'subuser' ? translateUi('uiMessages.mfc135337a267') : item.points_type === 'team' ? translateUi('uiMessages.macdf17f4e9c4') : item.points_type === 'package' ? translateUi('uiMessages.mc1cfa1340c62') : translateUi('canvas.contextMenu.permanent') }}
                         </span>
                       </div>
                       <p class="text-sm text-slate-500 dark:text-slate-400">
                         {{ new Date(item.ts).toLocaleString() }}
                       </p>
                       <p v-if="item.task_id" class="text-xs text-slate-400 dark:text-slate-500 mt-1 font-mono break-all">
-                        任务ID：{{ item.task_id }}
+                        {{ translateUi('uiMessages.m637263718da0', { value1: (item.task_id) }) }}
                       </p>
                       <p v-if="item.memo" class="text-xs text-slate-400 dark:text-slate-500 mt-1">
                         {{ item.memo }}
@@ -3811,11 +3803,11 @@ onUnmounted(() => {
             <div class="card p-6">
               <h3 class="text-xl font-bold gradient-text mb-6 flex items-center">
                 <span class="mr-2">📈</span>
-                积分来源分析
+                {{ translateUi('uiMessages.md46170721315') }}
               </h3>
               
               <div v-if="normalizedPointsSources.length === 0" class="text-center py-12">
-                <p class="text-slate-500 dark:text-slate-400">暂无数据</p>
+                <p class="text-slate-500 dark:text-slate-400">{{ translateUi('common.noData') }}</p>
               </div>
               
               <div v-else class="space-y-4">
@@ -3829,7 +3821,7 @@ onUnmounted(() => {
                       {{ getTransactionTypeText(source.type) }}
                     </span>
                     <span class="font-bold text-primary-600 dark:text-primary-400">
-                      +{{ formatPoints(source.total) }} 积分
+                      {{ translateUi('uiMessages.mcd759af5fd52', { value1: (formatPoints(source.total)) }) }}
                     </span>
                   </div>
                   <div class="w-full bg-slate-200 dark:bg-dark-600 rounded-full h-2 overflow-hidden">
@@ -3839,7 +3831,7 @@ onUnmounted(() => {
                     ></div>
                   </div>
                   <p class="text-xs text-slate-500 dark:text-slate-400">
-                    共 {{ source.count }} 次
+                    {{ translateUi('uiMessages.m129332b5f72e', { value1: (source.count) }) }}
                   </p>
                 </div>
               </div>
@@ -3854,20 +3846,20 @@ onUnmounted(() => {
             <div class="flex items-center justify-between mb-6">
               <h3 class="text-xl font-bold gradient-text flex items-center">
                 <span class="mr-2">📋</span>
-                充值订单记录
+                {{ translateUi('uiMessages.maec47c219e59') }}
               </h3>
               <button
                 @click="openRechargeModal"
                 class="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-medium rounded-lg hover:from-amber-600 hover:to-orange-600 transition-all duration-300 shadow-md hover:shadow-lg"
               >
-                💳 立即充值
+                {{ translateUi('uiMessages.mcdc129558175') }}
               </button>
             </div>
             
             <!-- 加载状态 -->
             <div v-if="billLoading" class="text-center py-12">
               <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-              <p class="mt-4 text-slate-500 dark:text-slate-400">加载中...</p>
+              <p class="mt-4 text-slate-500 dark:text-slate-400">{{ translateUi('common.loading') }}</p>
             </div>
             
             <!-- 空状态 -->
@@ -3875,9 +3867,9 @@ onUnmounted(() => {
               <div class="w-20 h-20 mx-auto mb-4 bg-slate-100 dark:bg-dark-600 rounded-full flex items-center justify-center">
                 <span class="text-3xl">📋</span>
               </div>
-              <p class="text-slate-500 dark:text-slate-400 mb-4">暂无充值记录</p>
+              <p class="text-slate-500 dark:text-slate-400 mb-4">{{ translateUi('uiMessages.m836b1c0bbed9') }}</p>
               <button @click="openRechargeModal" class="btn-primary px-6 py-2">
-                💳 立即充值
+                {{ translateUi('uiMessages.mcdc129558175') }}
               </button>
             </div>
             
@@ -3908,16 +3900,16 @@ onUnmounted(() => {
                   </div>
                 </div>
                 <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                  <span>创建时间：{{ new Date(order.created_at).toLocaleString() }}</span>
-                  <span v-if="order.paid_at">支付时间：{{ new Date(order.paid_at).toLocaleString() }}</span>
+                  <span>{{ translateUi('uiMessages.md25d82386696', { value1: (new Date(order.created_at).toLocaleString()) }) }}</span>
+                  <span v-if="order.paid_at">{{ translateUi('uiMessages.m3578471aa2ee', { value1: (new Date(order.paid_at).toLocaleString()) }) }}</span>
                 </div>
-                <a v-if="order.crypto_checkout_url" :href="order.crypto_checkout_url" class="inline-block mt-3 text-sm text-primary-600 dark:text-primary-400 underline">查看 USDT 订单 / 继续支付</a>
+                <a v-if="order.crypto_checkout_url" :href="order.crypto_checkout_url" class="inline-block mt-3 text-sm text-primary-600 dark:text-primary-400 underline">{{ translateUi('uiMessages.md72249b5a219') }}</a>
               </div>
             </div>
             
             <!-- 分页提示 -->
             <div v-if="billOrders.length > 0" class="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">
-              共 {{ billTotal }} 条记录
+              {{ translateUi('uiMessages.m461359dad186', { value1: (billTotal) }) }}
             </div>
           </div>
         </div>
@@ -3929,13 +3921,13 @@ onUnmounted(() => {
             <div class="card p-6">
               <h3 class="text-xl font-bold gradient-text mb-6 flex items-center">
                 <span class="mr-2">🎁</span>
-                我的邀请码
+                {{ translateUi('user.myInviteCode') }}
               </h3>
               
               <div class="space-y-4">
                 <div>
                   <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    邀请码
+                    {{ translateUi('user.inviteCode') }}
                   </label>
                   <div class="flex space-x-2">
                     <input
@@ -3947,17 +3939,17 @@ onUnmounted(() => {
                       @click="copyInvite"
                       class="btn-primary px-6"
                     >
-                      📋 复制链接
+                      {{ translateUi('uiMessages.m9847eea3bb49') }}
                     </button>
                   </div>
                 </div>
 
                 <div class="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
-                  <h4 class="font-semibold text-slate-900 dark:text-slate-100 mb-2">💡 邀请奖励规则</h4>
+                  <h4 class="font-semibold text-slate-900 dark:text-slate-100 mb-2">{{ translateUi('uiMessages.m73e5614d0935') }}</h4>
                   <ul class="text-sm text-slate-700 dark:text-slate-300 space-y-1">
-                    <li>• 好友使用你的邀请码注册</li>
-                    <li>• {{ inviteRewardAfterFirstPayment ? '好友完成首次充值后，你和好友都可获得积分奖励' : '你和好友都可获得积分奖励' }}</li>
-                    <li>• 邀请越多，奖励越多</li>
+                    <li>{{ translateUi('uiMessages.m6909239d1e84') }}</li>
+                    <li>• {{ inviteRewardAfterFirstPayment ? translateUi('uiMessages.md4c017617dfa') : translateUi('uiMessages.m2de849bde06a') }}</li>
+                    <li>{{ translateUi('uiMessages.md807c20e7223') }}</li>
                   </ul>
                 </div>
 
@@ -3965,8 +3957,8 @@ onUnmounted(() => {
                 <div class="pt-4 border-t border-slate-200 dark:border-dark-600">
                   <div class="flex items-center justify-between p-4 bg-gradient-to-r from-green-500 to-green-600 rounded-xl text-white">
                     <div>
-                      <p class="text-sm opacity-90">成功邀请</p>
-                      <p class="text-3xl font-bold">{{ inviteProgress.invite_count || 0 }} 人</p>
+                      <p class="text-sm opacity-90">{{ translateUi('uiMessages.m69c97096847a') }}</p>
+                      <p class="text-3xl font-bold">{{ translateUi('uiMessages.m23e263289f05', { value1: (inviteProgress.invite_count || 0) }) }}</p>
                     </div>
                     <div class="text-4xl">🎉</div>
                   </div>
@@ -3978,18 +3970,18 @@ onUnmounted(() => {
             <div class="card p-6">
               <h3 class="text-xl font-bold gradient-text mb-6 flex items-center">
                 <span class="mr-2">🚀</span>
-                快速分享
+                {{ translateUi('uiMessages.m73328fb084be') }}
               </h3>
               
               <div class="space-y-4">
                 <p class="text-sm text-slate-600 dark:text-slate-400">
-                  分享到社交平台，让更多朋友加入！
+                  {{ translateUi('uiMessages.m97765779e62b') }}
                 </p>
                 
                 <div class="grid grid-cols-2 gap-3">
                   <button class="p-4 border-2 border-slate-200 dark:border-dark-600 rounded-xl hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-all duration-200">
                     <div class="text-3xl mb-2">💬</div>
-                    <div class="text-sm font-medium text-slate-700 dark:text-slate-300">微信</div>
+                    <div class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.m81b430b69643') }}</div>
                   </button>
                   <button class="p-4 border-2 border-slate-200 dark:border-dark-600 rounded-xl hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-all duration-200">
                     <div class="text-3xl mb-2">📱</div>
@@ -3997,11 +3989,11 @@ onUnmounted(() => {
                   </button>
                   <button class="p-4 border-2 border-slate-200 dark:border-dark-600 rounded-xl hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-all duration-200">
                     <div class="text-3xl mb-2">🐦</div>
-                    <div class="text-sm font-medium text-slate-700 dark:text-slate-300">微博</div>
+                    <div class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.m0fc69798d832') }}</div>
                   </button>
                   <button @click="copyInvite" class="p-4 border-2 border-slate-200 dark:border-dark-600 rounded-xl hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-all duration-200">
                     <div class="text-3xl mb-2">🔗</div>
-                    <div class="text-sm font-medium text-slate-700 dark:text-slate-300">复制链接</div>
+                    <div class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.m8e86f9b1d54f') }}</div>
                   </button>
                 </div>
                 
@@ -4010,10 +4002,10 @@ onUnmounted(() => {
                   <div class="flex items-center justify-between mb-3">
                     <span class="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center">
                       <span class="mr-1.5">🎁</span>
-                      邀请进度奖励
+                      {{ translateUi('uiMessages.m697ed7ab5195') }}
                     </span>
                     <span class="text-xs text-purple-600 dark:text-purple-400 font-semibold">
-                      {{ inviteProgress.milestones?.filter(m => m.claimed).length || 0 }}/{{ inviteProgress.milestones?.length || 0 }} 已领取
+                      {{ translateUi('uiMessages.m141e73c50e4d', { value1: (inviteProgress.milestones?.filter(m => m.claimed).length || 0), value2: (inviteProgress.milestones?.length || 0) }) }}
                     </span>
                   </div>
                   <div class="flex items-center gap-2 mb-3">
@@ -4029,14 +4021,14 @@ onUnmounted(() => {
                             : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
                       ]"
                     >
-                      <div class="text-xs font-bold">{{ milestone.milestone }}人</div>
-                      <div class="text-[10px] opacity-80 mt-0.5">+{{ formatPoints(milestone.points) }}积分</div>
+                      <div class="text-xs font-bold">{{ translateUi('uiMessages.m48a8e95b1394', { value1: (milestone.milestone) }) }}</div>
+                      <div class="text-[10px] opacity-80 mt-0.5">{{ translateUi('uiMessages.m17e344078e34', { value1: (formatPoints(milestone.points)) }) }}</div>
                     </div>
                   </div>
                   <p class="text-[10px] text-center text-slate-600 dark:text-slate-400 bg-white/50 dark:bg-slate-800/50 rounded-md py-1.5 px-2">
                     💡 {{ inviteProgress.invite_count < (inviteProgress.milestones?.[0]?.milestone || 3) 
-                      ? `再邀请 ${(inviteProgress.milestones?.[0]?.milestone || 3) - inviteProgress.invite_count} 人即可获得 ${formatPoints(inviteProgress.milestones?.[0]?.points || 30)} 积分` 
-                      : '达标自动发放奖励' }}
+                      ? translateUi('uiMessages.m717112932a21', { value1: ((inviteProgress.milestones?.[0]?.milestone || 3) - inviteProgress.invite_count), value2: (formatPoints(inviteProgress.milestones?.[0]?.points || 30)) })
+                      : translateUi('uiMessages.m5388e7eb0435') }}
                   </p>
                 </div>
               </div>
@@ -4048,70 +4040,70 @@ onUnmounted(() => {
         <div v-show="activeTab === 'referral'" v-if="me?.referral_enabled">
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div class="card p-4 text-center">
-              <p class="text-sm text-slate-500 dark:text-slate-400">可用返利</p>
+              <p class="text-sm text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m2bee6ad281b4') }}</p>
               <p class="text-2xl font-bold text-emerald-500 mt-1">{{ currencySymbol }}{{ formatRebateAmount(referralStats.available) }}</p>
             </div>
             <div class="card p-4 text-center">
-              <p class="text-sm text-slate-500 dark:text-slate-400">累计返利</p>
+              <p class="text-sm text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m2acc6d552b0e') }}</p>
               <p class="text-2xl font-bold text-amber-500 mt-1">{{ currencySymbol }}{{ formatRebateAmount(referralStats.total_earned) }}</p>
             </div>
             <div class="card p-4 text-center">
-              <p class="text-sm text-slate-500 dark:text-slate-400">待审核提现</p>
+              <p class="text-sm text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m5e97661cd612') }}</p>
               <p class="text-2xl font-bold text-yellow-500 mt-1">{{ currencySymbol }}{{ formatRebateAmount(referralStats.pending) }}</p>
             </div>
             <div class="card p-4 text-center">
-              <p class="text-sm text-slate-500 dark:text-slate-400">邀请人数</p>
+              <p class="text-sm text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.mda4766c793d9') }}</p>
               <p class="text-2xl font-bold text-blue-500 mt-1">{{ referralStats.invitee_count || 0 }}</p>
             </div>
           </div>
           <div class="card p-6 mb-6">
-            <h3 class="text-base font-bold text-slate-900 dark:text-slate-100 mb-4">返利操作</h3>
+            <h3 class="text-base font-bold text-slate-900 dark:text-slate-100 mb-4">{{ translateUi('uiMessages.mdbe6bae7f00d') }}</h3>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div class="p-4 border border-slate-200 dark:border-slate-700 rounded-lg">
-                <h4 class="text-sm font-semibold text-amber-500 mb-3">申请提现到支付宝</h4>
+                <h4 class="text-sm font-semibold text-amber-500 mb-3">{{ translateUi('uiMessages.m01c7e6569a15') }}</h4>
                 <div class="space-y-3">
                   <div>
-                    <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1">提现金额（{{ currencyUnitLabel }}）</label>
-                    <input v-model.number="referralActionAmount" type="number" step="0.01" min="0.01" class="input w-full" placeholder="输入提现金额" />
+                    <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1">{{ translateUi('uiMessages.mb58691d60350', { value1: (currencyUnitLabel) }) }}</label>
+                    <input v-model.number="referralActionAmount" type="number" step="0.01" min="0.01" class="input w-full" :placeholder="translateUi('uiMessages.m41dc91c7102b')" />
                   </div>
                   <div>
-                    <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1">支付宝真实姓名</label>
-                    <input v-model="referralAlipayName" type="text" class="input w-full" placeholder="请输入收款人真实姓名" maxlength="50" />
+                    <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1">{{ translateUi('uiMessages.md04ea08e0634') }}</label>
+                    <input v-model="referralAlipayName" type="text" class="input w-full" :placeholder="translateUi('uiMessages.m84fe40f096ae')" maxlength="50" />
                   </div>
                   <div>
-                    <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1">支付宝账号</label>
-                    <input v-model="referralAlipayAccount" type="text" class="input w-full" placeholder="手机号或邮箱" maxlength="200" />
+                    <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1">{{ translateUi('uiMessages.m4e7d073b32f6') }}</label>
+                    <input v-model="referralAlipayAccount" type="text" class="input w-full" :placeholder="translateUi('uiMessages.mae3a6b9f14ae')" maxlength="200" />
                   </div>
                   <button @click="doReferralWithdraw" class="btn-primary w-full py-2" :disabled="referralSubmitting">
-                    {{ referralSubmitting ? '处理中...' : '申请提现' }}
+                    {{ referralSubmitting ? translateUi('common.processing') : translateUi('uiMessages.mfaf08c5bb453') }}
                   </button>
-                  <p class="text-xs text-slate-500 dark:text-slate-400">提现需管理员审核通过后打款到您的支付宝账户</p>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m887c56c0954c') }}</p>
                 </div>
               </div>
               <div class="p-4 border border-slate-200 dark:border-slate-700 rounded-lg">
-                <h4 class="text-sm font-semibold text-emerald-500 mb-3">划转到账户余额</h4>
+                <h4 class="text-sm font-semibold text-emerald-500 mb-3">{{ translateUi('uiMessages.mc4c5afc4d969') }}</h4>
                 <div class="space-y-3">
                   <div>
-                    <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1">划转金额（{{ currencyUnitLabel }}）</label>
-                    <input v-model.number="referralActionAmount" type="number" step="0.01" min="0.01" class="input w-full" placeholder="输入划转金额" />
+                    <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1">{{ translateUi('uiMessages.m3f1fed5cf9e7', { value1: (currencyUnitLabel) }) }}</label>
+                    <input v-model.number="referralActionAmount" type="number" step="0.01" min="0.01" class="input w-full" :placeholder="translateUi('uiMessages.mb2270e77b4bd')" />
                   </div>
                   <button @click="doReferralTransfer" class="w-full py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors" :disabled="referralSubmitting">
-                    {{ referralSubmitting ? '处理中...' : '划转余额' }}
+                    {{ referralSubmitting ? translateUi('common.processing') : translateUi('uiMessages.ma6dfe6e354e6') }}
                   </button>
-                  <p class="text-xs text-slate-500 dark:text-slate-400">即时到账，划转后可用于平台消费但不可再提现</p>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.m43e9996fe604') }}</p>
                 </div>
               </div>
             </div>
           </div>
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div class="card p-6">
-              <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-4">返利记录</h3>
-              <div v-if="referralRecords.length === 0" class="text-center text-slate-500 py-8">暂无返利记录</div>
+              <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-4">{{ translateUi('uiMessages.m3267f9df018a') }}</h3>
+              <div v-if="referralRecords.length === 0" class="text-center text-slate-500 py-8">{{ translateUi('uiMessages.m9cad99ca6d6a') }}</div>
               <div v-else class="space-y-3 max-h-96 overflow-y-auto">
                 <div v-for="r in referralRecords" :key="r.id" class="p-3 bg-slate-50 dark:bg-dark-600 rounded-lg">
                   <div class="flex items-center justify-between">
                     <div>
-                      <p class="text-sm font-medium text-slate-800 dark:text-slate-200">{{ r.invitee_username || '用户' }} 消费</p>
+                      <p class="text-sm font-medium text-slate-800 dark:text-slate-200">{{ translateUi('uiMessages.mb192f4411836', { value1: (r.invitee_username || translateUi('common.user')) }) }}</p>
                       <p class="text-xs text-slate-500 mt-1">{{ formatRebateTime(r.created_at) }}</p>
                     </div>
                     <div class="text-right">
@@ -4123,17 +4115,17 @@ onUnmounted(() => {
               </div>
             </div>
             <div class="card p-6">
-              <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-4">提现记录</h3>
-              <div v-if="referralWithdrawals.length === 0" class="text-center text-slate-500 py-8">暂无提现记录</div>
+              <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-4">{{ translateUi('uiMessages.mb09fb09b6f7c') }}</h3>
+              <div v-if="referralWithdrawals.length === 0" class="text-center text-slate-500 py-8">{{ translateUi('uiMessages.m852966eb1107') }}</div>
               <div v-else class="space-y-3 max-h-96 overflow-y-auto">
                 <div v-for="w in referralWithdrawals" :key="w.id" class="p-3 bg-slate-50 dark:bg-dark-600 rounded-lg">
                   <div class="flex items-center justify-between">
                     <div>
-                      <span :class="w.type === 'withdraw' ? 'text-amber-500' : 'text-blue-500'" class="text-xs font-medium">{{ w.type === 'withdraw' ? '提现' : '划转余额' }}</span>
+                      <span :class="w.type === 'withdraw' ? 'text-amber-500' : 'text-blue-500'" class="text-xs font-medium">{{ w.type === 'withdraw' ? translateUi('uiMessages.mdf9d5cbb40da') : translateUi('uiMessages.ma6dfe6e354e6') }}</span>
                       <span :class="{ 'text-yellow-500': w.status === 'pending', 'text-emerald-500': w.status === 'approved', 'text-red-500': w.status === 'rejected' }" class="text-xs ml-2">{{ { pending: '待审核', approved: '已通过', rejected: '已拒绝' }[w.status] }}</span>
                       <p v-if="w.alipay_name" class="text-xs text-slate-400 mt-0.5">{{ w.alipay_name }} · {{ w.alipay_account }}</p>
                       <p class="text-xs text-slate-500 mt-1">{{ formatRebateTime(w.created_at) }}</p>
-                      <p v-if="w.admin_note" class="text-xs text-slate-400 mt-0.5">备注：{{ w.admin_note }}</p>
+                      <p v-if="w.admin_note" class="text-xs text-slate-400 mt-0.5">{{ translateUi('uiMessages.mf142eb1f0ffa', { value1: (w.admin_note) }) }}</p>
                     </div>
                     <p class="font-bold text-slate-800 dark:text-slate-200">{{ currencySymbol }}{{ formatRebateAmount(w.amount) }}</p>
                   </div>
@@ -4151,19 +4143,19 @@ onUnmounted(() => {
               @click="switchCommunitySubTab('works')"
               :class="['px-4 py-2 rounded-lg text-sm font-medium transition-colors', communitySubTab === 'works' ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-600']"
             >
-              社区作品集
+              {{ translateUi('uiMessages.m073937182fa7') }}
             </button>
             <button
               @click="switchCommunitySubTab('purchases')"
               :class="['px-4 py-2 rounded-lg text-sm font-medium transition-colors', communitySubTab === 'purchases' ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-600']"
             >
-              我购买的工作流
+              {{ translateUi('uiMessages.m10d29ffc8e1d') }}
             </button>
             <button
               @click="switchCommunitySubTab('income')"
               :class="['px-4 py-2 rounded-lg text-sm font-medium transition-colors', communitySubTab === 'income' ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-600']"
             >
-              我的社区收入
+              {{ translateUi('uiMessages.m97ab533d365b') }}
             </button>
           </div>
 
@@ -4179,14 +4171,14 @@ onUnmounted(() => {
             <!-- 加载中 -->
             <div v-if="communityWorksLoading" class="text-center py-12">
               <div class="inline-block w-8 h-8 border-4 border-primary-200 border-t-primary-500 rounded-full animate-spin"></div>
-              <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">加载中...</p>
+              <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">{{ translateUi('common.loading') }}</p>
             </div>
             <!-- 空状态 -->
             <div v-else-if="communityWorks.length === 0" class="text-center py-12">
               <div class="w-16 h-16 mx-auto mb-3 bg-slate-100 dark:bg-dark-600 rounded-full flex items-center justify-center">
                 <span class="text-2xl">📝</span>
               </div>
-              <p class="text-slate-500 dark:text-slate-400">暂无发布的作品</p>
+              <p class="text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.mbab2ce66814d') }}</p>
             </div>
             <!-- 作品列表 -->
             <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -4208,7 +4200,7 @@ onUnmounted(() => {
                     <span>🔀 {{ work.fork_count || 0 }}</span>
                   </div>
                   <div v-if="work.status === 'rejected' && work.reject_reason" class="mt-2 p-2 bg-red-50 dark:bg-red-900/20 rounded text-xs text-red-600 dark:text-red-400">
-                    拒绝原因：{{ work.reject_reason }}
+                    {{ translateUi('uiMessages.m3ad3e8901507', { value1: (work.reject_reason) }) }}
                   </div>
                   <div class="mt-3 flex flex-wrap gap-2">
                     <span :class="['inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', getVisibilityBadgeClass(work)]">
@@ -4227,14 +4219,14 @@ onUnmounted(() => {
                       class="px-3 py-1.5 rounded-md text-xs font-medium bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-900/40 transition-colors"
                       @click="$router.push({ name: 'canvas', query: { id: work.workflow_id } })"
                     >
-                      重新编辑
+                      {{ translateUi('uiMessages.m1532ca4d4634') }}
                     </button>
                     <button
                       type="button"
                       class="px-3 py-1.5 rounded-md text-xs font-medium bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
                       @click="handleDeleteCommunityWork(work)"
                     >
-                      删除作品
+                      {{ translateUi('uiMessages.m2c305fc46b46') }}
                     </button>
                   </div>
                   <p class="mt-2 text-xs text-slate-400 dark:text-slate-500">{{ formatCommunityDate(work.created_at) }}</p>
@@ -4243,9 +4235,9 @@ onUnmounted(() => {
             </div>
             <!-- 分页 -->
             <div v-if="communityWorksTotal > 12" class="flex justify-center mt-6 gap-2">
-              <button @click="communityWorksPage > 1 && (communityWorksPage--, loadCommunityWorks())" :disabled="communityWorksPage <= 1" class="px-3 py-1.5 rounded-md text-sm bg-slate-100 dark:bg-dark-600 text-slate-600 dark:text-slate-400 disabled:opacity-40">上一页</button>
+              <button @click="communityWorksPage > 1 && (communityWorksPage--, loadCommunityWorks())" :disabled="communityWorksPage <= 1" class="px-3 py-1.5 rounded-md text-sm bg-slate-100 dark:bg-dark-600 text-slate-600 dark:text-slate-400 disabled:opacity-40">{{ translateUi('uiMessages.mc9b9ae7a6144') }}</button>
               <span class="px-3 py-1.5 text-sm text-slate-500 dark:text-slate-400">{{ communityWorksPage }} / {{ Math.ceil(communityWorksTotal / 12) }}</span>
-              <button @click="communityWorksPage < Math.ceil(communityWorksTotal / 12) && (communityWorksPage++, loadCommunityWorks())" :disabled="communityWorksPage >= Math.ceil(communityWorksTotal / 12)" class="px-3 py-1.5 rounded-md text-sm bg-slate-100 dark:bg-dark-600 text-slate-600 dark:text-slate-400 disabled:opacity-40">下一页</button>
+              <button @click="communityWorksPage < Math.ceil(communityWorksTotal / 12) && (communityWorksPage++, loadCommunityWorks())" :disabled="communityWorksPage >= Math.ceil(communityWorksTotal / 12)" class="px-3 py-1.5 rounded-md text-sm bg-slate-100 dark:bg-dark-600 text-slate-600 dark:text-slate-400 disabled:opacity-40">{{ translateUi('uiMessages.m8a8542f69648') }}</button>
             </div>
           </div>
 
@@ -4253,13 +4245,13 @@ onUnmounted(() => {
           <div v-if="communitySubTab === 'purchases'">
             <div v-if="communityPurchasesLoading" class="text-center py-12">
               <div class="inline-block w-8 h-8 border-4 border-primary-200 border-t-primary-500 rounded-full animate-spin"></div>
-              <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">加载中...</p>
+              <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">{{ translateUi('common.loading') }}</p>
             </div>
             <div v-else-if="communityPurchases.length === 0" class="text-center py-12">
               <div class="w-16 h-16 mx-auto mb-3 bg-slate-100 dark:bg-dark-600 rounded-full flex items-center justify-center">
                 <span class="text-2xl">🛒</span>
               </div>
-              <p class="text-slate-500 dark:text-slate-400">暂无购买记录</p>
+              <p class="text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.me7334f10478b') }}</p>
             </div>
             <div v-else class="space-y-3">
               <div v-for="p in communityPurchases" :key="p.id"
@@ -4271,19 +4263,19 @@ onUnmounted(() => {
                   <div v-else class="w-full h-full flex items-center justify-center text-slate-400"><span class="text-xl">🖼️</span></div>
                 </div>
                 <div class="flex-1 min-w-0">
-                  <h4 class="font-medium text-slate-900 dark:text-slate-100 truncate text-sm">{{ p.work_title || '未知作品' }}</h4>
-                  <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">卖家：{{ p.seller_username || '未知' }}</p>
+                  <h4 class="font-medium text-slate-900 dark:text-slate-100 truncate text-sm">{{ p.work_title || translateUi('uiMessages.m468a2963e152') }}</h4>
+                  <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ translateUi('uiMessages.m0b1dae3173ab', { value1: (p.seller_username || translateUi('uiMessages.m4d8c1c5b4283')) }) }}</p>
                 </div>
                 <div class="text-right flex-shrink-0">
-                  <p class="text-sm font-bold text-amber-500">{{ p.price || 0 }} 积分</p>
+                  <p class="text-sm font-bold text-amber-500">{{ translateUi('uiMessages.md901f70479c8', { value1: (p.price || 0) }) }}</p>
                   <p class="text-xs text-slate-400 mt-1">{{ formatCommunityDate(p.created_at) }}</p>
                 </div>
               </div>
             </div>
             <div v-if="communityPurchasesTotal > 12" class="flex justify-center mt-6 gap-2">
-              <button @click="communityPurchasesPage > 1 && (communityPurchasesPage--, loadCommunityPurchases())" :disabled="communityPurchasesPage <= 1" class="px-3 py-1.5 rounded-md text-sm bg-slate-100 dark:bg-dark-600 text-slate-600 dark:text-slate-400 disabled:opacity-40">上一页</button>
+              <button @click="communityPurchasesPage > 1 && (communityPurchasesPage--, loadCommunityPurchases())" :disabled="communityPurchasesPage <= 1" class="px-3 py-1.5 rounded-md text-sm bg-slate-100 dark:bg-dark-600 text-slate-600 dark:text-slate-400 disabled:opacity-40">{{ translateUi('uiMessages.mc9b9ae7a6144') }}</button>
               <span class="px-3 py-1.5 text-sm text-slate-500 dark:text-slate-400">{{ communityPurchasesPage }} / {{ Math.ceil(communityPurchasesTotal / 12) }}</span>
-              <button @click="communityPurchasesPage < Math.ceil(communityPurchasesTotal / 12) && (communityPurchasesPage++, loadCommunityPurchases())" :disabled="communityPurchasesPage >= Math.ceil(communityPurchasesTotal / 12)" class="px-3 py-1.5 rounded-md text-sm bg-slate-100 dark:bg-dark-600 text-slate-600 dark:text-slate-400 disabled:opacity-40">下一页</button>
+              <button @click="communityPurchasesPage < Math.ceil(communityPurchasesTotal / 12) && (communityPurchasesPage++, loadCommunityPurchases())" :disabled="communityPurchasesPage >= Math.ceil(communityPurchasesTotal / 12)" class="px-3 py-1.5 rounded-md text-sm bg-slate-100 dark:bg-dark-600 text-slate-600 dark:text-slate-400 disabled:opacity-40">{{ translateUi('uiMessages.m8a8542f69648') }}</button>
             </div>
           </div>
 
@@ -4291,36 +4283,36 @@ onUnmounted(() => {
           <div v-if="communitySubTab === 'income'">
             <div v-if="communityIncomeLoading" class="text-center py-12">
               <div class="inline-block w-8 h-8 border-4 border-primary-200 border-t-primary-500 rounded-full animate-spin"></div>
-              <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">加载中...</p>
+              <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">{{ translateUi('common.loading') }}</p>
             </div>
             <template v-else>
               <!-- 总收入展示 -->
               <div class="card p-6 mb-6 text-center">
-                <p class="text-sm text-slate-500 dark:text-slate-400 mb-1">累计社区收入</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mb-1">{{ translateUi('uiMessages.me68dc5b59163') }}</p>
                 <p class="text-4xl font-bold text-emerald-500">{{ communityIncome.total_income || 0 }}</p>
-                <p class="text-sm text-slate-400 dark:text-slate-500 mt-1">积分</p>
+                <p class="text-sm text-slate-400 dark:text-slate-500 mt-1">{{ translateUi('imageGen.points') }}</p>
               </div>
               <!-- 收入明细 -->
               <div v-if="!communityIncome.records || communityIncome.records.length === 0" class="text-center py-8">
-                <p class="text-slate-500 dark:text-slate-400">暂无收入记录</p>
+                <p class="text-slate-500 dark:text-slate-400">{{ translateUi('uiMessages.mbf9af0e7858d') }}</p>
               </div>
               <div v-else class="space-y-3">
                 <div v-for="r in communityIncome.records" :key="r.id" class="card p-4 flex items-center justify-between">
                   <div class="min-w-0 flex-1">
-                    <h4 class="font-medium text-slate-900 dark:text-slate-100 truncate text-sm">{{ r.work_title || '未知作品' }}</h4>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">买家：{{ r.buyer_username || '未知' }}</p>
+                    <h4 class="font-medium text-slate-900 dark:text-slate-100 truncate text-sm">{{ r.work_title || translateUi('uiMessages.m468a2963e152') }}</h4>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ translateUi('uiMessages.m5846575443bf', { value1: (r.buyer_username || translateUi('uiMessages.m4d8c1c5b4283')) }) }}</p>
                     <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{{ formatCommunityDate(r.created_at) }}</p>
                   </div>
                   <div class="text-right flex-shrink-0 ml-4">
                     <p class="text-sm font-bold text-emerald-500">+{{ r.seller_income || 0 }}</p>
-                    <p class="text-xs text-slate-400">积分</p>
+                    <p class="text-xs text-slate-400">{{ translateUi('imageGen.points') }}</p>
                   </div>
                 </div>
               </div>
               <div v-if="(communityIncome.total || 0) > 12" class="flex justify-center mt-6 gap-2">
-                <button @click="communityIncomePage > 1 && (communityIncomePage--, loadCommunityIncome())" :disabled="communityIncomePage <= 1" class="px-3 py-1.5 rounded-md text-sm bg-slate-100 dark:bg-dark-600 text-slate-600 dark:text-slate-400 disabled:opacity-40">上一页</button>
+                <button @click="communityIncomePage > 1 && (communityIncomePage--, loadCommunityIncome())" :disabled="communityIncomePage <= 1" class="px-3 py-1.5 rounded-md text-sm bg-slate-100 dark:bg-dark-600 text-slate-600 dark:text-slate-400 disabled:opacity-40">{{ translateUi('uiMessages.mc9b9ae7a6144') }}</button>
                 <span class="px-3 py-1.5 text-sm text-slate-500 dark:text-slate-400">{{ communityIncomePage }} / {{ Math.ceil((communityIncome.total || 0) / 12) }}</span>
-                <button @click="communityIncomePage < Math.ceil((communityIncome.total || 0) / 12) && (communityIncomePage++, loadCommunityIncome())" :disabled="communityIncomePage >= Math.ceil((communityIncome.total || 0) / 12)" class="px-3 py-1.5 rounded-md text-sm bg-slate-100 dark:bg-dark-600 text-slate-600 dark:text-slate-400 disabled:opacity-40">下一页</button>
+                <button @click="communityIncomePage < Math.ceil((communityIncome.total || 0) / 12) && (communityIncomePage++, loadCommunityIncome())" :disabled="communityIncomePage >= Math.ceil((communityIncome.total || 0) / 12)" class="px-3 py-1.5 rounded-md text-sm bg-slate-100 dark:bg-dark-600 text-slate-600 dark:text-slate-400 disabled:opacity-40">{{ translateUi('uiMessages.m8a8542f69648') }}</button>
               </div>
             </template>
           </div>
@@ -4332,16 +4324,16 @@ onUnmounted(() => {
         <span class="text-4xl">🔒</span>
       </div>
       <h3 class="text-2xl font-semibold text-slate-700 dark:text-slate-300 mb-4">
-        请先登录
+        {{ translateUi('uiMessages.m48144f96c150') }}
       </h3>
       <p class="text-slate-500 dark:text-slate-400 mb-8 max-w-md mx-auto">
-        登录后即可查看您的积分、邀请码和积分流水记录
+        {{ translateUi('uiMessages.mef37f020aa41') }}
       </p>
       <button
         @click="$router.push('/')"
         class="btn-primary px-8 py-3 text-lg"
       >
-        👉 立即登录
+        {{ translateUi('uiMessages.m83fcdfb7856f') }}
       </button>
     </div>
 
@@ -4350,7 +4342,7 @@ onUnmounted(() => {
       <div class="bg-white dark:bg-dark-700 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <!-- 模态框头部 -->
         <div class="sticky top-0 bg-white dark:bg-dark-700 border-b border-slate-200 dark:border-dark-600 px-6 py-4 flex items-center justify-between">
-          <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100">⚙️ 账户设置</h2>
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{{ translateUi('uiMessages.m0adbb1722654') }}</h2>
           <button @click="showSettingsModal = false" class="p-2 hover:bg-slate-100 dark:hover:bg-dark-600 rounded-lg transition-colors">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -4365,19 +4357,19 @@ onUnmounted(() => {
               @click="settingsTab = 'profile'"
               :class="['py-3 px-4 font-medium transition-colors', settingsTab === 'profile' ? 'text-primary-600 border-b-2 border-primary-600' : 'text-slate-600 dark:text-slate-400']"
             >
-              👤 个人资料
+              {{ translateUi('uiMessages.mdd4954fce192') }}
             </button>
             <button
               @click="settingsTab = 'password'"
               :class="['py-3 px-4 font-medium transition-colors', settingsTab === 'password' ? 'text-primary-600 border-b-2 border-primary-600' : 'text-slate-600 dark:text-slate-400']"
             >
-              🔒 修改密码
+              {{ translateUi('uiMessages.m2cb31c73ae3b') }}
             </button>
             <button
               @click="settingsTab = 'theme'"
               :class="['py-3 px-4 font-medium transition-colors', settingsTab === 'theme' ? 'text-primary-600 border-b-2 border-primary-600' : 'text-slate-600 dark:text-slate-400']"
             >
-              🎨 主题设置
+              {{ translateUi('uiMessages.m352421156cbb') }}
             </button>
           </div>
         </div>
@@ -4386,27 +4378,27 @@ onUnmounted(() => {
         <div class="p-6">
           <!-- 个人资料 -->
           <div v-if="settingsTab === 'profile'" class="space-y-4">
-            <RouterLink v-if="me && !me.is_subuser && me.has_subusers" to="/subuser" class="block text-primary-600 hover:text-primary-700">创建子用户</RouterLink>
+            <RouterLink v-if="me && !me.is_subuser && me.has_subusers" to="/subuser" class="block text-primary-600 hover:text-primary-700">{{ translateUi('uiMessages.ma84fdcb1634a') }}</RouterLink>
             <div>
               <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                用户名
+                {{ translateUi('auth.username') }}
               </label>
               <input
                 v-model="profileForm.username"
                 type="text"
                 class="input w-full"
-                placeholder="请输入用户名"
+                :placeholder="translateUi('user.enterUsername')"
               />
             </div>
             <div>
               <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                邮箱
+                {{ translateUi('auth.email') }}
               </label>
               <input
                 v-model="profileForm.email"
                 type="email"
                 class="input w-full"
-                placeholder="请输入邮箱（可选）"
+                :placeholder="translateUi('uiMessages.mae167aa89de3')"
               />
             </div>
             <button
@@ -4414,7 +4406,7 @@ onUnmounted(() => {
               :disabled="saveLoading"
               class="btn-primary w-full py-3"
             >
-              {{ saveLoading ? '保存中...' : '💾 保存修改' }}
+              {{ saveLoading ? translateUi('common.saving') : translateUi('uiMessages.m1dfee1befd34') }}
             </button>
           </div>
 
@@ -4422,35 +4414,35 @@ onUnmounted(() => {
           <div v-if="settingsTab === 'password'" class="space-y-4">
             <div>
               <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                原密码
+                {{ translateUi('user.oldPassword') }}
               </label>
               <input
                 v-model="passwordForm.oldPassword"
                 type="password"
                 class="input w-full"
-                placeholder="请输入原密码"
+                :placeholder="translateUi('user.enterOldPassword')"
               />
             </div>
             <div>
               <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                新密码
+                {{ translateUi('user.newPassword') }}
               </label>
               <input
                 v-model="passwordForm.newPassword"
                 type="password"
                 class="input w-full"
-                placeholder="请输入新密码（至少6位）"
+                :placeholder="translateUi('uiMessages.medef5df61d32')"
               />
             </div>
             <div>
               <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                确认新密码
+                {{ translateUi('uiMessages.m6fde05a916c6') }}
               </label>
               <input
                 v-model="passwordForm.confirmPassword"
                 type="password"
                 class="input w-full"
-                placeholder="请再次输入新密码"
+                :placeholder="translateUi('user.enterConfirmPassword')"
               />
             </div>
             <button
@@ -4458,14 +4450,14 @@ onUnmounted(() => {
               :disabled="saveLoading"
               class="btn-primary w-full py-3"
             >
-              {{ saveLoading ? '修改中...' : '🔐 修改密码' }}
+              {{ saveLoading ? translateUi('uiMessages.me91c0876ead6') : translateUi('uiMessages.m7205ed5ab01b') }}
             </button>
           </div>
 
           <!-- 主题设置 -->
           <div v-if="settingsTab === 'theme'" class="space-y-4">
             <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">
-              选择您喜欢的界面主题
+              {{ translateUi('uiMessages.m6571a67ad97b') }}
             </p>
             
             <div class="grid grid-cols-2 gap-4">
@@ -4477,10 +4469,10 @@ onUnmounted(() => {
                 <div class="w-16 h-16 mx-auto mb-3 bg-white rounded-lg shadow-md flex items-center justify-center">
                   <span class="text-3xl">☀️</span>
                 </div>
-                <p class="font-medium text-slate-900 dark:text-slate-100">浅色模式</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">适合白天使用</p>
+                <p class="font-medium text-slate-900 dark:text-slate-100">{{ translateUi('nav.lightMode') }}</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ translateUi('uiMessages.m9ddcfd221a0b') }}</p>
                 <div v-if="currentTheme === 'light'" class="mt-2 text-blue-600 dark:text-blue-400 text-xs font-semibold">
-                  ✓ 当前使用
+                  {{ translateUi('uiMessages.ma803e626639b') }}
                 </div>
               </button>
 
@@ -4492,10 +4484,10 @@ onUnmounted(() => {
                 <div class="w-16 h-16 mx-auto mb-3 bg-slate-800 rounded-lg shadow-md flex items-center justify-center">
                   <span class="text-3xl">🌙</span>
                 </div>
-                <p class="font-medium text-slate-900 dark:text-slate-100">深色模式</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">适合夜晚使用</p>
+                <p class="font-medium text-slate-900 dark:text-slate-100">{{ translateUi('nav.darkMode') }}</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ translateUi('uiMessages.m5ca6a840ce83') }}</p>
                 <div v-if="currentTheme === 'dark'" class="mt-2 text-indigo-600 dark:text-indigo-400 text-xs font-semibold">
-                  ✓ 当前使用
+                  {{ translateUi('uiMessages.ma803e626639b') }}
                 </div>
               </button>
             </div>
@@ -4509,7 +4501,7 @@ onUnmounted(() => {
       <div class="bg-white dark:bg-dark-700 rounded-xl shadow-2xl max-w-md w-full mx-4">
         <div class="p-6 border-b border-slate-200 dark:border-dark-600">
           <div class="flex items-center justify-between">
-            <h3 class="text-xl font-bold gradient-text">🎫 兑换券</h3>
+            <h3 class="text-xl font-bold gradient-text">{{ translateUi('uiMessages.m793022b01b53') }}</h3>
             <button @click="closeVoucherModal" class="text-slate-400 hover:text-slate-600 transition-colors">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -4521,18 +4513,18 @@ onUnmounted(() => {
         <div class="p-6 space-y-4">
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              兑换码
+              {{ translateUi('uiMessages.mabbb6156a43e') }}
             </label>
             <input 
               v-model="voucherCode"
               type="text"
               class="input w-full uppercase"
-              placeholder="请输入12位兑换码"
+              :placeholder="translateUi('uiMessages.m2727a128acfb')"
               maxlength="13"
               :disabled="voucherLoading"
             />
             <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              兑换码为12位大写字母
+              {{ translateUi('uiMessages.m442a5bf68f8c') }}
             </p>
           </div>
           
@@ -4547,7 +4539,7 @@ onUnmounted(() => {
         
         <div v-if="me" class="p-3 bg-slate-50 dark:bg-dark-600 rounded-lg mx-6 mb-6">
           <p class="text-sm text-slate-600 dark:text-slate-400">
-            当前积分：<span class="font-semibold text-amber-600 dark:text-amber-400">{{ me.points }}</span>
+            {{ translateUi('uiMessages.m253461880031') }}<span class="font-semibold text-amber-600 dark:text-amber-400">{{ me.points }}</span>
           </p>
         </div>
         
@@ -4561,7 +4553,7 @@ onUnmounted(() => {
               class="inline-flex items-center px-3 py-2 text-sm bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg font-medium shadow-md hover:shadow-lg transition-all duration-200"
             >
               <span class="mr-1.5">🔗</span>
-              <span>{{ externalLinkConfig.button_text || '获取兑换券' }}</span>
+              <span>{{ externalLinkConfig.button_text || translateUi('voucher.getVoucher') }}</span>
               <svg v-if="externalLinkConfig.open_in_new_tab" class="w-3.5 h-3.5 ml-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
               </svg>
@@ -4575,15 +4567,15 @@ onUnmounted(() => {
               class="btn-secondary"
               :disabled="voucherLoading"
             >
-              取消
+              {{ translateUi('common.cancel') }}
             </button>
             <button 
               @click="submitVoucher"
               class="btn-primary"
               :disabled="voucherLoading || !voucherCode.trim()"
             >
-              <span v-if="voucherLoading">兑换中...</span>
-              <span v-else>立即兑换</span>
+              <span v-if="voucherLoading">{{ translateUi('user.redeeming') }}</span>
+              <span v-else>{{ translateUi('user.redeemNow') }}</span>
             </button>
           </div>
         </div>
@@ -4597,7 +4589,7 @@ onUnmounted(() => {
           <div class="flex items-center justify-between">
             <h3 class="text-xl font-bold gradient-text flex items-center">
               <span class="mr-2">💰</span>
-              余额划转到积分
+              {{ translateUi('uiMessages.m508a85cb6cdd') }}
             </h3>
             <button @click="closeTransferModal" class="text-slate-400 hover:text-slate-600 transition-colors">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -4611,7 +4603,7 @@ onUnmounted(() => {
           <!-- 余额显示 -->
           <div class="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
             <div class="flex items-center justify-between">
-              <span class="text-sm text-slate-600 dark:text-slate-400">当前余额</span>
+              <span class="text-sm text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.m32cdac4f29d7') }}</span>
               <span class="text-2xl font-bold text-green-600 dark:text-green-400">{{ formatMoney(me.balance) }}</span>
             </div>
           </div>
@@ -4621,8 +4613,8 @@ onUnmounted(() => {
             <div class="flex items-center">
               <span class="text-2xl mr-2">💎</span>
               <div>
-                <p class="text-sm font-semibold text-blue-900 dark:text-blue-300">兑换汇率</p>
-                <p class="text-xs text-blue-700 dark:text-blue-400">1{{ currencyUnitLabel }} = {{ exchangeRate }} 积分</p>
+                <p class="text-sm font-semibold text-blue-900 dark:text-blue-300">{{ translateUi('uiMessages.m61ad7a3448de') }}</p>
+                <p class="text-xs text-blue-700 dark:text-blue-400">{{ translateUi('uiMessages.m776b7339ce9f', { value1: (currencyUnitLabel), value2: (exchangeRate) }) }}</p>
               </div>
             </div>
           </div>
@@ -4630,7 +4622,7 @@ onUnmounted(() => {
           <!-- 输入金额 -->
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              划转金额（{{ currencyUnitLabel }}）
+              {{ translateUi('uiMessages.m3f1fed5cf9e7', { value1: (currencyUnitLabel) }) }}
             </label>
             <input 
               v-model="transferForm.amount"
@@ -4638,21 +4630,21 @@ onUnmounted(() => {
               min="1"
               step="0.01"
               class="input w-full text-lg"
-              placeholder="请输入划转金额"
+              :placeholder="translateUi('user.enterTransferAmount')"
               :disabled="transferLoading"
             />
             <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              最低划转金额为1{{ currencyUnitLabel }}
+              {{ translateUi('uiMessages.ma05f75ffcb36', { value1: (currencyUnitLabel) }) }}
             </p>
           </div>
           
           <!-- 预计获得积分 -->
           <div v-if="calculatedPoints > 0" class="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
             <div class="flex items-center justify-between">
-              <span class="text-sm text-purple-700 dark:text-purple-300">预计获得</span>
+              <span class="text-sm text-purple-700 dark:text-purple-300">{{ translateUi('uiMessages.m9d97db483907') }}</span>
               <div class="flex items-center space-x-2">
                 <span class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ calculatedPoints }}</span>
-                <span class="text-sm text-purple-700 dark:text-purple-300">积分</span>
+                <span class="text-sm text-purple-700 dark:text-purple-300">{{ translateUi('imageGen.points') }}</span>
               </div>
             </div>
           </div>
@@ -4672,11 +4664,11 @@ onUnmounted(() => {
             <div class="flex items-start">
               <span class="text-lg mr-2">💡</span>
               <div class="text-xs text-amber-800 dark:text-amber-400">
-                <p class="font-semibold mb-1">温馨提示：</p>
+                <p class="font-semibold mb-1">{{ translateUi('uiMessages.m2278a772a240') }}</p>
                 <ul class="space-y-1 list-disc list-inside">
-                  <li>划转后的积分为永久积分，永不过期</li>
-                  <li>划转操作不可撤销，请谨慎操作</li>
-                  <li>划转将立即生效，余额和积分会实时更新</li>
+                  <li>{{ translateUi('uiMessages.m3dc9b49c6cf2') }}</li>
+                  <li>{{ translateUi('uiMessages.m9679c7df06fd') }}</li>
+                  <li>{{ translateUi('uiMessages.m487d68a935b9') }}</li>
                 </ul>
               </div>
             </div>
@@ -4690,15 +4682,15 @@ onUnmounted(() => {
             class="flex-1 btn-secondary"
             :disabled="transferLoading"
           >
-            取消
+            {{ translateUi('common.cancel') }}
           </button>
           <button 
             @click="submitTransfer"
             class="flex-1 btn-primary"
             :disabled="transferLoading || !transferForm.amount || parseFloat(transferForm.amount) <= 0"
           >
-            <span v-if="transferLoading">划转中...</span>
-            <span v-else>💎 确认划转</span>
+            <span v-if="transferLoading">{{ translateUi('user.transferring') }}</span>
+            <span v-else>{{ translateUi('uiMessages.maa06c45c2687') }}</span>
           </button>
         </div>
       </div>
@@ -4713,8 +4705,8 @@ onUnmounted(() => {
             <div class="flex items-center space-x-3">
               <span class="text-3xl">💳</span>
               <div>
-                <h3 class="text-xl font-bold text-white">账户充值</h3>
-                <p class="text-sm text-white/80">快速充值到账户余额</p>
+                <h3 class="text-xl font-bold text-white">{{ translateUi('user.accountRecharge') }}</h3>
+                <p class="text-sm text-white/80">{{ translateUi('uiMessages.mc3bce5c18868') }}</p>
               </div>
             </div>
             <button @click="closeRechargeModal" class="text-white/80 hover:text-white transition-colors">
@@ -4729,7 +4721,7 @@ onUnmounted(() => {
           <!-- 充值卡片选项 -->
           <div v-if="rechargeCards.length > 0">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
-              选择充值卡片
+              {{ translateUi('user.selectRechargeCard') }}
             </label>
             <div class="grid grid-cols-3 gap-3">
               <button
@@ -4752,8 +4744,8 @@ onUnmounted(() => {
                 <div class="font-bold text-lg">{{ currencySymbol }}{{ (card.amount / 100).toFixed(0) }}</div>
                 <!-- 奖励说明 -->
                 <div v-if="card.bonus_enabled" class="text-xs mt-1" :class="selectedRechargeCard?.id === card.id ? 'text-white/90' : 'text-amber-600 dark:text-amber-400'">
-                  <span v-if="card.bonus_type === 'random'">+{{ card.bonus_min }}~{{ card.bonus_max }}随机积分奖励</span>
-                  <span v-else>+{{ card.bonus_fixed }}积分奖励</span>
+                  <span v-if="card.bonus_type === 'random'">{{ translateUi('uiMessages.m8b4b5c38f268', { value1: (card.bonus_min), value2: (card.bonus_max) }) }}</span>
+                  <span v-else>{{ translateUi('uiMessages.mad0cf298ee0b', { value1: (card.bonus_fixed) }) }}</span>
                 </div>
               </button>
             </div>
@@ -4762,7 +4754,7 @@ onUnmounted(() => {
           <!-- 快捷金额选项（如果没有卡片时显示） -->
           <div v-else>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
-              选择充值金额
+              {{ translateUi('uiMessages.maf82a2e314b1') }}
             </label>
             <div class="grid grid-cols-3 gap-3">
               <button
@@ -4784,7 +4776,7 @@ onUnmounted(() => {
           <!-- 自定义金额 -->
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              或输入自定义金额（{{ rechargeLimits.minAmount }}-{{ rechargeLimits.maxAmount }}{{ currencyUnitLabel }}）
+              {{ translateUi('uiMessages.m8db41ccc790d', { value1: (rechargeLimits.minAmount), value2: (rechargeLimits.maxAmount), value3: (currencyUnitLabel) }) }}
             </label>
             <div class="relative">
               <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400 text-lg">{{ currencySymbol }}</span>
@@ -4795,7 +4787,7 @@ onUnmounted(() => {
                 :max="rechargeLimits.maxAmount"
                 step="0.01"
                 class="input w-full pl-10 text-lg"
-                placeholder="输入金额"
+                :placeholder="translateUi('uiMessages.mad727176fc37')"
                 @input="rechargeAmount = ''; selectedRechargeCard = null"
               />
             </div>
@@ -4805,7 +4797,7 @@ onUnmounted(() => {
           <!-- 充值金额预览 -->
           <div v-if="getFinalRechargeAmount() > 0" class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4">
             <div class="flex items-center justify-between">
-              <span class="text-sm text-green-700 dark:text-green-300">充值金额</span>
+              <span class="text-sm text-green-700 dark:text-green-300">{{ translateUi('user.rechargeAmount') }}</span>
               <span class="text-2xl font-bold text-green-600 dark:text-green-400">
                 {{ formatMoney(getFinalRechargeAmount()) }}
               </span>
@@ -4822,9 +4814,9 @@ onUnmounted(() => {
             <div class="flex items-start space-x-2">
               <span class="text-lg">💡</span>
               <div class="text-xs text-slate-600 dark:text-slate-400 space-y-1">
-                <p>• 充值后金额将直接到账户余额</p>
-                <p>• 账户余额可用于购买套餐或划转为积分</p>
-                <p>• 最低充值{{ rechargeLimits.minAmount }}{{ currencyUnitLabel }}，单笔最高{{ rechargeLimits.maxAmount }}{{ currencyUnitLabel }}</p>
+                <p>{{ translateUi('uiMessages.me7d555f383d4') }}</p>
+                <p>{{ translateUi('uiMessages.mc79f4ab52fca') }}</p>
+                <p>{{ translateUi('uiMessages.m717b29d7fba4', { value1: (rechargeLimits.minAmount), value2: (currencyUnitLabel), value3: (rechargeLimits.maxAmount), value4: (currencyUnitLabel) }) }}</p>
               </div>
             </div>
           </div>
@@ -4837,15 +4829,15 @@ onUnmounted(() => {
             class="flex-1 btn-secondary"
             :disabled="rechargeLoading"
           >
-            取消
+            {{ translateUi('common.cancel') }}
           </button>
           <button 
             @click="submitRecharge"
             class="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium rounded-xl hover:from-amber-600 hover:to-orange-600 transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
             :disabled="rechargeLoading || getFinalRechargeAmount() < 100"
           >
-            <span v-if="rechargeLoading">处理中...</span>
-            <span v-else>💳 立即支付</span>
+            <span v-if="rechargeLoading">{{ translateUi('common.processing') }}</span>
+            <span v-else>{{ translateUi('uiMessages.m6fa46cf1759d') }}</span>
           </button>
         </div>
       </div>
@@ -4858,7 +4850,7 @@ onUnmounted(() => {
           <CachedImage
             :src="getImageDisplayUrl(selectedImage)"
             :placeholder="makeHistoryImagePlaceholder(selectedImage)"
-            :alt="selectedImage.prompt || '预览图片'"
+            :alt="selectedImage.prompt || translateUi('uiMessages.mde078ce976ce')"
             wrapper-class="max-w-full max-h-[calc(96vh-190px)] flex items-center justify-center"
             img-class="max-w-full max-h-[calc(96vh-190px)] w-auto h-auto object-contain rounded-xl shadow-2xl"
             loading="eager"
@@ -4873,25 +4865,25 @@ onUnmounted(() => {
                     ? 'bg-amber-500 text-white' 
                     : 'bg-white/20 hover:bg-amber-500'
                 ]"
-                title="评分"
+                :title="translateUi('imageGen.rating')"
               >
                 <span v-if="selectedImage.rating > 0" class="text-sm">{{ '⭐'.repeat(selectedImage.rating) }}</span>
                 <span v-else class="text-xl">☆</span>
               </button>
               <!-- 星级选择弹出 -->
               <div class="absolute right-0 top-full mt-1 hidden group-hover/modalrating:flex flex-col bg-white dark:bg-dark-700 rounded-lg shadow-xl border border-slate-200 dark:border-dark-600 overflow-hidden z-20">
-                <button @click.stop="updateImageRating(selectedImage.id, 5)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">⭐⭐⭐⭐⭐ 5星</button>
-                <button @click.stop="updateImageRating(selectedImage.id, 4)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">⭐⭐⭐⭐ 4星</button>
-                <button @click.stop="updateImageRating(selectedImage.id, 3)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">⭐⭐⭐ 3星</button>
-                <button @click.stop="updateImageRating(selectedImage.id, 2)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">⭐⭐ 2星</button>
-                <button @click.stop="updateImageRating(selectedImage.id, 1)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">⭐ 1星</button>
-                <button @click.stop="updateImageRating(selectedImage.id, 0)" class="px-3 py-2 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 whitespace-nowrap">✕ 清除评分</button>
+                <button @click.stop="updateImageRating(selectedImage.id, 5)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.m3746a4aa4d91') }}</button>
+                <button @click.stop="updateImageRating(selectedImage.id, 4)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.m4c0a7c502ce6') }}</button>
+                <button @click.stop="updateImageRating(selectedImage.id, 3)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.me1452b0f2927') }}</button>
+                <button @click.stop="updateImageRating(selectedImage.id, 2)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.m0ea2cdf0e832') }}</button>
+                <button @click.stop="updateImageRating(selectedImage.id, 1)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.md93883019383') }}</button>
+                <button @click.stop="updateImageRating(selectedImage.id, 0)" class="px-3 py-2 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 whitespace-nowrap">{{ translateUi('uiMessages.m7b896f0ab2f6') }}</button>
               </div>
             </div>
             <button
               @click.stop="startEditNote('image', selectedImage.id, selectedImage.note)"
               class="p-3 bg-blue-500/80 backdrop-blur rounded-lg hover:bg-blue-600 transition-colors"
-              title="编辑备注"
+              :title="translateUi('uiMessages.m2d22af42a79f')"
             >
               <span class="text-xl">📝</span>
             </button>
@@ -4899,7 +4891,7 @@ onUnmounted(() => {
               @click.stop="downloadSelectedImageFromPreview(false)"
               :disabled="historyImageSaving"
               class="p-3 bg-green-500/80 backdrop-blur rounded-lg hover:bg-green-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              title="下载图片"
+              :title="translateUi('imageGen.downloadImage')"
             >
               <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
@@ -4924,7 +4916,7 @@ onUnmounted(() => {
             </p>
           </div>
           
-          <p class="text-white font-medium mb-2 whitespace-pre-wrap break-words leading-relaxed">{{ selectedImage.prompt || '无提示词' }}</p>
+          <p class="text-white font-medium mb-2 whitespace-pre-wrap break-words leading-relaxed">{{ selectedImage.prompt || translateUi('uiMessages.m827d156d9b4f') }}</p>
           <div class="flex flex-wrap items-start gap-x-4 gap-y-1.5 text-sm text-white/75 select-text">
             <div
               v-for="detail in getImagePreviewDetails(selectedImage)"
@@ -4937,7 +4929,7 @@ onUnmounted(() => {
           </div>
           <div class="flex items-center space-x-2 mt-2">
             <span v-if="selectedImage.rating > 0" class="text-sm font-medium px-2 py-1 bg-amber-500/20 text-amber-300 rounded">
-              {{ '⭐'.repeat(selectedImage.rating) }} {{ selectedImage.rating }}星
+              {{ translateUi('uiMessages.ma49603414d36', { value1: ('⭐'.repeat(selectedImage.rating)), value2: (selectedImage.rating) }) }}
             </span>
           </div>
           <div class="mt-3 pt-3 border-t border-white/20">
@@ -4945,7 +4937,7 @@ onUnmounted(() => {
               <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
               </svg>
-              图片保留期限由管理员设置，请及时保存到本地
+              {{ translateUi('uiMessages.m9a24d07c7ade') }}
             </p>
           </div>
         </div>
@@ -4982,25 +4974,25 @@ onUnmounted(() => {
                     ? 'bg-amber-500 text-white' 
                     : 'bg-white/20 hover:bg-amber-500'
                 ]"
-                title="评分"
+                :title="translateUi('imageGen.rating')"
               >
                 <span v-if="selectedVideo.rating > 0" class="text-sm">{{ '⭐'.repeat(selectedVideo.rating) }}</span>
                 <span v-else class="text-xl">☆</span>
               </button>
               <!-- 星级选择弹出 -->
               <div class="absolute right-0 top-full mt-1 hidden group-hover/modalrating:flex flex-col bg-white dark:bg-dark-700 rounded-lg shadow-xl border border-slate-200 dark:border-dark-600 overflow-hidden z-20">
-                <button @click.stop="updateVideoRating(selectedVideo.id, 5)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">⭐⭐⭐⭐⭐ 5星</button>
-                <button @click.stop="updateVideoRating(selectedVideo.id, 4)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">⭐⭐⭐⭐ 4星</button>
-                <button @click.stop="updateVideoRating(selectedVideo.id, 3)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">⭐⭐⭐ 3星</button>
-                <button @click.stop="updateVideoRating(selectedVideo.id, 2)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">⭐⭐ 2星</button>
-                <button @click.stop="updateVideoRating(selectedVideo.id, 1)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">⭐ 1星</button>
-                <button @click.stop="updateVideoRating(selectedVideo.id, 0)" class="px-3 py-2 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 whitespace-nowrap">✕ 清除评分</button>
+                <button @click.stop="updateVideoRating(selectedVideo.id, 5)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.m3746a4aa4d91') }}</button>
+                <button @click.stop="updateVideoRating(selectedVideo.id, 4)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.m4c0a7c502ce6') }}</button>
+                <button @click.stop="updateVideoRating(selectedVideo.id, 3)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.me1452b0f2927') }}</button>
+                <button @click.stop="updateVideoRating(selectedVideo.id, 2)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.m0ea2cdf0e832') }}</button>
+                <button @click.stop="updateVideoRating(selectedVideo.id, 1)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">{{ translateUi('uiMessages.md93883019383') }}</button>
+                <button @click.stop="updateVideoRating(selectedVideo.id, 0)" class="px-3 py-2 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 whitespace-nowrap">{{ translateUi('uiMessages.m7b896f0ab2f6') }}</button>
               </div>
             </div>
             <button
               @click.stop="startEditNote('video', selectedVideo.id, selectedVideo.note)"
               class="p-3 bg-blue-500/80 backdrop-blur rounded-lg hover:bg-blue-600 transition-colors"
-              title="编辑备注"
+              :title="translateUi('uiMessages.m2d22af42a79f')"
             >
               <span class="text-xl">📝</span>
             </button>
@@ -5009,7 +5001,7 @@ onUnmounted(() => {
               :href="getMediaUrl(selectedVideo.video_url)"
               :download="selectedVideo.note ? `${sanitizeFilename(selectedVideo.note)}.mp4` : `${selectedVideo.model}-${selectedVideo.id}.mp4`"
               class="p-3 bg-green-500/80 backdrop-blur rounded-lg hover:bg-green-600 transition-colors"
-              title="下载视频"
+              :title="translateUi('videoGen.downloadVideo')"
               @click.stop
             >
               <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -5051,22 +5043,22 @@ onUnmounted(() => {
               {{ formatVideoStatus(selectedVideo.status) }}
             </span>
             <span v-if="selectedVideo.rating > 0" class="text-sm font-medium px-2 py-1 bg-amber-500/20 text-amber-300 rounded">
-              {{ '⭐'.repeat(selectedVideo.rating) }} {{ selectedVideo.rating }}星
+              {{ translateUi('uiMessages.ma49603414d36', { value1: ('⭐'.repeat(selectedVideo.rating)), value2: (selectedVideo.rating) }) }}
             </span>
             <span v-if="selectedVideo.points_cost" class="text-sm text-white/70">
-              消耗 {{ selectedVideo.points_cost }} 积分
+              {{ translateUi('uiMessages.mfe189bda5260', { value1: (selectedVideo.points_cost) }) }}
             </span>
           </div>
           <div v-if="selectedVideo.fail_reason" class="mt-2 p-2 rounded text-sm" :class="isContentSafetyMsg(selectedVideo.fail_reason) ? 'bg-amber-500/20 text-amber-300' : 'bg-red-500/20 text-red-300'">
             {{ selectedVideo.fail_reason }}
-            <p v-if="isContentSafetyMsg(selectedVideo.fail_reason)" class="text-xs mt-1 text-amber-200/70">请修改提示词或更换参考图片后重试</p>
+            <p v-if="isContentSafetyMsg(selectedVideo.fail_reason)" class="text-xs mt-1 text-amber-200/70">{{ translateUi('uiMessages.mb8705a65f9cb') }}</p>
           </div>
           <div class="mt-3 pt-3 border-t border-white/20">
             <p class="text-xs text-amber-300 flex items-center">
               <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
               </svg>
-              视频保留期限由管理员设置，请及时保存到本地
+              {{ translateUi('uiMessages.m0420353ba9b0') }}
             </p>
           </div>
         </div>
@@ -5080,7 +5072,7 @@ onUnmounted(() => {
           <div class="flex items-center justify-between">
             <h3 class="text-lg font-bold text-white flex items-center">
               <span class="mr-2">📝</span>
-              编辑备注
+              {{ translateUi('uiMessages.m2d22af42a79f') }}
             </h3>
             <button @click="cancelEditNote" class="text-white/80 hover:text-white transition-colors">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -5093,18 +5085,18 @@ onUnmounted(() => {
         <div class="p-4 space-y-4">
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              备注内容（用于下载时重命名文件）
+              {{ translateUi('uiMessages.m78f97f0a22ac') }}
             </label>
             <input
               v-model="noteInput"
               type="text"
               class="w-full px-3 py-2 border border-slate-300 dark:border-dark-500 rounded-lg bg-white dark:bg-dark-600 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="输入备注..."
+              :placeholder="translateUi('uiMessages.mbc03a92388eb')"
               maxlength="100"
               @keyup.enter="saveNote"
             />
             <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              最多100个字符，用于下载时作为文件名
+              {{ translateUi('uiMessages.m9511f8c2449e') }}
             </p>
           </div>
         </div>
@@ -5114,13 +5106,13 @@ onUnmounted(() => {
             @click="cancelEditNote"
             class="flex-1 px-4 py-2 bg-slate-200 dark:bg-dark-600 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-dark-500 transition-colors"
           >
-            取消
+            {{ translateUi('common.cancel') }}
           </button>
           <button 
             @click="saveNote"
             class="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
           >
-            保存
+            {{ translateUi('common.save') }}
           </button>
         </div>
       </div>
@@ -5143,8 +5135,8 @@ onUnmounted(() => {
               </svg>
             </div>
             <div>
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">确认转让</h3>
-              <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">请仔细核对转让信息</p>
+              <h3 class="text-xl font-bold text-slate-900 dark:text-white">{{ translateUi('uiMessages.me7a4b20fbac2') }}</h3>
+              <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{{ translateUi('uiMessages.mca61a33b3185') }}</p>
             </div>
           </div>
         </div>
@@ -5155,7 +5147,7 @@ onUnmounted(() => {
         <div class="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-5 space-y-4">
           <!-- 收款人信息 -->
           <div class="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-700">
-            <span class="text-sm font-medium text-slate-600 dark:text-slate-400">收款人</span>
+            <span class="text-sm font-medium text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.m207f3c8a23b4') }}</span>
             <div class="text-right">
               <p class="font-semibold text-slate-900 dark:text-white">{{ pointsTransferForm.selectedRecipient?.username }}</p>
               <p class="text-xs text-slate-500 dark:text-slate-400">{{ pointsTransferForm.selectedRecipient?.email }}</p>
@@ -5164,21 +5156,21 @@ onUnmounted(() => {
 
           <!-- 转让金额 -->
           <div class="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-700">
-            <span class="text-sm font-medium text-slate-600 dark:text-slate-400">转让积分</span>
+            <span class="text-sm font-medium text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.m573e119fa968') }}</span>
             <span class="text-2xl font-bold text-slate-900 dark:text-white">{{ pointsTransferForm.amount }}</span>
           </div>
 
           <!-- 备注 -->
           <div v-if="pointsTransferForm.memo" class="flex items-start justify-between pb-3 border-b border-slate-200 dark:border-slate-700">
-            <span class="text-sm font-medium text-slate-600 dark:text-slate-400">备注</span>
+            <span class="text-sm font-medium text-slate-600 dark:text-slate-400">{{ translateUi('directorStudio.inspector.note') }}</span>
             <span class="text-sm text-slate-700 dark:text-slate-300 text-right max-w-[200px]">{{ pointsTransferForm.memo }}</span>
           </div>
 
           <!-- 余额变化 -->
           <div class="bg-white dark:bg-slate-800 rounded-lg p-4 space-y-2">
             <div class="flex items-center justify-between">
-              <span class="text-sm text-slate-600 dark:text-slate-400">当前余额</span>
-              <span class="font-semibold text-slate-900 dark:text-white">{{ me?.points || 0 }} 积分</span>
+              <span class="text-sm text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.m32cdac4f29d7') }}</span>
+              <span class="font-semibold text-slate-900 dark:text-white">{{ translateUi('uiMessages.md901f70479c8', { value1: (me?.points || 0) }) }}</span>
             </div>
             <div class="flex items-center justify-center">
               <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -5186,8 +5178,8 @@ onUnmounted(() => {
               </svg>
             </div>
             <div class="flex items-center justify-between">
-              <span class="text-sm text-slate-600 dark:text-slate-400">转让后余额</span>
-              <span class="font-bold text-lg text-slate-900 dark:text-white">{{ (me?.points || 0) - (pointsTransferForm.amount || 0) }} 积分</span>
+              <span class="text-sm text-slate-600 dark:text-slate-400">{{ translateUi('uiMessages.m82ce3f3a55b3') }}</span>
+              <span class="font-bold text-lg text-slate-900 dark:text-white">{{ translateUi('uiMessages.md901f70479c8', { value1: ((me?.points || 0) - (pointsTransferForm.amount || 0)) }) }}</span>
             </div>
           </div>
 
@@ -5196,7 +5188,7 @@ onUnmounted(() => {
             <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
             </svg>
-            <p>积分转让后无法撤回，请确认收款人信息正确</p>
+            <p>{{ translateUi('uiMessages.m3a1f5ac208bd') }}</p>
           </div>
         </div>
       </div>
@@ -5207,13 +5199,13 @@ onUnmounted(() => {
           @click="showTransferConfirmModal = false"
           class="flex-1 px-6 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold rounded-xl transition-all duration-200 hover:shadow-md"
         >
-          取消
+          {{ translateUi('common.cancel') }}
         </button>
         <button
           @click="executeTransfer"
           class="flex-1 px-6 py-3 bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-800 hover:to-slate-900 dark:from-slate-600 dark:to-slate-700 dark:hover:from-slate-500 dark:hover:to-slate-600 text-white font-bold rounded-xl transition-all duration-200 hover:shadow-lg transform hover:scale-[1.02] active:scale-[0.98]"
         >
-          确认转让
+          {{ translateUi('uiMessages.me7a4b20fbac2') }}
         </button>
       </div>
     </div>

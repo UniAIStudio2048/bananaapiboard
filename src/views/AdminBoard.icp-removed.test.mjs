@@ -1,3 +1,4 @@
+import { localizedPattern } from '../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
@@ -5,7 +6,7 @@ const source = readFileSync(new URL('./AdminBoard.vue', import.meta.url), 'utf8'
 
 assert.doesNotMatch(
   source,
-  /网站备案设置|settings\.icp_config|icp_config/,
+  localizedPattern(/网站备案设置|settings\.icp_config|icp_config/),
   'board admin should no longer expose or save ICP settings'
 )
 

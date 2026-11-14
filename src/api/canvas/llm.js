@@ -1,3 +1,4 @@
+import { t as translateUi } from '../../i18n/index.js'
 /**
  * Canvas LLM API
  * 大语言模型相关 API
@@ -22,7 +23,7 @@ function normalizeLLMNetworkError(error) {
   const name = String(error?.name || '')
 
   if (name === 'AbortError' || message.includes('abort')) {
-    return new Error('LLM 请求超时，请稍后重试')
+    return new Error(translateUi('uiMessages.mbc992d53fc7f'))
   }
 
   if (
@@ -31,7 +32,7 @@ function normalizeLLMNetworkError(error) {
     message.includes('NetworkError') ||
     message.includes('Load failed')
   ) {
-    return new Error('LLM 请求连接失败，请检查网络或稍后重试')
+    return new Error(translateUi('uiMessages.m657ec07bf19c'))
   }
 
   return error
@@ -100,9 +101,9 @@ export async function chatWithLLM(params) {
     throwPromptSafetyErrorIfNeeded(error)
     // 统一积分不足错误提示
     if (error.error === 'insufficient_points' || response.status === 402) {
-      throw new Error('当前积分余额不足，任务提交失败')
+      throw new Error(translateUi('uiMessages.mf02eb368d929'))
     }
-    throw new Error(error.message || error.error || 'LLM 请求失败')
+    throw new Error(error.message || error.error || translateUi('uiMessages.m40f9195d7eb7'))
   }
   
   return response.json()
@@ -139,7 +140,7 @@ export async function chatWithLLMStream(params) {
     if (!response.ok) {
       const error = await response.json().catch(() => ({}))
       throwPromptSafetyErrorIfNeeded(error)
-      throw new Error(error.message || error.error || 'LLM 请求失败')
+      throw new Error(error.message || error.error || translateUi('uiMessages.m40f9195d7eb7'))
     }
     
     // 读取流式响应
@@ -204,9 +205,9 @@ export async function chatWithLLMStream(params) {
           if (json.error) {
             throwPromptSafetyErrorIfNeeded(json)
             if (json.error === 'insufficient_points' || json.status === 402) {
-              throw new Error('当前积分余额不足，任务提交失败')
+              throw new Error(translateUi('uiMessages.mf02eb368d929'))
             }
-            throw new Error(json.message || json.error || 'LLM 请求失败')
+            throw new Error(json.message || json.error || translateUi('uiMessages.m40f9195d7eb7'))
           }
 
           // OpenAI 格式的流式响应
@@ -259,9 +260,9 @@ async function callLLM(action, params) {
     throwPromptSafetyErrorIfNeeded(error)
     // 统一积分不足错误提示
     if (error.error === 'insufficient_points' || response.status === 402) {
-      throw new Error('当前积分余额不足，任务提交失败')
+      throw new Error(translateUi('uiMessages.mf02eb368d929'))
     }
-    throw new Error(error.message || error.error || 'LLM 请求失败')
+    throw new Error(error.message || error.error || translateUi('uiMessages.m40f9195d7eb7'))
   }
   
   return response.json()
@@ -342,7 +343,7 @@ export async function getUserLLMPresets() {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || error.error || '获取预设列表失败')
+    throw new Error(error.message || error.error || translateUi('uiMessages.m3873d80f8c54'))
   }
 
   return response.json()
@@ -364,7 +365,7 @@ export async function createUserLLMPreset({ name, systemPrompt }) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || error.error || '创建预设失败')
+    throw new Error(error.message || error.error || translateUi('uiMessages.m40f41d4c928d'))
   }
 
   return response.json()
@@ -387,7 +388,7 @@ export async function updateUserLLMPreset(id, { name, systemPrompt }) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || error.error || '更新预设失败')
+    throw new Error(error.message || error.error || translateUi('uiMessages.m5f996ae4293e'))
   }
 
   return response.json()
@@ -406,7 +407,7 @@ export async function deleteUserLLMPreset(id) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || error.error || '删除预设失败')
+    throw new Error(error.message || error.error || translateUi('uiMessages.m5a3b750e4f52'))
   }
 
   return response.json()

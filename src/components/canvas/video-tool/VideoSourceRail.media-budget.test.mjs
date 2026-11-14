@@ -1,3 +1,6 @@
+import * as i18nTestRuntime from '../../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -15,6 +18,8 @@ async function renderRail(canvasVideos) {
   let probes = 0
   const module = { exports: {} }
   const runtimeRequire = id => {
+if (id === '@/i18n') return i18nTestRuntime
+
     if (id === 'vue') return vue
     if (id === '@/config/tenant') return { getMediaUrl: url => url }
     if (id === '@/api/canvas/history') return { getHistory: async () => ({ history: [] }) }
@@ -27,7 +32,7 @@ async function renderRail(canvasVideos) {
       return { removeAttribute() {}, load() {}, set src(value) { queueMicrotask(() => this.onerror?.()) } }
     }
   }
-  new Function('require', 'module', 'exports', 'document', 'setTimeout', compiled)(runtimeRequire, module, module.exports, document, () => 0)
+  new Function('translateUi', 'uiLanguage', 'require', 'module', 'exports', 'document', 'setTimeout', compiled)(translateUi, uiLanguage, runtimeRequire, module, module.exports, document, () => 0)
   const html = await renderToString(vue.createSSRApp(module.exports.default, { canvasVideos }))
   return { html, probes }
 }

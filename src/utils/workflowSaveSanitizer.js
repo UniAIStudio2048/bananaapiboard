@@ -1,3 +1,4 @@
+import { t as translateUi } from '../i18n/index.js'
 const TRANSIENT_URL_RE = /^(data:|blob:)/i
 
 const NODE_RUNTIME_KEYS = new Set([
@@ -154,7 +155,7 @@ function sanitizeDirectorStudioProject(project) {
 }
 
 export function sanitizeWorkflowNodeForSave(node) {
-  if (node.data?._shellLoading) throw new Error('画布节点尚未加载完整，请稍后再保存。')
+  if (node.data?._shellLoading) throw new Error(translateUi('uiMessages.m948941fc5094'))
   const cleanedNode = removeEmptyRuntimeStyle(copyWithoutKeys(node, NODE_RUNTIME_KEYS))
   if (!cleanedNode.data) {
     return sanitizeInlineValue(cleanedNode)

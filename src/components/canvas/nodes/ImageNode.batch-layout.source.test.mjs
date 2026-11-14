@@ -6,10 +6,7 @@ const source = fs.readFileSync(new URL('./ImageNode.vue', import.meta.url), 'utf
 
 test('image 2x/4x uses shared grid and visible group', () => {
   assert.match(source, /getBatchGridPositions/)
-  assert.match(
-    source,
-    /canvasStore\.createVisibleGroup\(allNodeIds, `图片生成 ×\$\{generateCount\}`/
-  )
+  assert.match(source, /canvasStore\.createVisibleGroup\(allNodeIds, translateUi\('uiMessages\.m825cca2477d1', \{ value1: \(generateCount\) \}\)/)
   assert.match(source, /skipHistory:\s*true/)
 })
 

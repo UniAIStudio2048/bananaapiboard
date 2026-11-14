@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * SpaceSwitcher.vue - 空间切换器组件（下拉菜单版）
  * 用于在历史记录、资产、工作流面板顶部切换空间筛选
@@ -72,7 +74,7 @@ const spaces = computed(() => {
   if (props.showAll) {
     list.push({
       id: 'all',
-      name: '全部',
+      get name() { return translateUi('canvas.categories.all') },
       icon: '◈',
       type: 'all'
     })
@@ -84,9 +86,9 @@ const spaces = computed(() => {
 // 获取角色显示文本
 function getRoleText(role) {
   const roleMap = {
-    owner: '所有者',
-    admin: '管理员',
-    member: '成员'
+    owner: translateUi('uiMessages.m43a7f4b4c5c8'),
+    admin: translateUi('user.roleAdmin'),
+    member: translateUi('uiMessages.m6e6d6ddbb7c1')
   }
   return roleMap[role] || role
 }
@@ -125,7 +127,7 @@ onUnmounted(() => {
 
 <template>
   <div :class="['space-switcher-dropdown', { compact }]" ref="dropdownRef">
-    <div class="switcher-label">空间:</div>
+    <div class="switcher-label">{{ translateUi('uiMessages.ma4e1aa5695d5') }}</div>
     <div class="dropdown-wrapper">
       <button class="dropdown-trigger" @click="toggleDropdown">
         <span class="space-icon">{{ selectedSpaceInfo.icon }}</span>
@@ -153,7 +155,7 @@ onUnmounted(() => {
               v-if="space.type === 'team' && space.memberCount" 
               class="member-count"
             >
-              {{ space.memberCount }}人
+              {{ translateUi('uiMessages.m48a8e95b1394', { value1: (space.memberCount) }) }}
             </span>
             <span v-if="selectedSpace === space.id" class="check-mark">✓</span>
           </div>

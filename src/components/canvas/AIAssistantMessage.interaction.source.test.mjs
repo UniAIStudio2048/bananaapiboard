@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../i18n/sourceAssertions.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
@@ -6,7 +7,7 @@ const source = await readFile(new URL('./AIAssistantMessage.vue', import.meta.ur
 
 test('thinking is a single collapsed disclosure row with a live thinking state', () => {
   assert.match(source, /message\.thinking \|\| message\.isThinking/)
-  assert.match(source, /message\.isThinking \? '思考中…' : '思考过程'/)
+  assert.match(source, localizedPattern(/message\.isThinking \? '思考中…' : '思考过程'/))
   assert.match(source, /v-if="showThinking && message\.thinking" class="ai-thinking__content"/)
   assert.match(source, /const showThinking = ref\(false\)/)
 })

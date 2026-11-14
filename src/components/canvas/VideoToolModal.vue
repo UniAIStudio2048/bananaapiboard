@@ -6,17 +6,17 @@
       <main class="video-tool-modal__workspace">
         <!-- 标题栏 -->
         <header class="video-tool-modal__titlebar">
-          <span class="video-tool-modal__title">视频工具</span>
+          <span class="video-tool-modal__title">{{ translateUi('uiMessages.md2442cb204fa') }}</span>
           <div class="video-tool-modal__title-actions">
             <div v-if="activeMode === 'edit'" class="video-tool-modal__export">
-              <button type="button" :disabled="submitting || !selectedClip || !draftReady" @click="showExportMenu = !showExportMenu">{{ submitting ? '处理中...' : '导出 ▾' }}</button>
+              <button type="button" :disabled="submitting || !selectedClip || !draftReady" @click="showExportMenu = !showExportMenu">{{ submitting ? translateUi('common.processing') : translateUi('uiMessages.m070d83c17613') }}</button>
               <div v-if="showExportMenu" class="video-tool-modal__export-menu">
-                <span>导出选中片段</span>
-                <button type="button" @click="exportSelected('local')">导出到本地</button>
-                <button type="button" @click="exportSelected('canvas')">导出到画布</button>
+                <span>{{ translateUi('uiMessages.m47c5b40bf212') }}</span>
+                <button type="button" @click="exportSelected('local')">{{ translateUi('uiMessages.mb61dc95bc7f3') }}</button>
+                <button type="button" @click="exportSelected('canvas')">{{ translateUi('uiMessages.m10619736d5d8') }}</button>
               </div>
             </div>
-          <button type="button" class="video-tool-modal__close" title="关闭" :disabled="submitting" @click="requestClose">
+          <button type="button" class="video-tool-modal__close" :title="translateUi('common.close')" :disabled="submitting" @click="requestClose">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
@@ -37,7 +37,7 @@
               <circle cx="6" cy="18" r="3" />
               <path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12" />
             </svg>
-            <span>剪辑</span>
+            <span>{{ translateUi('uiMessages.m6d997bfb2e1d') }}</span>
           </button>
           <div class="video-tool-modal__mode-tab-wrapper">
             <button
@@ -50,14 +50,14 @@
                 <rect x="2" y="4" width="20" height="16" rx="2" />
                 <path d="M7 15h4M13 15h4" />
               </svg>
-              <span>字幕擦除</span>
+              <span>{{ translateUi('user.ledgerType.subtitle_erase') }}</span>
               <span class="video-tool-modal__erase-label">· {{ activeEraseOption.label }}</span>
               <svg class="video-tool-modal__dropdown-arrow" :class="{ 'video-tool-modal__dropdown-arrow--open': showEraseDropdown }" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M6 9l6 6 6-6" />
               </svg>
             </button>
             <div v-if="showEraseDropdown" class="video-tool-modal__erase-dropdown">
-              <div class="video-tool-modal__erase-group-label">字幕擦除</div>
+              <div class="video-tool-modal__erase-group-label">{{ translateUi('user.ledgerType.subtitle_erase') }}</div>
               <button
                 v-for="option in subtitleEraseOptions"
                 :key="option.value"
@@ -65,7 +65,7 @@
                 :class="{ active: eraseMode === option.value }"
                 @click="eraseMode = option.value; showEraseDropdown = false"
               >{{ option.label }}</button>
-              <div class="video-tool-modal__erase-group-label">高级水印/字幕擦除</div>
+              <div class="video-tool-modal__erase-group-label">{{ translateUi('uiMessages.mb47b5d585533') }}</div>
               <button
                 v-for="option in watermarkEraseOptions"
                 :key="option.value"
@@ -94,15 +94,15 @@
           @metadata="confirmSourceMetadata"
         />
         <aside v-if="activeMode === 'edit'" class="video-tool-modal__properties">
-          <h3>视频</h3>
+          <h3>{{ translateUi('canvas.nodes.video') }}</h3>
           <template v-if="selectedClip">
-            <h4>变速</h4>
-            <label>变速倍数 <input aria-label="变速倍数" type="number" min="0.25" max="4" step="0.01" :value="Number(selectedClip.playbackRate ?? 1).toFixed(2)" :disabled="!draftReady || submitting" @change="updateClipProperty('playbackRate', $event)" /><span>x</span></label>
-            <div class="video-tool-modal__duration">时长 <output>{{ getClipDuration(selectedClip).toFixed(2) }}s</output></div>
-            <h4>音量</h4>
-            <label>音量增益 <input aria-label="音量增益" type="number" min="-60" max="12" step="0.1" :value="Number(selectedClip.volumeDb ?? 0).toFixed(1)" :disabled="!draftReady || submitting" @change="updateClipProperty('volumeDb', $event)" /><span>dB</span></label>
+            <h4>{{ translateUi('uiMessages.m1eede67ef0f6') }}</h4>
+            <label>{{ translateUi('uiMessages.mc5613718244b') }} <input :aria-label="translateUi('uiMessages.mc5613718244b')" type="number" min="0.25" max="4" step="0.01" :value="Number(selectedClip.playbackRate ?? 1).toFixed(2)" :disabled="!draftReady || submitting" @change="updateClipProperty('playbackRate', $event)" /><span>x</span></label>
+            <div class="video-tool-modal__duration">{{ translateUi('videoGen.duration') }} <output>{{ getClipDuration(selectedClip).toFixed(2) }}s</output></div>
+            <h4>{{ translateUi('uiMessages.m8bf8b9780d34') }}</h4>
+            <label>{{ translateUi('uiMessages.ma6c7728e2136') }} <input :aria-label="translateUi('uiMessages.ma6c7728e2136')" type="number" min="-60" max="12" step="0.1" :value="Number(selectedClip.volumeDb ?? 0).toFixed(1)" :disabled="!draftReady || submitting" @change="updateClipProperty('volumeDb', $event)" /><span>dB</span></label>
           </template>
-          <p v-else>请选择时间线上的片段</p>
+          <p v-else>{{ translateUi('uiMessages.m56b75fef9f4f') }}</p>
         </aside>
         </div>
 
@@ -117,7 +117,7 @@
           <!-- 中间：播放控制 -->
           <div class="video-tool-modal__toolbar-center">
             <span class="video-tool-modal__time">{{ formatTimeDisplay(currentPlayTime) }}</span>
-            <button type="button" class="video-tool-modal__play-btn" @click="togglePreviewPlay" :title="isPreviewPlaying ? '暂停' : '播放'">
+            <button type="button" class="video-tool-modal__play-btn" @click="togglePreviewPlay" :title="isPreviewPlaying ? translateUi('common.pause') : translateUi('uiMessages.mc3396195e91c')">
               <svg v-if="!isPreviewPlaying" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M8 5v14l11-7z"/>
               </svg>
@@ -134,14 +134,14 @@
               :disabled="submitting || normalizedClips.length === 0"
               @click="submit"
             >
-              {{ submitting ? '处理中...' : '开始擦除' }}
+              {{ submitting ? translateUi('common.processing') : translateUi('uiMessages.m8c1003b46e31') }}
             </button>
           </div>
 
           <!-- 右侧：缩放 -->
           <div class="video-tool-modal__toolbar-right">
             <div class="video-tool-modal__zoom-group">
-              <button type="button" title="缩小" @click="zoomLevel = Math.max(0.1, zoomLevel - 0.25)">
+              <button type="button" :title="translateUi('canvas.zoomOut')" @click="zoomLevel = Math.max(0.1, zoomLevel - 0.25)">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="11" cy="11" r="8" />
                   <path d="M21 21l-4.35-4.35M8 11h6" />
@@ -155,7 +155,7 @@
                 step="0.1"
                 v-model.number="zoomLevel"
               />
-              <button type="button" title="放大" @click="zoomLevel = Math.min(5, zoomLevel + 0.25)">
+              <button type="button" :title="translateUi('canvas.zoomIn')" @click="zoomLevel = Math.min(5, zoomLevel + 0.25)">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="11" cy="11" r="8" />
                   <path d="M21 21l-4.35-4.35M11 8v6M8 11h6" />
@@ -169,21 +169,21 @@
         <div v-if="estimate || statusText !== '添加视频后开始处理'" class="video-tool-modal__status-bar">
           <span>{{ statusText }}</span>
           <span v-if="activeMode === 'edit'" role="status">{{ saveStatusLabel }}</span>
-          <button v-if="saveState === 'error'" type="button" @click="retrySave">{{ saveError?.code === 'VERSION_CONFLICT' ? '重新加载' : '重试保存' }}</button>
-          <button v-if="localExportResult" type="button" :disabled="submitting" @click="retryDownload">重新下载上次成片</button>
+          <button v-if="saveState === 'error'" type="button" @click="retrySave">{{ saveError?.code === 'VERSION_CONFLICT' ? translateUi('uiMessages.m7bdd5ce1e298') : translateUi('uiMessages.m917e75040547') }}</button>
+          <button v-if="localExportResult" type="button" :disabled="submitting" @click="retryDownload">{{ translateUi('uiMessages.m88918399da45') }}</button>
           <template v-if="closeBlocked">
-            <span>修改尚未保存，是否放弃未保存修改并关闭？</span>
-            <button type="button" @click="$emit('close')">放弃并关闭</button>
-            <button type="button" @click="closeBlocked = false">继续编辑</button>
+            <span>{{ translateUi('uiMessages.m334edf9e9729') }}</span>
+            <button type="button" @click="$emit('close')">{{ translateUi('uiMessages.m7e5590b331a2') }}</button>
+            <button type="button" @click="closeBlocked = false">{{ translateUi('uiMessages.mfd4b9e3b6c68') }}</button>
           </template>
           <strong v-if="estimate">
-            预计 {{ estimate.pointsCost }} 积分
-            <template v-if="estimate.channel"> · {{ estimate.channel === 'volcengine' ? '火山' : '无痕' }}</template>
+            {{ translateUi('uiMessages.m3b0a08686473', { value1: (estimate.pointsCost) }) }}
+            <template v-if="estimate.channel"> · {{ estimate.channel === 'volcengine' ? translateUi('uiMessages.mdc749837f4e0') : translateUi('uiMessages.m21abaa3911b9') }}</template>
             <template v-if="estimate.billingUnit === 'second'">
-              · {{ estimate.billedSeconds }} 秒（{{ estimate.pointsPerSecond }} 积分/秒）
+              {{ translateUi('uiMessages.m8e503149f48d', { value1: (estimate.billedSeconds), value2: (estimate.pointsPerSecond) }) }}
             </template>
             <template v-else>
-              · {{ estimate.billedMinutes }} 分钟
+              {{ translateUi('uiMessages.mbece20211544', { value1: (estimate.billedMinutes) }) }}
             </template>
           </strong>
         </div>
@@ -207,6 +207,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import VideoSourceRail from './video-tool/VideoSourceRail.vue'
 import VideoTimeline from './video-tool/VideoTimeline.vue'
@@ -250,7 +252,7 @@ const detectRect = ref(null)
 const estimate = ref(null)
 const subtitleConfig = ref(null)
 const submitting = ref(false)
-const statusText = ref('添加视频后开始处理')
+const statusText = ref(translateUi('uiMessages.m81554f2b52cf'))
 const zoomLevel = ref(1)
 const currentPlayTime = ref(0)
 const isPreviewPlaying = ref(false)
@@ -262,16 +264,16 @@ const saveError = ref(null)
 const closeBlocked = ref(false)
 const localExportResult = ref(null)
 const splitActions = [
-  { value: 'split', label: '分割' },
-  { value: 'left', label: '向左分割' },
-  { value: 'right', label: '向右分割' }
+  { value: 'split', get label() { return translateUi('uiMessages.m88a998a101b4') } },
+  { value: 'left', get label() { return translateUi('uiMessages.m4fcfde0c0faf') } },
+  { value: 'right', get label() { return translateUi('uiMessages.m7c9ed6c19971') } }
 ]
-const saveStatusLabel = computed(() => ({ loading: '加载草稿中', saving: '保存中', saved: '已保存', error: `保存失败：${saveError.value?.message || '请重试'}` })[saveState.value])
+const saveStatusLabel = computed(() => ({ get loading() { return translateUi('uiMessages.m084ce5305e31') }, get saving() { return translateUi('uiMessages.ma1a1720d3eb5') }, get saved() { return translateUi('tips.saved') }, get error() { return translateUi('uiMessages.mab11eeb05921', { value1: (saveError.value?.message || translateUi('uiMessages.ma2577bae3cfc')) }) } })[saveState.value])
 let draftWriter = makeDraftWriter()
 
 function makeDraftWriter() {
   return createVideoEditDraftWriter(async draft => {
-    if (!props.saveDraft) throw new Error('草稿保存接口不可用')
+    if (!props.saveDraft) throw new Error(translateUi('uiMessages.m8af3f27f073d'))
     await props.saveDraft(draft)
   }, (state, error) => { saveState.value = state; saveError.value = error || null })
 }
@@ -325,10 +327,10 @@ function updateClipProperty(property, event) {
     const [updated] = normalizeTimelineClips([{ ...clip, [property]: event.target.value }])
     clips.value = clips.value.map(entry => entry.id === clip.id ? updated : entry)
     currentPlayTime.value = sourceTimeToTimeline(clips.value, selectedIndex.value, localTime)
-    statusText.value = '片段属性已更新'
+    statusText.value = translateUi('uiMessages.m0da1a3b97cd3')
   } catch {
     event.target.value = clip[property] ?? (property === 'playbackRate' ? 1 : 0)
-    statusText.value = property === 'playbackRate' ? '变速倍数须为 0.25–4.00' : '音量增益须为 -60–12 dB'
+    statusText.value = property === 'playbackRate' ? translateUi('uiMessages.me83a50ab42e8') : translateUi('uiMessages.m0525e4157734')
   }
 }
 
@@ -345,19 +347,19 @@ async function initializeDraft() {
     draftReady.value = true
     saveState.value = 'saved'
     if (!restored && props.initialSource) await addSourceToTimeline(props.initialSource)
-    if (stored && !restored) statusText.value = '源视频已变化或草稿无效，已重新初始化'
+    if (stored && !restored) statusText.value = translateUi('uiMessages.m58c36df86735')
     selectClip(selectedIndex.value)
   } catch (error) {
     saveState.value = 'error'
     saveError.value = error
-    statusText.value = '无法加载剪辑草稿，请重试'
+    statusText.value = translateUi('uiMessages.m1cb927186513')
   }
 }
 
 async function retrySave() {
   try {
     if (!draftReady.value || saveError.value?.code === 'VERSION_CONFLICT') {
-      if (draftReady.value && !window.confirm('远端片段已更新。重新加载会放弃本次未保存修改，是否继续？')) return
+      if (draftReady.value && !window.confirm(translateUi('uiMessages.m465b1f69984a'))) return
       await initializeDraft()
     } else await draftWriter.retry()
     closeBlocked.value = false
@@ -379,8 +381,8 @@ async function retryDownload() {
   try {
     const { url, filename } = localExportResult.value
     await downloadWithAuth(buildVideoDownloadUrl(url, filename), filename)
-    statusText.value = '下载已开始'
-  } catch (error) { statusText.value = `下载失败：${error.message}，可重新下载成片` }
+    statusText.value = translateUi('uiMessages.mb9e4236196d3')
+  } catch (error) { statusText.value = translateUi('uiMessages.ma0972ae3ed96', { value1: (error.message) }) }
   finally { submitting.value = false }
 }
 
@@ -388,26 +390,26 @@ async function exportSelected(destination) {
   if (submitting.value || !draftReady.value) return
   showExportMenu.value = false
   submitting.value = true
-  statusText.value = '正在导出选中片段'
+  statusText.value = translateUi('uiMessages.m1124b1ade026')
   try {
     const snapshot = selectedExportClips(clips.value, selectedClip.value?.id)
-    if (!(snapshot[0].sourceDuration > 0)) throw new Error('请等待素材时长确认后再导出')
+    if (!(snapshot[0].sourceDuration > 0)) throw new Error(translateUi('uiMessages.m68ffeeb200a2'))
     await nextTick()
     await draftWriter.flush()
     if (destination === 'canvas') {
-      if (!props.exportClipToCanvas) throw new Error('画布导出接口不可用')
+      if (!props.exportClipToCanvas) throw new Error(translateUi('uiMessages.meec139948d32'))
       await props.exportClipToCanvas({ clips: snapshot, mode: 'edit' })
-      statusText.value = '选中片段已导出到画布'
+      statusText.value = translateUi('uiMessages.mbe4e4389bf63')
     } else {
       const result = await exportVideoTimeline({ clips: snapshot })
       const url = result?.url || result?.video_url || result?.videoUrl || result?.resultUrl
-      if (!url) throw new Error('导出未返回视频地址')
-      const filename = `视频剪辑-${Date.now()}.mp4`
+      if (!url) throw new Error(translateUi('uiMessages.m5664e49b4c43'))
+      const filename = translateUi('uiMessages.m6ed0215286d3', { value1: (Date.now()) })
       localExportResult.value = { url, filename }
       await downloadWithAuth(buildVideoDownloadUrl(url, filename), filename)
-      statusText.value = '下载已开始'
+      statusText.value = translateUi('uiMessages.mb9e4236196d3')
     }
-  } catch (error) { statusText.value = error.message || '导出失败' }
+  } catch (error) { statusText.value = error.message || translateUi('uiMessages.m6e4445df6957') }
   finally { submitting.value = false }
 }
 
@@ -419,12 +421,12 @@ function guardUnsavedDraft(event) {
 }
 
 const subtitleEraseOptions = [
-  { value: 'subtitle_all_area', label: '全域智能擦除' },
-  { value: 'subtitle_sel_area', label: '选区擦除' }
+  { value: 'subtitle_all_area', get label() { return translateUi('uiMessages.m94ecd6ccc205') } },
+  { value: 'subtitle_sel_area', get label() { return translateUi('uiMessages.m3aac65393e9d') } }
 ]
 const watermarkEraseOptions = [
-  { value: 'watermark_all_area', label: '全域水印/字幕擦除' },
-  { value: 'watermark_sel_area', label: '选区水印/字幕擦除' }
+  { value: 'watermark_all_area', get label() { return translateUi('uiMessages.m38c8454ea9c7') } },
+  { value: 'watermark_sel_area', get label() { return translateUi('uiMessages.mdc389c05c626') } }
 ]
 const eraseOptions = [...subtitleEraseOptions, ...watermarkEraseOptions]
 
@@ -516,7 +518,7 @@ function sourceToClip(source, probedDuration) {
   const duration = Math.max(0.1, probedDuration || Number(source.duration) || 10)
   return {
     id: globalThis.crypto.randomUUID(),
-    name: source.name || '视频片段',
+    name: source.name || translateUi('uiMessages.m77426c37004b'),
     url: source.url,
     startTime: 0,
     endTime: duration,
@@ -592,7 +594,7 @@ async function ensureSubtitleConfigLoaded() {
 async function refreshEstimate() {
   if (activeMode.value !== 'subtitle' || normalizedClips.value.length === 0) {
     estimate.value = null
-    statusText.value = normalizedClips.value.length === 0 ? '添加视频后开始处理' : '剪辑导出'
+    statusText.value = normalizedClips.value.length === 0 ? translateUi('uiMessages.m81554f2b52cf') : translateUi('uiMessages.ma856775af5c5')
     return
   }
 
@@ -610,7 +612,7 @@ async function refreshEstimate() {
   } catch (error) {
     if (localEstimate?.pointsCost > 0) {
       estimate.value = localEstimate
-      statusText.value = '本地预估'
+      statusText.value = translateUi('uiMessages.mbc30877bd034')
       return
     }
     estimate.value = localEstimate || {
@@ -620,7 +622,7 @@ async function refreshEstimate() {
       pointsPerSecond: 0,
       pointsCost: 0
     }
-    statusText.value = error?.message || '无法预估积分，请检查字幕擦除配置'
+    statusText.value = error?.message || translateUi('uiMessages.m2a8761f8f9b2')
   }
 }
 
@@ -628,11 +630,11 @@ async function submit() {
   if (activeMode.value === 'edit') return exportSelected('canvas')
   if (normalizedClips.value.length === 0) return
   if (activeMode.value === 'subtitle' && isSelectionEraseMode.value && !detectRect.value) {
-    statusText.value = '请先在视频上框选需要擦除的区域'
+    statusText.value = translateUi('uiMessages.m799a61dec359')
     return
   }
   submitting.value = true
-  statusText.value = '提交中'
+  statusText.value = translateUi('uiMessages.mdcc1a22d9e72')
   try {
     const clipsSnapshot = JSON.parse(JSON.stringify(normalizedClips.value))
     const detectRectSnapshot = isSelectionEraseMode.value
@@ -645,7 +647,7 @@ async function submit() {
       detectRect: detectRectSnapshot
     })
   } catch (error) {
-    statusText.value = error.message || '处理失败'
+    statusText.value = error.message || translateUi('uiMessages.mae173945fb80')
   } finally {
     submitting.value = false
   }

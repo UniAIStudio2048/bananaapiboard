@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 import { useCanvasStore } from '@/stores/canvas'
@@ -40,15 +42,15 @@ async function loadProviders() {
 async function getProvider() {
   const selected = selectedProvider.value
   await loadProviders()
-  if (selected && !providers.value.some(provider => provider.id === selected)) throw new Error('所选素材渠道已停用，请重新选择')
-  if (!selectedProvider.value) throw new Error('暂无支持此素材的启用渠道，请联系管理员配置')
+  if (selected && !providers.value.some(provider => provider.id === selected)) throw new Error(translateUi('uiMessages.m310a79d2ba2f'))
+  if (!selectedProvider.value) throw new Error(translateUi('uiMessages.m1b991e1ee635'))
   return selectedProvider.value
 }
 const queryFailed = computed(() => status.value === 'processing' && !!props.data?.seedanceQuickAsset?.error)
 const buttonText = computed(() => {
-  if (submitting.value) return '提交中'
-  if (queryFailed.value) return '查询失败，重试'
-  return { approved: '已过审', processing: '审核中', failed: '审核失败，重试', expired: '已失效，重审' }[status.value] || '过审'
+  if (submitting.value) return translateUi('uiMessages.mdcc1a22d9e72')
+  if (queryFailed.value) return translateUi('uiMessages.mf6902249c417')
+  return { get approved() { return translateUi('uiMessages.m93632ccd0ab5') }, get processing() { return translateUi('uiMessages.ma9f71b911f2a') }, get failed() { return translateUi('uiMessages.m69fbd787f99b') }, get expired() { return translateUi('uiMessages.m6bcc5fd5d39e') } }[status.value] || translateUi('uiMessages.m87f2e0587195')
 })
 const controller = createSeedanceReviewController({
   getData: () => canvasStore.nodes.find(node => node.id === props.nodeId)?.data,
@@ -111,7 +113,7 @@ onUnmounted(() => controller.dispose())
     :disabled="submitting || loadingProviders || (providers.length <= 1 && providerDisabled(selectedProvider))"
     :aria-haspopup="providers.length > 1 ? 'menu' : undefined"
     :aria-expanded="providers.length > 1 ? menuOpen : undefined"
-    :title="data?.seedanceQuickAsset?.error || '提交 Seedance 素材审核，审核通过后可连接 Seedance 视频节点使用'"
+    :title="data?.seedanceQuickAsset?.error || translateUi('uiMessages.m9d5ffefabc99')"
     @mousedown.stop.prevent
     @click.stop.prevent="handleReviewClick"
   >
@@ -123,12 +125,12 @@ onUnmounted(() => controller.dispose())
       <path d="M12 3l7 4v5c0 4.2-2.8 7.5-7 9-4.2-1.5-7-4.8-7-9V7l7-4z" stroke-linecap="round" stroke-linejoin="round" />
       <path d="M9 12l2 2 4-5" stroke-linecap="round" stroke-linejoin="round" />
     </svg>
-    <span>{{ providers.length > 1 && !submitting ? '过审' : buttonText }}</span>
+    <span>{{ providers.length > 1 && !submitting ? translateUi('uiMessages.m87f2e0587195') : buttonText }}</span>
     <svg v-if="providers.length > 1" class="review-dropdown-arrow" :class="{ open: menuOpen }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
       <path d="m6 9 6 6 6-6" stroke-linecap="round" stroke-linejoin="round" />
     </svg>
   </button>
-  <span v-if="menuOpen && providers.length > 1" class="seedance-review-menu nowheel" role="menu" aria-label="素材审核渠道" @click.stop @wheel.stop>
+  <span v-if="menuOpen && providers.length > 1" class="seedance-review-menu nowheel" role="menu" :aria-label="translateUi('uiMessages.ma13933ce3bd1')" @click.stop @wheel.stop>
     <button v-for="provider in providers" :key="provider.id" type="button" role="menuitem" class="seedance-review-menu-item" :disabled="providerDisabled(provider.id)" @click.stop.prevent="submitToProvider(provider.id)">
       <span>{{ provider.label }}</span>
       <span v-if="provider.id === data?.seedanceQuickAsset?.providerType" class="review-provider-status">{{ buttonText }}</span>

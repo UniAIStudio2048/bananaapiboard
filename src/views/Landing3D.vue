@@ -155,8 +155,8 @@
           <WechatLoginButton v-if="authMode === 'login' && !resetMode" />
           <!-- 密码重置标题 -->
           <div v-if="resetMode && !phoneFormMode" class="reset-header">
-            <h3 class="reset-title">🔑 重置密码</h3>
-            <p class="reset-desc">请输入注册邮箱，我们将发送验证码到您的邮箱</p>
+            <h3 class="reset-title">{{ translateUi('uiMessages.mdd02b6d5deaa') }}</h3>
+            <p class="reset-desc">{{ translateUi('uiMessages.m02df660fb01c') }}</p>
           </div>
 
           <div v-if="showSmsMethod" class="sms-method-toggle"><button type="button" @click="smsLogin = !smsLogin">{{ smsLogin ? (resetMode ? copy.emailRetrieve : copy.passwordLogin) : (resetMode ? copy.retrieve : copy.login) }}</button></div>
@@ -168,7 +168,7 @@
           <!-- 密码重置表单 -->
           <form v-else-if="resetMode" @submit.prevent="resetPassword" class="auth-form">
             <div class="form-group">
-              <input v-model="account" type="email" class="form-input" placeholder="请输入注册邮箱" required />
+              <input v-model="account" type="email" class="form-input" :placeholder="translateUi('uiMessages.m85435c1130e6')" required />
             </div>
 
             <div class="form-group">
@@ -177,7 +177,7 @@
                   v-model="resetEmailCode" 
                   type="text" 
                   class="form-input code-input" 
-                  placeholder="请输入6位验证码"
+                  :placeholder="translateUi('uiMessages.m6bc8d6f5786b')"
                   maxlength="6"
                   required 
                 />
@@ -187,29 +187,29 @@
                   :disabled="resetSendingCode || resetCodeSent || !account"
                   class="code-btn"
                 >
-                  {{ resetSendingCode ? '发送中...' : resetCodeSent ? `${resetCountdown}秒后重发` : '发送验证码' }}
+                  {{ resetSendingCode ? translateUi('auth.sending') : resetCodeSent ? translateUi('uiMessages.med3a91ed4429', { value1: (resetCountdown) }) : translateUi('auth.sendCode') }}
                 </button>
               </div>
             </div>
 
             <div class="form-group">
-              <input v-model="newPassword" type="password" class="form-input" placeholder="请输入新密码（至少6位）" required />
+              <input v-model="newPassword" type="password" class="form-input" :placeholder="translateUi('uiMessages.medef5df61d32')" required />
             </div>
 
             <div class="form-group">
-              <input v-model="confirmPassword" type="password" class="form-input" placeholder="请再次输入新密码" required />
+              <input v-model="confirmPassword" type="password" class="form-input" :placeholder="translateUi('user.enterConfirmPassword')" required />
             </div>
 
             <div v-if="authError" class="error-message">{{ authError }}</div>
 
             <button type="submit" class="submit-btn" :disabled="authLoading">
               <span v-if="authLoading" class="loading-spinner"></span>
-              <span v-else>重置密码</span>
+              <span v-else>{{ translateUi('uiMessages.md70928debc2e') }}</span>
             </button>
 
             <div class="reset-footer">
               <button type="button" class="link-btn" @click="exitResetMode">
-                ← 返回登录
+                {{ translateUi('uiMessages.m4f60ae6665de') }}
               </button>
             </div>
           </form>
@@ -289,7 +289,7 @@
             </button>
             <div v-if="authMode === 'login'" class="forgot-password">
               <button type="button" class="link-btn forgot-link" @click="enterResetMode">
-                忘记密码？
+                {{ translateUi('uiMessages.m1d02d7f1c5c4') }}
               </button>
             </div>
           </div>
@@ -363,6 +363,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import PhoneAuthForm from '@/components/auth/PhoneAuthForm.vue'
 import WechatLoginButton from '@/components/auth/WechatLoginButton.vue'
 import PhoneCountrySelect from '@/components/auth/PhoneCountrySelect.vue'
@@ -541,7 +543,7 @@ async function sendVerificationCode() {
     
     if (!r.ok) {
       const data = await r.json()
-      throw new Error(data.message || '发送失败')
+      throw new Error(data.message || translateUi('uiMessages.mac77953a1e06'))
     }
     
     codeSent.value = true
@@ -557,7 +559,7 @@ async function sendVerificationCode() {
     }, 1000)
     
   } catch (e) {
-    authError.value = e.message || '发送验证码失败'
+    authError.value = e.message || translateUi('uiMessages.m0a7b29f34fae')
   } finally {
     sendingCode.value = false
   }
@@ -590,7 +592,7 @@ async function sendResetVerificationCode() {
     
     if (!r.ok) {
       const data = await r.json()
-      throw new Error(data.message || '发送失败')
+      throw new Error(data.message || translateUi('uiMessages.mac77953a1e06'))
     }
     
     resetCodeSent.value = true
@@ -606,7 +608,7 @@ async function sendResetVerificationCode() {
     }, 1000)
     
   } catch (e) {
-    authError.value = e.message || '发送验证码失败'
+    authError.value = e.message || translateUi('uiMessages.m0a7b29f34fae')
   } finally {
     resetSendingCode.value = false
   }
@@ -617,17 +619,17 @@ async function resetPassword() {
   authError.value = ''
   
   if (!account.value || !resetEmailCode.value || !newPassword.value) {
-    authError.value = '请填写所有必填项'
+    authError.value = translateUi('uiMessages.m25872b05ede5')
     return
   }
   
   if (newPassword.value !== confirmPassword.value) {
-    authError.value = '两次输入的密码不一致'
+    authError.value = translateUi('uiMessages.m58807745708e')
     return
   }
   
   if (newPassword.value.length < 6) {
-    authError.value = '密码长度至少6位'
+    authError.value = translateUi('uiMessages.m8eee17404155')
     return
   }
   
@@ -646,7 +648,7 @@ async function resetPassword() {
     
     if (!r.ok) {
       const data = await r.json()
-      throw new Error(data.message || '重置失败')
+      throw new Error(data.message || translateUi('uiMessages.m4230b353344a'))
     }
     
     // 重置成功，返回登录
@@ -658,11 +660,11 @@ async function resetPassword() {
     confirmPassword.value = ''
     
     // 显示成功提示（用 authError 临时显示成功信息，2秒后清除）
-    authError.value = '✅ 密码重置成功，请使用新密码登录'
+    authError.value = translateUi('uiMessages.m1bc0df6c98cf')
     setTimeout(() => { authError.value = '' }, 3000)
     
   } catch (e) {
-    authError.value = e.message || '密码重置失败'
+    authError.value = e.message || translateUi('uiMessages.mb0703ade4f60')
   } finally {
     authLoading.value = false
   }
@@ -764,9 +766,9 @@ const submitAuth = async () => {
         : data.error === 'invalid_email_code' ? t('auth.invalidEmailCode')
         : data.error === 'email_code_required' ? t('auth.emailCodeRequired')
         : data.error === 'email_not_whitelisted' ? t('auth.emailNotWhitelisted')
-        : data.error === 'too_many_requests' ? (data.message || '密码错误次数过多，请5分钟后重试')
-        : data.error === 'username_exists' ? '该用户名已被注册，请更换一个用户名'
-        : data.error === 'email_exists' ? '该邮箱已被注册'
+        : data.error === 'too_many_requests' ? (data.message || translateUi('uiMessages.mdc52a1075134'))
+        : data.error === 'username_exists' ? translateUi('uiMessages.me1b636cbf060')
+        : data.error === 'email_exists' ? translateUi('uiMessages.mca59e824b463')
         : data.message || t('auth.operationFailed')
       return
     }

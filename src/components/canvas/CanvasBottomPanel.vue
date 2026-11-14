@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * CanvasBottomPanel.vue - 底部输入面板
  * 根据选中节点类型显示不同的配置选项
@@ -57,11 +59,11 @@ const llmConfig = ref({
 })
 
 const llmCapabilityOptions = [
-  { key: 'image', label: '图片理解', icon: '' },
-  { key: 'video', label: '视频理解', icon: '' },
-  { key: 'audio', label: '音频理解', icon: '' },
-  { key: 'webSearch', label: '联网搜索', icon: '⌕' },
-  { key: 'file', label: '文件理解', icon: '□' }
+  { key: 'image', get label() { return translateUi('uiMessages.mce1ca0a2d377') }, icon: '' },
+  { key: 'video', get label() { return translateUi('uiMessages.m2c7cdc65109a') }, icon: '' },
+  { key: 'audio', get label() { return translateUi('uiMessages.mcedd745b43f0') }, icon: '' },
+  { key: 'webSearch', get label() { return translateUi('uiMessages.mf30b4fa151f2') }, icon: '⌕' },
+  { key: 'file', get label() { return translateUi('uiMessages.m9002ed6fc84c') }, icon: '□' }
 ]
 
 function getEnabledLlmCapabilities(model = {}) {
@@ -150,7 +152,7 @@ const currentModelCost = computed(() => {
 })
 
 function getModelPackageMessage(model) {
-  return model?.accessMessage || '需要购买对应套餐后使用'
+  return model?.accessMessage || translateUi('uiMessages.m861a77c9f9fb')
 }
 
 // 是否是文本节点（显示LLM对话功能）
@@ -315,7 +317,7 @@ async function handleGenerate() {
   
   // 检查输入
   if (!inputText.value.trim()) {
-    await showAlert('请输入内容', '提示')
+    await showAlert(translateUi('uiMessages.m606ae522e681'), translateUi('common.info'))
     return
   }
 
@@ -377,9 +379,9 @@ async function handleLLMChat(nodeId) {
     console.error('[BottomPanel] LLM 对话失败:', error)
     canvasStore.updateNodeData(nodeId, {
       status: 'error',
-      error: error.message || 'LLM 对话失败'
+      error: error.message || translateUi('uiMessages.mbc2d78d3d58b')
     })
-    alert(error.message || 'LLM 对话失败，请重试')
+    alert(error.message || translateUi('uiMessages.mcecb392bcfb1'))
   } finally {
     isGenerating.value = false
   }
@@ -416,7 +418,7 @@ async function reuploadToCloud(url) {
     })
     
     if (!response.ok) {
-      throw new Error(`获取图片失败: ${response.status}`)
+      throw new Error(translateUi('uiMessages.m51ad3ca5f373', { value1: (response.status) }))
     }
     
     const blob = await response.blob()
@@ -427,7 +429,7 @@ async function reuploadToCloud(url) {
       console.log('[BottomPanel] 重新上传成功，新 URL:', urls[0])
       return urls[0]
     }
-    throw new Error('上传返回空 URL')
+    throw new Error(translateUi('uiMessages.mff46e2b3d326'))
   } catch (error) {
     console.error('[BottomPanel] 重新上传失败:', error)
     return url
@@ -446,7 +448,7 @@ async function ensureAccessibleUrls(imageUrls) {
       console.log('[BottomPanel] blob URL 需要上传到云端:', url.substring(0, 60))
       try {
         const response = await fetch(url)
-        if (!response.ok) throw new Error(`获取 blob 图片失败: ${response.status}`)
+        if (!response.ok) throw new Error(translateUi('uiMessages.m2251b688a1f9', { value1: (response.status) }))
         const blob = await response.blob()
         const file = new File([blob], `blob_${Date.now()}.png`, { type: blob.type || 'image/png' })
         const urls = await uploadImages([file])
@@ -539,7 +541,7 @@ function getUpstreamImagesRealtime(nodeId) {
 // 处理图片生成
 async function handleImageGenerate(nodeId, nodeType) {
   if (findBlockingCanvasUploads(canvasStore.nodes, canvasStore.edges, nodeId).length > 0) {
-    await showAlert('素材仍在上传，请等待完成后重试', '提示')
+    await showAlert(translateUi('uiMessages.m97f1343b0c9b'), translateUi('common.info'))
     isGenerating.value = false
     return
   }
@@ -571,7 +573,7 @@ async function handleImageGenerate(nodeId, nodeType) {
       // 🔥 关键：确保所有 URL 都是 AI 模型可以访问的（七牛云 CDN URL）
       const accessibleUrls = await ensureAccessibleUrls(finalImages)
       if (accessibleUrls.length === 0) {
-        throw new Error('参考图片未能转换为可访问 URL，请重新上传后重试')
+        throw new Error(translateUi('uiMessages.m141625726a02'))
       }
       console.log('[BottomPanel] 处理后的可访问 URLs:', accessibleUrls.length, '张')
       const effectiveAspectRatio = await resolveGenerationAspectRatio(selectedAspectRatio.value, accessibleUrls[0])
@@ -624,7 +626,7 @@ async function handleImageGenerate(nodeId, nodeType) {
         console.error('[BottomPanel] 轮询失败:', error)
         canvasStore.updateNodeData(nodeId, {
           status: 'error',
-          error: withNoChargeNotice(error.message, '生成失败')
+          error: withNoChargeNotice(error.message, translateUi('canvas.audioNode.generateFailed'))
         })
       })
     } else if (result.urls || result.images) {
@@ -643,9 +645,9 @@ async function handleImageGenerate(nodeId, nodeType) {
     console.error('[BottomPanel] 生成失败:', error)
     canvasStore.updateNodeData(nodeId, {
       status: 'error',
-      error: withNoChargeNotice(error.message, '生成失败')
+      error: withNoChargeNotice(error.message, translateUi('canvas.audioNode.generateFailed'))
     })
-    alert(withNoChargeNotice(error.message, '生成失败，请重试'))
+    alert(withNoChargeNotice(error.message, translateUi('uiMessages.m82970688146a')))
     isGenerating.value = false
   }
 }
@@ -667,7 +669,7 @@ function handleKeyDown(event) {
     <!-- 文本节点：内容预览区域 -->
     <div v-if="isTextNode && hasTextContent" class="text-preview-section">
       <!-- 左侧添加按钮 -->
-      <button class="preview-add-btn preview-add-left" title="添加上游节点">
+      <button class="preview-add-btn preview-add-left" :title="translateUi('uiMessages.md2c5826a72e6')">
         <span>+</span>
       </button>
       
@@ -677,7 +679,7 @@ function handleKeyDown(event) {
       </div>
       
       <!-- 右侧添加按钮 -->
-      <button class="preview-add-btn preview-add-right" title="添加下游节点">
+      <button class="preview-add-btn preview-add-right" :title="translateUi('uiMessages.m66356cc83693')">
         <span>+</span>
       </button>
     </div>
@@ -690,7 +692,7 @@ function handleKeyDown(event) {
           ref="inputRef"
           v-model="inputText"
           class="canvas-input"
-          :placeholder="isTextNode ? '描述这个图片的内容' : '输入提示词...'"
+          :placeholder="isTextNode ? translateUi('uiMessages.m3013b584132e') : translateUi('uiMessages.mc91fa0e4556e')"
           @input="handleInputChange"
           @keydown="handleKeyDown"
         ></textarea>
@@ -726,7 +728,7 @@ function handleKeyDown(event) {
                     class="model-option-icon"
                     :class="{ 'llm-icon': isTextNode }"
                   />
-                  <span class="model-option-name">{{ model.label }}{{ model.disabled ? ' - 需套餐' : '' }}</span>
+                  <span class="model-option-name">{{ model.label }}{{ model.disabled ? translateUi('uiMessages.m5017edab92ad') : '' }}</span>
                   <div class="model-option-meta">
                     <span v-if="typeof model.pointsCost === 'number'" class="model-option-cost">💎{{ formatPoints(model.pointsCost) }}</span>
                     <div v-if="isTextNode && getEnabledLlmCapabilities(model).length" class="model-capability-row">
@@ -783,7 +785,7 @@ function handleKeyDown(event) {
           <button 
             class="canvas-generate-btn"
             :disabled="!inputText.trim() || isGenerating"
-            title="开始生成 (Enter)"
+            :title="translateUi('uiMessages.madc724059d32')"
             @click="handleGenerate"
           >
             <span v-if="isGenerating">⏳</span>

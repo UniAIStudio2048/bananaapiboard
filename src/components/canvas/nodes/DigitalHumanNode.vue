@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
 import DigitalHumanSelector from '../DigitalHumanSelector.vue'
@@ -31,8 +33,8 @@ function handleSelect(asset) {
     .forEach(edge => { edge.sourceHandle = 'output' })
 
   canvasStore.updateNodeData(props.id, {
-    title: `${asset.name || '数字人'}形象图`,
-    label: asset.name || '图片',
+    title: translateUi('uiMessages.m3b3a0f8bdd59', { value1: (asset.name || translateUi('uiMessages.mb901660d9e33')) }),
+    label: asset.name || translateUi('canvas.nodeConfig.imageInput.label'),
     sourceImages: [nextPreviewUrl],
     nodeRole: 'source',
     assetId: asset.id,
@@ -51,14 +53,14 @@ function handleSelect(asset) {
 
 <template>
   <div class="digital-human-node" :class="{ selected }" @dblclick.stop="openSelector">
-    <div class="digital-human-label">HeyGen 数字人</div>
+    <div class="digital-human-label">{{ translateUi('uiMessages.mf98ccb20ef71') }}</div>
     <div class="digital-human-card">
       <div class="digital-human-empty" @click="openSelector">
         <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
           <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.5" />
           <path d="M5 20C5 16.134 8.134 13 12 13C15.866 13 19 16.134 19 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
         </svg>
-        <span class="digital-human-empty-text">点击选择角色</span>
+        <span class="digital-human-empty-text">{{ translateUi('uiMessages.m92ad47714b0b') }}</span>
       </div>
     </div>
     <DigitalHumanSelector

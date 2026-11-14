@@ -4,7 +4,7 @@
     <button
       v-show="canScrollLeft"
       class="absolute left-0 top-0 bottom-0 z-10 w-10 bg-gradient-to-r from-black/80 to-transparent flex items-center justify-center opacity-0 group-hover/scroll:opacity-100 transition-opacity"
-      aria-label="向左滚动"
+      :aria-label="translateUi('uiMessages.mf3fb0ec33396')"
       @click="scrollBy(-1)"
     >
       <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -39,7 +39,7 @@
     <button
       v-show="canScrollRight"
       class="absolute right-0 top-0 bottom-0 z-10 w-10 bg-gradient-to-l from-black/80 to-transparent flex items-center justify-center opacity-0 group-hover/scroll:opacity-100 transition-opacity"
-      aria-label="向右滚动"
+      :aria-label="translateUi('uiMessages.m8071f3d80a53')"
       @click="scrollBy(1)"
     >
       <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -50,6 +50,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, onMounted, nextTick } from 'vue'
 import WorkCard from './WorkCard.vue'
 

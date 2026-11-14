@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -6,7 +7,7 @@ const imageSource = readFileSync(new URL('./ImageNode.vue', import.meta.url), 'u
 const videoSource = readFileSync(new URL('./VideoNode.vue', import.meta.url), 'utf8')
 
 function getDownloadButton(source, nodeName) {
-  const match = source.match(/<button\b(?=[^>]*title="下载")[^>]*>/)
+  const match = source.match(localizedPattern(/<button\b(?=[^>]*title="下载")[^>]*>/))
   assert.ok(match, `${nodeName} should render a toolbar download button`)
   return match[0]
 }

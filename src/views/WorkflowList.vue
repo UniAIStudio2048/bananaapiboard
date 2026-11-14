@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi, currentLanguage as uiLanguage } from '@/i18n'
+
 /**
  * WorkflowList.vue - 工作流列表页面（项目文件夹模式）
  * 无导航栏的全屏页面，黑白灰色系风格
@@ -149,7 +151,7 @@ async function loadProjects({ openQueryProject = false } = {}) {
     }
   } catch (error) {
     console.error('[WorkflowList] 加载项目失败:', error)
-    alert('加载项目列表失败：' + error.message)
+    alert(translateUi('uiMessages.me8c5925d8c81') + error.message)
   } finally {
     loading.value = false
   }
@@ -183,7 +185,7 @@ async function loadWorkflows() {
     pagination.value = nextPagination
   } catch (error) {
     console.error('[WorkflowList] 加载失败:', error)
-    alert('加载工作流列表失败：' + error.message)
+    alert(translateUi('uiMessages.me3285e85c8bf') + error.message)
   } finally {
     loading.value = false
   }
@@ -292,7 +294,7 @@ async function handleCreateProject() {
     newProjectName.value = ''
     await loadProjects()
   } catch (error) {
-    alert('创建项目失败：' + error.message)
+    alert(translateUi('uiMessages.m5027ca6aae21') + error.message)
   } finally {
     creatingProject.value = false
   }
@@ -300,7 +302,7 @@ async function handleCreateProject() {
 
 function confirmDeleteProject(project) {
   if (project.is_default) {
-    alert('默认项目不可删除')
+    alert(translateUi('uiMessages.m14be8bf2d1ac'))
     return
   }
   projectDeleteConfirm.value = { visible: true, project }
@@ -314,7 +316,7 @@ async function handleDeleteProject() {
     projectDeleteConfirm.value = { visible: false, project: null }
     await loadProjects()
   } catch (error) {
-    alert('删除项目失败：' + error.message)
+    alert(translateUi('uiMessages.mf77e1fc07e47') + error.message)
   }
 }
 
@@ -345,7 +347,7 @@ async function handleRename() {
     }
     renameState.value = { visible: false, id: null, name: '', type: '' }
   } catch (error) {
-    alert('重命名失败：' + error.message)
+    alert(translateUi('uiMessages.m0ab10c33f462') + error.message)
   }
 }
 
@@ -430,7 +432,7 @@ async function confirmInlineRename() {
     }
     cancelInlineRename()
   } catch (error) {
-    alert('重命名失败：' + error.message)
+    alert(translateUi('uiMessages.m0ab10c33f462') + error.message)
     inlineRenameState.value.saving = false
   }
 }
@@ -514,7 +516,7 @@ async function handleDelete() {
     cancelDelete()
   } catch (error) {
     console.error('[WorkflowList] 删除失败:', error)
-    alert('删除失败：' + error.message)
+    alert(translateUi('uiMessages.m0580fcee37e0') + error.message)
   }
 }
 
@@ -524,11 +526,11 @@ function formatDate(date) {
   const d = new Date(date)
   const now = new Date()
   const diff = now - d
-  if (diff < 60000) return '刚刚'
-  if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`
-  if (diff < 604800000) return `${Math.floor(diff / 86400000)} 天前`
-  return d.toLocaleDateString('zh-CN')
+  if (diff < 60000) return translateUi('time.justNow')
+  if (diff < 3600000) return translateUi('uiMessages.mc83a5dfaa9ad', { value1: (Math.floor(diff / 60000)) })
+  if (diff < 86400000) return translateUi('uiMessages.m3b4c666b9dc5', { value1: (Math.floor(diff / 3600000)) })
+  if (diff < 604800000) return translateUi('uiMessages.m1c5258efd9d7', { value1: (Math.floor(diff / 86400000)) })
+  return d.toLocaleDateString(uiLanguage.value)
 }
 
 // 格式化存储大小
@@ -591,16 +593,16 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
     <!-- 顶部工具栏 -->
     <div class="top-bar">
       <div class="top-bar-left">
-        <button class="back-btn" @click="goBack" :title="currentProject ? '返回项目列表' : '返回画布'">
+        <button class="back-btn" @click="goBack" :title="currentProject ? translateUi('uiMessages.mbb14d7c41431') : translateUi('uiMessages.mbeef286e1e42')">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M19 12H5M12 19l-7-7 7-7"/>
           </svg>
-          <span>返回</span>
+          <span>{{ translateUi('common.back') }}</span>
         </button>
 
         <!-- 面包屑 -->
         <div v-if="currentProject" class="breadcrumb">
-          <button class="breadcrumb-link" @click="goBackToProjects">全部项目</button>
+          <button class="breadcrumb-link" @click="goBackToProjects">{{ translateUi('uiMessages.me3040dfd6b30') }}</button>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="breadcrumb-sep">
             <polyline points="9 18 15 12 9 6"/>
           </svg>
@@ -620,7 +622,7 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
           class="page-title"
           @dblclick="currentProject ? startInlineRename('project', currentProject) : null"
         >
-          {{ currentProject ? currentProject.name : '我的项目' }}
+          {{ currentProject ? currentProject.name : translateUi('uiMessages.m9ce557b30a3f') }}
         </h1>
         <input
           v-else
@@ -633,8 +635,8 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
           @blur="confirmInlineRename"
         />
         <div v-if="!isInlineRenaming('project', currentProject)" class="page-count">
-          <span v-if="currentProject">共 {{ currentProjectWorkflowTotal }} 个工作流</span>
-          <span v-else>项目数量：{{ projects.length }} · 工作流：{{ currentSpaceWorkflowTotal }}</span>
+          <span v-if="currentProject">{{ translateUi('uiMessages.m2e73afa109b2', { value1: (currentProjectWorkflowTotal) }) }}</span>
+          <span v-else>{{ translateUi('uiMessages.m272766ca2755', { value1: (projects.length), value2: (currentSpaceWorkflowTotal) }) }}</span>
         </div>
       </div>
 
@@ -643,7 +645,7 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
           <line x1="12" y1="5" x2="12" y2="19"/>
           <line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
-        <span>{{ currentProject ? '新建工作流' : '新建项目' }}</span>
+        <span>{{ currentProject ? translateUi('canvas.newWorkflow') : translateUi('uiMessages.m0e1a7040390f') }}</span>
       </button>
     </div>
 
@@ -651,7 +653,7 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
     <div v-if="quota" class="quota-section">
       <div class="quota-row">
         <div class="quota-info">
-          <span class="quota-label">存储空间</span>
+          <span class="quota-label">{{ translateUi('canvas.storageSpace') }}</span>
           <span class="quota-value">{{ formatSize(quota.used_storage) }} / {{ formatSize(quota.total_quota) }}</span>
         </div>
         <div class="quota-bar">
@@ -662,15 +664,15 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
         <div class="stat-box">
           <span class="stat-num">{{ currentSpaceWorkflowTotal }}</span>
           <span class="stat-max">/ {{ quota.max_workflows }}</span>
-          <span class="stat-text">工作流</span>
+          <span class="stat-text">{{ translateUi('canvas.workflow') }}</span>
         </div>
         <div class="stat-box">
           <span class="stat-num">{{ formatSize(quota.max_workflow_size) }}</span>
-          <span class="stat-text">单个限制</span>
+          <span class="stat-text">{{ translateUi('uiMessages.m8a4b0b4b9683') }}</span>
         </div>
         <div class="stat-box">
           <span class="stat-num">{{ quota.total_generations }}</span>
-          <span class="stat-text">生成次数</span>
+          <span class="stat-text">{{ translateUi('uiMessages.m614d0c8bf399') }}</span>
         </div>
         <div v-if="quota.is_vip" class="stat-box vip-box">
           <span class="vip-tag">PRO</span>
@@ -683,7 +685,7 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
       <!-- 加载状态 -->
       <div v-if="loading" class="loading-state">
         <div class="spinner"></div>
-        <span>加载中...</span>
+        <span>{{ translateUi('common.loading') }}</span>
       </div>
 
       <!-- ========== 项目列表层级 ========== -->
@@ -694,14 +696,14 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
             </svg>
           </div>
-          <h3>还没有项目</h3>
-          <p>创建您的第一个项目来组织工作流</p>
+          <h3>{{ translateUi('uiMessages.mc1fe7fb67eca') }}</h3>
+          <p>{{ translateUi('uiMessages.maf2d19f9dcc1') }}</p>
           <button class="create-btn" @click="openCreateProject">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="12" y1="5" x2="12" y2="19"/>
               <line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
-            创建项目
+            {{ translateUi('uiMessages.m43d7d2b51d75') }}
           </button>
         </div>
 
@@ -733,7 +735,7 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
               <svg v-else width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
               </svg>
-              <span v-if="project.is_default" class="default-badge">默认</span>
+              <span v-if="project.is_default" class="default-badge">{{ translateUi('uiMessages.m844b8cc8dff7') }}</span>
             </div>
             <!-- 信息 -->
             <div class="project-body">
@@ -754,7 +756,7 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
                 @dblclick.stop="startInlineRename('project', project)"
               >{{ project.name }}</h3>
               <div class="project-meta">
-                <span class="meta-item">{{ project.workflow_count || 0 }} 个工作流</span>
+                <span class="meta-item">{{ translateUi('uiMessages.m9882de3c01da', { value1: (project.workflow_count || 0) }) }}</span>
                 <span class="meta-item">{{ formatDate(project.updated_at) }}</span>
               </div>
             </div>
@@ -773,14 +775,14 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
               <rect x="14" y="14" width="7" height="7" rx="1"/>
             </svg>
           </div>
-          <h3>项目中还没有工作流</h3>
-          <p>创建一个新的工作流开始创作</p>
+          <h3>{{ translateUi('uiMessages.m9e5d2e91636f') }}</h3>
+          <p>{{ translateUi('uiMessages.mefdb1f4348aa') }}</p>
           <button class="create-btn" @click="createNewWorkflow">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="12" y1="5" x2="12" y2="19"/>
               <line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
-            创建工作流
+            {{ translateUi('uiMessages.m4e95b0e0ce45') }}
           </button>
         </div>
 
@@ -839,7 +841,7 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="3" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><path d="M21 3v4h-4M3 21v-4h4"/>
                   </svg>
-                  {{ workflow.node_count }} 节点
+                  {{ translateUi('uiMessages.m3024acec321c', { value1: (workflow.node_count) }) }}
                 </span>
                 <span class="meta-item">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -850,11 +852,11 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
               </div>
               <div class="card-footer">
                 <span class="card-time">{{ formatDate(workflow.updated_at) }}</span>
-                <span v-if="isWorkflowShared(workflow)" class="share-status-badge">已分享</span>
-                <button class="share-btn" @click.stop="openWorkflowShare(workflow)" title="分享工作流">
-                  分享
+                <span v-if="isWorkflowShared(workflow)" class="share-status-badge">{{ translateUi('uiMessages.mf62961edbb8f') }}</span>
+                <button class="share-btn" @click.stop="openWorkflowShare(workflow)" :title="translateUi('uiMessages.m1d211c6fcd4c')">
+                  {{ translateUi('canvas.share') }}
                 </button>
-                <button class="delete-btn" @click.stop="confirmDelete(workflow)" title="删除">
+                <button class="delete-btn" @click.stop="confirmDelete(workflow)" :title="translateUi('common.delete')">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                   </svg>
@@ -892,15 +894,15 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
             @click="contextMenu.item?.is_default ? null : handleContextAction('move')"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-            {{ contextMenu.item?.is_default ? '默认项目不可移动' : '移动到其他空间' }}
+            {{ contextMenu.item?.is_default ? translateUi('uiMessages.mf1fd537866d6') : translateUi('uiMessages.m27b089d1b381') }}
           </button>
           <button class="context-item" @click="handleContextAction('copy')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            创建项目副本
+            {{ translateUi('uiMessages.m41077d3eb7c4') }}
           </button>
           <button class="context-item" @click="handleContextAction('rename')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            重命名
+            {{ translateUi('canvas.assetPanel.directory.rename') }}
           </button>
           <button
             class="context-item context-danger"
@@ -908,25 +910,25 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
             @click="contextMenu.item?.is_default ? null : handleContextAction('delete')"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            {{ contextMenu.item?.is_default ? '默认项目不可删除' : '删除' }}
+            {{ contextMenu.item?.is_default ? translateUi('uiMessages.m14be8bf2d1ac') : translateUi('common.delete') }}
           </button>
         </template>
         <template v-else-if="contextMenu.type === 'workflow'">
           <button class="context-item" @click="handleContextAction('share')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.7 10.7 6.6-3.9M8.7 13.3l6.6 3.9"/></svg>
-            分享工作流
+            {{ translateUi('uiMessages.m1d211c6fcd4c') }}
           </button>
           <button class="context-item" @click="handleContextAction('move')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-            移动到项目
+            {{ translateUi('uiMessages.m647eaf80ee94') }}
           </button>
           <button class="context-item" @click="handleContextAction('copy')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            创建工作流副本
+            {{ translateUi('uiMessages.mc9357e23541a') }}
           </button>
           <button class="context-item context-danger" @click="handleContextAction('delete')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            删除
+            {{ translateUi('common.delete') }}
           </button>
         </template>
       </div>
@@ -937,25 +939,25 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
       <div v-if="showCreateProject" class="modal-overlay" @click.self="showCreateProject = false">
         <div class="modal-box">
           <div class="modal-header">
-            <h2>新建项目</h2>
+            <h2>{{ translateUi('uiMessages.m0e1a7040390f') }}</h2>
             <button class="modal-close" @click="showCreateProject = false">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
           <div class="modal-body">
-            <label class="input-label">项目名称</label>
+            <label class="input-label">{{ translateUi('directorStudio.projects.namePrompt') }}</label>
             <input
               v-model="newProjectName"
               class="modal-input create-project-input"
-              placeholder="输入项目名称"
+              :placeholder="translateUi('uiMessages.mfb7c19b6a4c1')"
               maxlength="50"
               @keyup.enter="handleCreateProject"
             />
           </div>
           <div class="modal-footer">
-            <button class="btn-cancel" @click="showCreateProject = false" :disabled="creatingProject">取消</button>
+            <button class="btn-cancel" @click="showCreateProject = false" :disabled="creatingProject">{{ translateUi('common.cancel') }}</button>
             <button class="btn-confirm" @click="handleCreateProject" :disabled="creatingProject || !newProjectName.trim()">
-              {{ creatingProject ? '创建中...' : '创建' }}
+              {{ creatingProject ? translateUi('uiMessages.m687d8f3ba99e') : translateUi('uiMessages.mcde2cd071d25') }}
             </button>
           </div>
         </div>
@@ -967,24 +969,24 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
       <div v-if="renameState.visible" class="modal-overlay" @click.self="cancelRename">
         <div class="modal-box">
           <div class="modal-header">
-            <h2>重命名</h2>
+            <h2>{{ translateUi('canvas.assetPanel.directory.rename') }}</h2>
             <button class="modal-close" @click="cancelRename">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
           <div class="modal-body">
-            <label class="input-label">名称</label>
+            <label class="input-label">{{ translateUi('directorStudio.inspector.name') }}</label>
             <input
               v-model="renameState.name"
               class="modal-input rename-input"
-              placeholder="输入新名称"
+              :placeholder="translateUi('uiMessages.mf5d96b0a35d2')"
               maxlength="50"
               @keyup.enter="handleRename"
             />
           </div>
           <div class="modal-footer">
-            <button class="btn-cancel" @click="cancelRename">取消</button>
-            <button class="btn-confirm" @click="handleRename" :disabled="!renameState.name.trim()">确认</button>
+            <button class="btn-cancel" @click="cancelRename">{{ translateUi('common.cancel') }}</button>
+            <button class="btn-confirm" @click="handleRename" :disabled="!renameState.name.trim()">{{ translateUi('common.confirm') }}</button>
           </div>
         </div>
       </div>
@@ -995,18 +997,18 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
       <div v-if="deleteConfirm.visible" class="modal-overlay" @click.self="cancelDelete">
         <div class="modal-box">
           <div class="modal-header">
-            <h2>确认删除</h2>
+            <h2>{{ translateUi('uiMessages.ma3ea3c17b401') }}</h2>
             <button class="modal-close" @click="cancelDelete">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
           <div class="modal-body">
-            <p>确定要删除工作流 "<strong>{{ deleteConfirm.workflow?.name }}</strong>" 吗？</p>
-            <p class="warning">此操作无法撤销</p>
+            <p>{{ translateUi('uiMessages.me3b5c7d25fba') }}<strong>{{ deleteConfirm.workflow?.name }}</strong>{{ translateUi('uiMessages.me380fd0d91ec') }}</p>
+            <p class="warning">{{ translateUi('uiMessages.m1f1a8e3dece2') }}</p>
           </div>
           <div class="modal-footer">
-            <button class="btn-cancel" @click="cancelDelete">取消</button>
-            <button class="btn-delete" @click="handleDelete">删除</button>
+            <button class="btn-cancel" @click="cancelDelete">{{ translateUi('common.cancel') }}</button>
+            <button class="btn-delete" @click="handleDelete">{{ translateUi('common.delete') }}</button>
           </div>
         </div>
       </div>
@@ -1017,18 +1019,18 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
       <div v-if="projectDeleteConfirm.visible" class="modal-overlay" @click.self="cancelDeleteProject">
         <div class="modal-box">
           <div class="modal-header">
-            <h2>确认删除项目</h2>
+            <h2>{{ translateUi('uiMessages.m6f456d2420a5') }}</h2>
             <button class="modal-close" @click="cancelDeleteProject">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
           <div class="modal-body">
-            <p>确定要删除项目 "<strong>{{ projectDeleteConfirm.project?.name }}</strong>" 吗？</p>
-            <p class="warning">项目内的工作流将移至默认项目，此操作无法撤销</p>
+            <p>{{ translateUi('uiMessages.m499937322ffb') }}<strong>{{ projectDeleteConfirm.project?.name }}</strong>{{ translateUi('uiMessages.me380fd0d91ec') }}</p>
+            <p class="warning">{{ translateUi('uiMessages.m101b5c62874d') }}</p>
           </div>
           <div class="modal-footer">
-            <button class="btn-cancel" @click="cancelDeleteProject">取消</button>
-            <button class="btn-delete" @click="handleDeleteProject">删除</button>
+            <button class="btn-cancel" @click="cancelDeleteProject">{{ translateUi('common.cancel') }}</button>
+            <button class="btn-delete" @click="handleDeleteProject">{{ translateUi('common.delete') }}</button>
           </div>
         </div>
       </div>

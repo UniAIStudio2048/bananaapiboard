@@ -1,3 +1,6 @@
+import * as i18nTestRuntime from '../../i18n/index.js'
+const { t: translateUi, currentLanguage: uiLanguage } = i18nTestRuntime
+uiLanguage.value = 'zh-CN'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -8,7 +11,7 @@ function getFunction(source, name, context) {
   const ast = parse(source, { sourceType: 'module' })
   const fn = ast.program.body.find(node => node.type === 'FunctionDeclaration' && node.id.name === name)
   assert.ok(fn)
-  return runInNewContext(`${source.slice(fn.start, fn.end)}\n;${name}`, context)
+  return runInNewContext(`${source.slice(fn.start, fn.end)}\n;${name}`, Object.assign(context, { translateUi, uiLanguage }))
 }
 
 test('素材选择器只提供有效视频，并保留来源、封面和时长', () => {

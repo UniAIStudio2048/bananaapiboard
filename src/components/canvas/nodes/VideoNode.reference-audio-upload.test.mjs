@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import { readFileSync } from 'node:fs'
 import { strict as assert } from 'node:assert'
 import { dirname, join } from 'node:path'
@@ -60,7 +61,7 @@ assert.match(
 
 assert.match(
   source,
-  /拖拽图片\/视频\/音频到此处/,
+  localizedPattern(/拖拽图片\/视频\/音频到此处/),
   'The reference strip hint should advertise audio support'
 )
 

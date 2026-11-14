@@ -1,4 +1,6 @@
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 /**
  * CommunityWorkflow.vue - 社区工作流只读预览页
  * 路由: /community/:id/workflow
@@ -178,7 +180,7 @@ async function loadWorkDetail() {
       }
     }
   } catch (e) {
-    error.value = e.message || '加载作品信息失败'
+    error.value = e.message || translateUi('uiMessages.m387e0d076f0e')
     throw e
   }
 }
@@ -207,7 +209,7 @@ async function loadWorkflow() {
       // 付费未购买，预期行为
       return
     }
-    error.value = e.message || '加载工作流失败'
+    error.value = e.message || translateUi('uiMessages.m50c701a50f8b')
   }
 }
 
@@ -264,7 +266,7 @@ onMounted(async () => {
         class="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm transition-colors"
         @click="goBack"
       >
-        返回
+        {{ translateUi('common.back') }}
       </button>
     </div>
 
@@ -275,20 +277,20 @@ onMounted(async () => {
         <!-- 左侧：返回 -->
         <button
           class="flex items-center gap-1.5 text-sm text-gray-300 hover:text-white transition-colors"
-          aria-label="返回社区"
+          :aria-label="translateUi('uiMessages.m939bc79bd1c9')"
           @click="goBack"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
           </svg>
-          返回社区
+          {{ translateUi('uiMessages.m939bc79bd1c9') }}
         </button>
         <!-- 中间：标题 + 作者 -->
         <div class="flex items-center gap-3 absolute left-1/2 -translate-x-1/2">
           <img
             v-if="work.author_avatar"
             :src="work.author_avatar"
-            alt="作者头像"
+            :alt="translateUi('uiMessages.m9fe956ddc889')"
             class="w-7 h-7 rounded-full object-cover"
           />
           <div class="text-center">
@@ -342,17 +344,17 @@ onMounted(async () => {
                 </svg>
               </div>
               <div>
-                <p class="text-lg font-medium mb-1">付费工作流</p>
-                <p class="text-sm text-gray-400">解锁后可查看完整工作流并复刻到你的空间</p>
+                <p class="text-lg font-medium mb-1">{{ translateUi('uiMessages.m2fde101f29e8') }}</p>
+                <p class="text-sm text-gray-400">{{ translateUi('uiMessages.m9d29e3f1fda4') }}</p>
               </div>
               <div class="text-2xl font-bold text-white">
-                {{ work.price }} 积分
+                {{ translateUi('uiMessages.md901f70479c8', { value1: (work.price) }) }}
               </div>
               <button
                 class="w-full px-6 py-3 rounded-lg bg-white hover:bg-neutral-200 text-neutral-900 font-medium transition-colors"
                 @click="handlePurchase"
               >
-                支付 {{ work.price }} 积分解锁
+                {{ translateUi('uiMessages.me580f129a8c7', { value1: (work.price) }) }}
               </button>
             </div>
           </div>
@@ -373,7 +375,7 @@ onMounted(async () => {
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
           </svg>
-          复刻到我的空间
+          {{ translateUi('uiMessages.mc9e6dc01603b') }}
         </button>
       </div>
     </template>

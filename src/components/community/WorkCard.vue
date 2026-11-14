@@ -62,7 +62,7 @@
         v-if="work.share_mode === 'paid' && work.price"
         class="community-work-card-paid-badge absolute top-2 left-2 px-2 py-0.5 rounded-md border border-white/35 bg-white/75 text-neutral-950 text-xs font-semibold shadow-[0_4px_16px_rgba(0,0,0,0.22)] backdrop-blur-md"
       >
-        {{ work.price }} 积分
+        {{ translateUi('uiMessages.md901f70479c8', { value1: (work.price) }) }}
       </div>
 
       <!-- 精选标签 -->
@@ -71,18 +71,18 @@
         class="community-work-card-featured-badge absolute top-2 text-xs font-medium px-2 py-0.5 rounded-md border border-white/20 bg-black/45 text-white shadow-[0_4px_16px_rgba(0,0,0,0.24)] backdrop-blur-md"
         :class="work.share_mode === 'paid' && work.price ? 'left-16' : 'left-2'"
       >
-        精选
+        {{ translateUi('uiMessages.m15b26cdaf900') }}
       </div>
 
       <!-- 底部渐变遮罩 + 作者名 & 标题 + 点赞 -->
       <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-8 pb-2.5 px-3 flex items-end justify-between gap-2">
         <div class="flex-1 min-w-0">
-          <p class="text-sm text-white font-medium truncate leading-snug drop-shadow-sm">{{ work.title || '无标题' }}</p>
-          <span class="text-xs text-white/70 truncate block mt-0.5 drop-shadow-sm">@{{ work.author_name || '匿名用户' }}</span>
+          <p class="text-sm text-white font-medium truncate leading-snug drop-shadow-sm">{{ work.title || translateUi('uiMessages.m8c974da9d870') }}</p>
+          <span class="text-xs text-white/70 truncate block mt-0.5 drop-shadow-sm">@{{ work.author_name || translateUi('uiMessages.mdbb891595578') }}</span>
         </div>
         <button
           class="community-work-card-like flex flex-col items-center gap-0.5 shrink-0 opacity-0 pointer-events-none transition-all duration-200 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto hover:scale-110"
-          :aria-label="work.is_liked ? '取消点赞' : '点赞'"
+          :aria-label="work.is_liked ? translateUi('uiMessages.m3ab399c75fa6') : translateUi('uiMessages.maced5d7f9fc9')"
           @click.stop="$emit('like', work)"
         >
           <svg
@@ -99,6 +99,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import { getImageMediaUrls } from '@/utils/communityMedia'
 import { getCanvasThumbnailUrl } from '@/utils/canvasThumbnail'

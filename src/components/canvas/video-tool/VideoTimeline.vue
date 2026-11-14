@@ -64,7 +64,7 @@
             class="video-timeline__clip"
             :class="{ active: index === selectedIndex }"
             :style="getClipStyle(clip, index)"
-            :title="`${clip.name || '视频片段'} · ${formatClipDuration(clip)} · ${(clip.playbackRate || 1).toFixed(2)}x`"
+            :title="`${clip.name || translateUi('uiMessages.m77426c37004b')} · ${formatClipDuration(clip)} · ${(clip.playbackRate || 1).toFixed(2)}x`"
             draggable="true"
             @click="$emit('select', index)"
             @dragstart="handleDragStart(index)"
@@ -72,16 +72,16 @@
             @drop="handleDrop(index)"
           >
             <span class="video-timeline__clip-duration">{{ formatClipDuration(clip) }}</span>
-            <span class="video-timeline__clip-name">{{ clip.name || `片段 ${index + 1}` }}</span>
+            <span class="video-timeline__clip-name">{{ clip.name || translateUi('uiMessages.m8bdcc8527ef9', { value1: (index + 1) }) }}</span>
             <span v-if="clip.playbackRate && clip.playbackRate !== 1" class="video-timeline__clip-rate">{{ clip.playbackRate.toFixed(2) }}x</span>
             <button
               type="button"
               class="video-timeline__clip-remove"
-              title="移除"
+              :title="translateUi('user.removeCoupon')"
               @click.stop="removeClip(index)"
             >×</button>
           </div>
-          <div v-if="clips.length === 0" class="video-timeline__empty">从左侧添加视频到时间轴</div>
+          <div v-if="clips.length === 0" class="video-timeline__empty">{{ translateUi('uiMessages.m13cb8befc53c') }}</div>
         </div>
       </div>
 
@@ -101,6 +101,8 @@
 </template>
 
 <script setup>
+import { t as translateUi } from '@/i18n'
+
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { getClipDuration } from '@/utils/videoToolTimeline'
 

@@ -1,3 +1,4 @@
+import { localizedPattern } from '../../../i18n/sourceAssertions.mjs'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
@@ -12,8 +13,8 @@ test('ImageNode exposes quick Seedance review button and approved/expired badge'
   assert.match(button, /createQuickSeedanceCharacterAsset/)
   assert.match(button, /seedance-review-btn/)
   assert.match(source, /seedance-review-badge/)
-  assert.match(source, /已过审/)
-  assert.match(source, /已失效/)
+  assert.match(source, localizedPattern(/已过审/))
+  assert.match(source, localizedPattern(/已失效/))
 })
 
 test('ImageNode preserves face URI for quick review assets from OpenAPI Pro channels', () => {
