@@ -14,6 +14,7 @@ function section(source, startMarker, endMarker) {
 
 function createHarness({ imageSize, references, model = 'gpt-image-2.5-flare', outputFormat = 'png', isGptImage26 = false }) {
   const requests = []
+  const detectModel = new Function(`${section(imageNodeSource, 'function isGptImage26ModelConfig', '\nconst isGptImage26Model')}; return isGptImage26ModelConfig`)()
   const dependencies = {
     console: { log() {}, warn() {}, error() {} },
     referenceImages: { value: references },
@@ -28,8 +29,9 @@ function createHarness({ imageSize, references, model = 'gpt-image-2.5-flare', o
     selectedQuality: { value: 'high' },
     isPixmaxImage2Model: { value: false },
     selectedOutputFormat: { value: outputFormat },
-    isGptImage26Model: { value: isGptImage26 },
+    isGptImage26Model: { value: detectModel({ actualModel: model }) },
     isMJModel: { value: false },
+    isSeedream55Model: { value: false },
     enableGroupGeneration: { value: false },
     maxGroupImages: { value: 1 },
     isSeedream50LiteModel: { value: false },
@@ -114,3 +116,22 @@ test('gpt-image-2.6 PNG keeps the prompt unchanged', async () => {
   assert.equal(harness.requests[0].body.output_format, 'png')
   assert.equal(harness.requests[0].body.prompt, 'draw a cup')
 })
+
+for (const model of ['gpt-image-2.6-sunburst', 'gpt-image-2.6-flare']) {
+  for (const imageSize of ['1K', '2K', '4K']) {
+    for (const outputFormat of ['png', 'gif']) {
+      test(`${model} image-to-image sends ${imageSize}, ${outputFormat} and high quality`, async () => {
+        const references = ['https://cdn.example/reference.png']
+        const harness = createHarness({ imageSize, references, model, outputFormat, isGptImage26: true })
+        await harness.send('Keep the cup, change the background')
+        const body = harness.requests[0].body
+        assert.equal(body.model, model)
+        assert.equal(body.image_size, imageSize)
+        assert.equal(body.quality, 'high')
+        assert.equal(body.output_format, outputFormat)
+        assert.deepEqual(body.image, references)
+        assert.equal(body.prompt.includes('Please return an animated GIF.'), outputFormat === 'gif')
+      })
+    }
+  }
+}

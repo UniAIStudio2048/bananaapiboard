@@ -306,7 +306,8 @@ export function createIncrementalWriter({
    * 回放 IndexedDB 中尚未发送成功的 ops。
    */
   async function replayPersisted() {
-    if (!allowOfflineReplay) return { replayed: 0, paused: true }
+    // 禁用离线回放不代表写入暂停，空队列 flush 仍可正常进入任务提交。
+    if (!allowOfflineReplay) return { replayed: 0 }
     const wfId = getWorkflowId()
     if (!wfId) return { replayed: 0 }
     let persisted = []

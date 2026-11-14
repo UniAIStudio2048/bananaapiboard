@@ -1,7 +1,6 @@
 <script setup>
 import { t as translateUi } from '@/i18n'
 
-import Seedream55Parameters from '../Seedream55Parameters.vue'
 import BreakdownReferenceDetails from '../BreakdownReferenceDetails.vue'
 defineOptions({
   inheritAttrs: false
@@ -1632,10 +1631,6 @@ const isSeedream55Model = computed(() => {
   const model = modelLookupList.value.find(m => m.value === selectedModel.value)
   return model?.actualModel === 'seedream-v5.5' || model?.value === 'seedream5.5'
 })
-const seedream55Options = computed({
-  get: () => props.data.seedream55 || {},
-  set: value => canvasStore.updateNodeData(props.id, { seedream55: value })
-})
 
 // 获取当前模型的清晰度选项（积分与开关均来自租户后台）
 const imageSizes = computed(() => {
@@ -1656,7 +1651,9 @@ const imageSizes = computed(() => {
       ? ['2K', '4K']
       : isWan27I2I
         ? ['1K', '2K']
-        : ['1K', '2K', '3K', '4K']
+        : isGptImage26Model.value
+          ? ['1K', '2K', '4K']
+          : ['1K', '2K', '3K', '4K']
 
   const supportedSet = new Set(supportedSizes)
   return getAvailableImageResolutionOptions(currentModel)
@@ -1810,9 +1807,7 @@ const basePointsCost = computed(() => {
   const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
   
   if (isSeedream55Model.value) {
-    const options = seedream55Options.value
-    const pixels = Number(options.width || 1024) * Number(options.height || 1024)
-    const tier = options.sizeMode === 'custom' ? (pixels <= 2600000 ? '1.5k' : pixels <= 4620000 ? '2k' : '3k') : imageSize.value.toLowerCase()
+    const tier = imageSize.value.toLowerCase()
     return roundPoints(Number(currentModel?.pointsCost?.[tier] || 0) + normalizeModelImageUrls(referenceImages.value).length * Number(currentModel?.referenceImagePointsCost || 0))
   }
 
@@ -5752,7 +5747,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
     ? `${basePrompt}\nPlease return an animated GIF.`
     : basePrompt
   const baseParams = {
-    ...(isSeedream55Model.value ? { seedream55: { ...seedream55Options.value } } : {}),
+    ...(isSeedream55Model.value ? { seedream55: {} } : {}),
     prompt: requestPrompt,
     userPrompt: userPrompt || finalPrompt || '',
     model: selectedModel.value,
@@ -8783,7 +8778,6 @@ async function handleDrop(event) {
             />
           </div>
           
-          <Seedream55Parameters v-if="isSeedream55Model" v-model="seedream55Options" />
 
           <!-- 预设选择器（MJ模型时隐藏） -->
           <div v-if="showPresetOption" class="preset-selector-custom" ref="presetSelectorRef" @click.stop>
