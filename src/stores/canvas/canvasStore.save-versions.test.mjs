@@ -230,3 +230,19 @@ test('协作状态按工作流写入对应标签，不污染当前激活的其�
   h.setCollaborationState({ workflowId: 'wf-closed', collabRevision: 99, collabEpoch: 'epoch-x' })
   assert.equal(h.workflowTabs.value[1].collabEpoch, 'epoch-b')
 })
+
+test('新建工作流的首次保存响应按 clientTabId 写入协作 epoch，后续增量提交不触发 epoch 冲突', () => {
+  const h = harness()
+  const tab = h.workflowTabs.value[0]
+  tab.workflowId = null
+  tab.collabEpoch = undefined
+  tab.collabRevision = 0
+  // 首次保存响应先于 markCurrentTabSaved 到达，此时标签还没有 workflowId
+  h.setCollaborationState({ workflowId: 'new-wf', clientTabId: 'tab-a', collabRevision: 1, collabEpoch: 'epoch-new' })
+  assert.equal(tab.collabEpoch, 'epoch-new')
+  assert.equal(tab.collabRevision, 1)
+  // clientTabId 指向已绑定其他工作流的标签时不能写入
+  h.setCollaborationState({ workflowId: 'other-wf', clientTabId: 'tab-b', collabRevision: 9, collabEpoch: 'epoch-x' })
+  assert.equal(h.workflowTabs.value[1].collabEpoch, undefined)
+  assert.equal(h.workflowTabs.value[1].collabRevision, undefined)
+})

@@ -104,6 +104,7 @@ async function syncSavedWorkflowVersions(data) {
   if (typeof store.setCollaborationState === 'function') {
     store.setCollaborationState({
       workflowId: data.workflow.id,
+      clientTabId: data.workflow.client_tab_id,
       collabRevision: data.workflow.collab_revision,
       collabEpoch: data.workflow.collab_epoch
     })

@@ -2549,9 +2549,11 @@ export const useCanvasStore = defineStore('canvas', () => {
   }
 
   // workflowId：响应所属工作流。异步响应可能在切换标签后才返回，必须写回对应标签，不能写入当前激活的其他标签
-  function setCollaborationState({ workflowId, collabRevision, collabEpoch } = {}) {
+  // clientTabId：新建工作流首次保存时响应先于 markCurrentTabSaved 返回，标签尚无 workflowId，按发起保存的标签匹配
+  function setCollaborationState({ workflowId, clientTabId, collabRevision, collabEpoch } = {}) {
     const currentTab = workflowId
-      ? workflowTabs.value.find(item => item.workflowId === workflowId)
+      ? workflowTabs.value.find(item => item.workflowId === workflowId ||
+        (clientTabId && item.id === clientTabId && !item.workflowId))
       : workflowTabs.value.find(item => item.id === activeTabId.value)
     if (!currentTab) return
     if (Number.isFinite(Number(collabRevision))) {

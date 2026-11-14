@@ -17,13 +17,15 @@ function harness(ok = true, conflictNodeVersions = null, options = {}) {
   const batchCalls = []
   const marks = []
   const remoteApplied = []
-  const workflow = { id: 'wf-a', client_tab_id: 'tab-a', node_versions: { media: 8 } }
+  const collabStates = []
+  const workflow = { id: 'wf-a', client_tab_id: 'tab-a', node_versions: { media: 8 }, ...(options.workflow || {}) }
   const context = {
     getApiUrl: path => path, getAuthHeaders: () => ({}),
     prepareWorkflowSaveBody, isStaleTaskResultForInFlightNode, uploadCanvasFile: async () => { throw new Error('unexpected upload') },
     useCanvasStore: () => ({
       applyWorkflowSaveVersions: value => applied.push(value),
       applyIncrementalNode: (node, opts) => remoteApplied.push({ node, opts }),
+      setCollaborationState: value => collabStates.push(value),
       flushIncrementalWriter: async () => { flushes.push(requests.length) }
     }),
     canvasEditLease: {
@@ -59,7 +61,7 @@ function harness(ok = true, conflictNodeVersions = null, options = {}) {
     const body = source.slice(node.start, node.end).replace("const { useCanvasStore } = await import('@/stores/canvas/canvasStore')", '')
     context[name] = runInNewContext(`(${body})`, context)
   }
-  return { context, applied, workflow, requests, requestHeaders, batchCalls, marks, remoteApplied, flushes }
+  return { context, applied, workflow, requests, requestHeaders, batchCalls, marks, remoteApplied, flushes, collabStates }
 }
 
 test('successful raw autosave synchronizes the returned node versions before resolving', async () => {
@@ -234,4 +236,12 @@ test('已保存工作流整份保存前先发完排队中的增量写入', async
   const h = harness()
   await h.context.saveWorkflow({ id: 'wf-a', nodes: [] })
   assert.deepEqual(h.flushes, [0], '必须在第一次保存请求之前 flush')
+})
+
+test('新建工作流保存后把 client_tab_id 随协作 epoch 一并交给 store', async () => {
+  const h = harness(true, null, { workflow: { id: 'new-wf', collab_revision: 1, collab_epoch: 'epoch-new' } })
+  await h.context.saveWorkflow({ nodes: [], clientTabId: 'tab-a' })
+  assert.deepEqual(JSON.parse(JSON.stringify(h.collabStates)), [
+    { workflowId: 'new-wf', clientTabId: 'tab-a', collabRevision: 1, collabEpoch: 'epoch-new' }
+  ])
 })
