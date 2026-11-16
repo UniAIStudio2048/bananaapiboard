@@ -6,6 +6,14 @@ export const SEEDANCE_MAX_VIDEO_PIXELS = 927_408
 export const SEEDANCE_ANT_MAX_VIDEO_PIXELS = 2_086_876
 export const SEEDANCE_MAX_VIDEO_BYTES = 50 * 1024 * 1024
 
+// 与后端 video-reference-validation.js 的火山官方规格保持一致。
+// https://docs.volcengine.com/docs/zh/ark/create-video-generation-task-api.md
+const OFFICIAL_VIDEO_LIMITS = Object.freeze({
+  minPixels: 407_696,
+  maxPixels: 8_295_044,
+  maxBytes: 200 * 1024 * 1024
+})
+
 function toPositiveNumber(value) {
   const n = Number(value)
   return Number.isFinite(n) && n > 0 ? n : 0
@@ -64,11 +72,11 @@ function evenCeil(value) {
   return Math.ceil(value / 2) * 2
 }
 
-function getMinimumVideoDimensions(width, height) {
-  const scale = Math.sqrt(SEEDANCE_MIN_VIDEO_PIXELS / (width * height))
+function getMinimumVideoDimensions(width, height, minPixels) {
+  const scale = Math.sqrt(minPixels / (width * height))
   const targetWidth = evenCeil(width * scale)
   let targetHeight = evenCeil(height * scale)
-  while (targetWidth * targetHeight < SEEDANCE_MIN_VIDEO_PIXELS) targetHeight += 2
+  while (targetWidth * targetHeight < minPixels) targetHeight += 2
   return { width: targetWidth, height: targetHeight }
 }
 
@@ -80,14 +88,18 @@ export function validateSeedanceVideoMetadata(meta = {}, options = {}) {
   const duration = toPositiveNumber(meta.duration)
   const size = toPositiveNumber(meta.size)
   const type = String(meta.type || '').toLowerCase()
-  const maxPixels = apiType === 'ant' ? SEEDANCE_ANT_MAX_VIDEO_PIXELS : SEEDANCE_MAX_VIDEO_PIXELS
+  const isOfficial = ['seedance-2.0', 'seedance-2.5'].includes(apiType)
+  const minPixels = isOfficial ? OFFICIAL_VIDEO_LIMITS.minPixels : SEEDANCE_MIN_VIDEO_PIXELS
+  const maxPixels = isOfficial ? OFFICIAL_VIDEO_LIMITS.maxPixels
+    : apiType === 'ant' ? SEEDANCE_ANT_MAX_VIDEO_PIXELS : SEEDANCE_MAX_VIDEO_PIXELS
+  const maxBytes = isOfficial ? OFFICIAL_VIDEO_LIMITS.maxBytes : SEEDANCE_MAX_VIDEO_BYTES
   const durationMax = toPositiveNumber(maxDuration) || 15
 
   if (type && !['video/mp4', 'video/quicktime'].includes(type)) {
     return `${label}格式不受支持，请使用 MP4 或 MOV`
   }
-  if (size > SEEDANCE_MAX_VIDEO_BYTES) {
-    return `${label}大小超过50MB，请压缩文件后重试`
+  if (size > maxBytes) {
+    return `${label}大小超过${maxBytes / (1024 * 1024)}MB，请压缩文件后重试`
   }
   if (duration < 2 || duration > durationMax) {
     return `${label}时长需在2到${durationMax}秒之间`
@@ -105,9 +117,9 @@ export function validateSeedanceVideoMetadata(meta = {}, options = {}) {
   }
 
   const pixels = width * height
-  if (pixels < SEEDANCE_MIN_VIDEO_PIXELS) {
-    const recommended = getMinimumVideoDimensions(width, height)
-    return `${label}分辨率过低：当前 ${width}×${height}（${pixels} 像素），要求至少 ${SEEDANCE_MIN_VIDEO_PIXELS} 像素，请提升到 ${recommended.width}×${recommended.height} 或更高后重试`
+  if (pixels < minPixels) {
+    const recommended = getMinimumVideoDimensions(width, height, minPixels)
+    return `${label}分辨率过低：当前 ${width}×${height}（${pixels} 像素），要求至少 ${minPixels} 像素，请提升到 ${recommended.width}×${recommended.height} 或更高后重试`
   }
   if (pixels > maxPixels) {
     return `${label}分辨率过高：当前 ${width}×${height}（${pixels} 像素），当前渠道最多支持 ${maxPixels} 像素`

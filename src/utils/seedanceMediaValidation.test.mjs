@@ -10,6 +10,29 @@ import {
   validateSeedanceModeInputs
 } from './seedanceMediaValidation.js'
 
+test('official Seedance upload validation accepts 1080p, 4K and documented boundaries', () => {
+  for (const apiType of ['seedance-2.0', 'seedance-2.5']) {
+    for (const [width, height] of [[1080, 1920], [3840, 2160], [3326, 2494], [614, 664]]) {
+      assert.equal(validateSeedanceVideoMetadata({
+        width, height, duration: 15, size: 200 * 1024 * 1024, type: 'video/mp4'
+      }, { apiType }), '', `${apiType} ${width}×${height}`)
+    }
+  }
+})
+
+test('official Seedance upload validation reports the updated limits in Chinese', () => {
+  const metadata = { width: 1080, height: 1920, duration: 10, size: 1024, type: 'video/mp4' }
+  for (const [override, message] of [
+    [{ width: 3842, height: 2160 }, /分辨率过高.*8295044/],
+    [{ width: 612, height: 664 }, /分辨率过低.*407696/],
+    [{ size: 200 * 1024 * 1024 + 1 }, /大小超过200MB/],
+    [{ duration: 16 }, /2到15秒/]
+  ]) {
+    assert.match(validateSeedanceVideoMetadata({ ...metadata, ...override }, { apiType: 'seedance-2.0' }), message)
+  }
+  assert.match(validateSeedanceVideoMetadata(metadata, { apiType: 'ctyun-seedance' }), /分辨率过高.*927408/)
+})
+
 test('marks oversized seedance images for compression by pixel count', () => {
   const plan = getSeedanceImageCompressionPlan({
     width: 9000,

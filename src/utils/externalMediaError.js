@@ -7,6 +7,12 @@ function resolveLanguage(language) {
 function getRawMessage(payload, fallback) {
   if (typeof payload === 'string' && payload.trim()) return payload.trim()
   if (!payload || typeof payload !== 'object') return fallback
+  if (payload.error === 'invalid_reference_video') {
+    return payload.message || '参考视频不符合要求，请检查格式、分辨率、大小、时长和帧率后重试'
+  }
+  if (payload.error === 'seedance_media_invalid') {
+    return payload.message || '参考素材不符合要求，请检查文件格式和大小后重试'
+  }
   const error = typeof payload.error === 'string'
     ? payload.error
     : payload.error?.message

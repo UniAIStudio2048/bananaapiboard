@@ -45,3 +45,22 @@ test('localizes task payload error fields without dropping the structured contra
 test('preserves existing raw messages when the backend has no localization contract', () => {
   assert.equal(resolveExternalMediaErrorMessage({ message: 'raw upstream failure' }, 'fallback', 'ja'), 'raw upstream failure')
 })
+
+test('shows the Chinese reference video validation message instead of the error code', () => {
+  const message = '参考视频1分辨率过高：当前 4000×3000（12000000 像素），当前渠道最多支持 8295044 像素'
+  assert.equal(resolveExternalMediaErrorMessage({
+    error: 'invalid_reference_video', message, details: { reason: 'reference_video_pixels_too_high' }
+  }, '生成失败', 'zh-CN'), message)
+})
+
+test('provides a Chinese hint when reference video validation has no message', () => {
+  assert.match(resolveExternalMediaErrorMessage({ error: 'invalid_reference_video' }, '生成失败', 'zh-CN'), /参考视频.*格式.*分辨率.*大小.*时长.*帧率/)
+})
+
+test('shows Chinese multipart media validation errors', () => {
+  assert.equal(resolveExternalMediaErrorMessage({ error: 'seedance_media_invalid', message: '参考视频不能超过200MB' }), '参考视频不能超过200MB')
+})
+
+test('preserves upstream failure detail when its outer message is generic', () => {
+  assert.equal(resolveExternalMediaErrorMessage({ error: 'provider detail', message: '生成失败' }), 'provider detail')
+})

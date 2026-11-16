@@ -1162,10 +1162,12 @@ async function handleSeedanceRefVideos(e) {
     e.target.value = ''
     return
   }
-  const maxVideoBytes = isWan3Model.value ? 100 * 1024 * 1024 : 50 * 1024 * 1024
+  const maxVideoBytes = ['seedance-2.0', 'seedance-2.5'].includes(currentModelConfig.value?.apiType)
+    ? 200 * 1024 * 1024
+    : isWan3Model.value ? 100 * 1024 * 1024 : 50 * 1024 * 1024
   const tooLarge = files.find(f => f.size > maxVideoBytes)
   if (tooLarge) {
-    error.value = translateUi('uiMessages.mfa3b7cd8305f', { value1: (isWan3Model.value ? 100 : 50) })
+    error.value = translateUi('uiMessages.mfa3b7cd8305f', { value1: maxVideoBytes / (1024 * 1024) })
     e.target.value = ''
     return
   }
