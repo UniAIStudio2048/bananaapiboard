@@ -156,7 +156,7 @@ export function useScriptDocument(nodeId) {
       if (entry === 'manual') { if (!document.value.shots.length) document.value.shots.push(newShot(`shot_${crypto.randomUUID()}`)); await save(); return }
       const parent = store.nodes.find(n => n.id === nodeId)
       const incoming = store.edges.filter(e => e.target === nodeId).map(e => store.nodes.find(n => n.id === e.source)).filter(Boolean)
-      const source = incoming.filter(n => /text/.test(n.type)).map(n => n.data.text || n.data.llmResponse || '').join('\n\n')
+      const source = incoming.filter(n => /text/.test(n.type)).map(n => n.data.llmResponse || n.data.text || '').join('\n\n')
       document.value.referenceImages = incoming.filter(n => /image/.test(n.type)).map(n => n.data.output?.url || n.data.imageUrl || n.data.url).filter(Boolean).slice(0, 12)
       if (source) document.value.sourceText = source
       else if (entry === 'story' && !document.value.sourceText) {
