@@ -443,6 +443,8 @@ const generationMode = ref(props.data.generationMode || 'text')
 const isHeygenModel = model => model?.apiType === 'heygen'
 
 function supportsCurrentMode(model, currentMode) {
+  // 组合素材模型始终展示，素材是否齐全由选择和提交校验决定。
+  if (['runninghub-motion-transfer', 'runninghub-longcat'].includes(model.apiType)) return true
   const supportedModes = model.supportedModes
   if (!supportedModes) return true
 
@@ -577,6 +579,7 @@ function toggleModelDropdown(event) {
 }
 
 function selectModel(modelValue) {
+  if (getModelInputError(models.value.find(model => model.value === modelValue))) return
   selectedModel.value = modelValue
   isModelDropdownOpen.value = false
   videoModeDropdownOpen.value = null
@@ -3789,6 +3792,20 @@ const referenceAudios = computed(() => {
 })
 
 const hasReferenceAudios = computed(() => referenceAudios.value.length > 0)
+
+function getModelInputError(model) {
+  if (model?.apiType === 'runninghub-motion-transfer') {
+    return referenceImages.value.length === 1 && referenceVideos.value.length === 1 && referenceAudios.value.length === 0
+      ? '' : translateUi('uiMessages.m571b9e956ead')
+  }
+  if (model?.apiType === 'runninghub-longcat') {
+    return referenceImages.value.length === 1 && referenceAudios.value.length === 1 && referenceVideos.value.length === 0
+      ? '' : translateUi('uiMessages.ma78e2e9a16d9')
+  }
+  return ''
+}
+
+const selectedModelInputError = computed(() => getModelInputError(currentModelConfig.value))
 
 const activeDigitalHuman = computed(() => getUpstreamData().digitalHumans[0] || null)
 const isDigitalHumanMode = computed(() => !!activeDigitalHuman.value)
@@ -7081,7 +7098,7 @@ async function handleSeedanceDraftFinal() {
 
 async function handleGenerate(options = {}) {
   const { retry = false } = options
-  if (isGenerating.value) return
+  if (isGenerating.value || selectedModelInputError.value) return
   if (findBlockingCanvasUploads(canvasStore.nodes, canvasStore.edges, props.id).length > 0) {
     showToast(translateUi('uiMessages.m97f1343b0c9b'), 'warning')
     return
@@ -11452,6 +11469,8 @@ function toggleFullscreenPlayback() {
           <div v-if="!isHeygenMode || isHeygenModelSelected" class="model-selector-custom" ref="modelSelectorRef" @click.stop>
             <div 
               class="model-selector-trigger"
+              :class="{ 'input-disabled': !!selectedModelInputError }"
+              :title="selectedModelInputError"
               @click="toggleModelDropdown"
             >
               <span class="model-icon">{{ models.find(m => m.value === selectedModel)?.icon || '🎬' }}</span>
@@ -11493,7 +11512,9 @@ function toggleFullscreenPlayback() {
                       v-for="m in currentVendorModels"
                       :key="m.value"
                       class="model-dropdown-item"
-                      :class="{ 'active': selectedModel === m.value }"
+                      :class="{ 'active': selectedModel === m.value, 'input-disabled': !!getModelInputError(m) }"
+                      :aria-disabled="!!getModelInputError(m)"
+                      :title="getModelInputError(m)"
                       @click="selectModel(m.value)"
                     >
                       <div class="model-item-main">
@@ -11531,7 +11552,9 @@ function toggleFullscreenPlayback() {
                     v-for="m in models"
                     :key="m.value"
                     class="model-dropdown-item"
-                    :class="{ 'active': selectedModel === m.value }"
+                    :class="{ 'active': selectedModel === m.value, 'input-disabled': !!getModelInputError(m) }"
+                    :aria-disabled="!!getModelInputError(m)"
+                    :title="getModelInputError(m)"
                     @click="selectModel(m.value)"
                   >
                     <div class="model-item-main">
@@ -11806,10 +11829,12 @@ function toggleFullscreenPlayback() {
             </template>
           </span>
           
-          <!-- 生成按钮 - 只在任务提交中禁用，节点生成中仍可点击发起新任务 -->
+          <!-- 提交中或组合素材不齐时禁用；节点生成中仍可发起新任务 -->
           <button 
             class="generate-btn"
-            :disabled="isGenerating"
+            :class="{ 'input-disabled': !!selectedModelInputError }"
+            :disabled="isGenerating || !!selectedModelInputError"
+            :title="selectedModelInputError"
             @click="handleGenerate"
           >
             <span v-if="isGenerating" class="btn-loading">...</span>
@@ -13814,6 +13839,21 @@ function toggleFullscreenPlayback() {
 .model-selector-trigger:hover {
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(255, 255, 255, 0.15);
+}
+
+.model-selector-trigger.input-disabled {
+  opacity: 0.5;
+  filter: grayscale(1);
+}
+
+.model-dropdown-item.input-disabled {
+  opacity: 0.5;
+  filter: grayscale(1);
+  cursor: not-allowed;
+}
+
+.generate-btn.input-disabled {
+  filter: grayscale(1);
 }
 
 .model-icon {
