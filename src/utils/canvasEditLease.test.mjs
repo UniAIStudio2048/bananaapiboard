@@ -269,3 +269,16 @@ test('申请未完成时关闭、重开再关闭：排队的新申请也必须�
   await reopened
   assert.equal(client.getState('wf-1').mode, 'released')
 })
+
+test('心跳携带各工作流原令牌，过期恢复后仍用原令牌保存', async () => {
+  const { client, calls } = makeClient({
+    '/lease/acquire': editorResponse(7),
+    '/leases/heartbeat': { ok: true, data: { renewed: ['wf-1'], lost: [] } }
+  })
+  await client.acquire('wf-1')
+  await client.heartbeat()
+  const heartbeat = calls.find(c => c.path.endsWith('/leases/heartbeat'))
+  assert.deepEqual(heartbeat.body.leaseTokens, { 'wf-1': 7 })
+  assert.equal(client.getState('wf-1').mode, 'editor')
+  assert.equal(client.getLeaseHeaders('wf-1')['X-Canvas-Lease-Token'], '7')
+})

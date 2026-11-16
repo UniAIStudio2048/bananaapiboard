@@ -161,14 +161,15 @@ export function createEditLeaseClient({ request, getSessionId, getBeaconAuth = (
     return releasing
   }
 
-  /** 为所有打开的编辑工作流续期；丢失后只读，等待用户显式拿回 */
+  /** 携原令牌续期，单会话过期由服务端恢复；确实被接管后才转只读 */
   async function heartbeat() {
     const editors = new Map(Object.values(states).filter(s => s.mode === 'editor').map(s => [s.workflowId, s]))
     const workflowIds = [...editors.keys()]
     if (workflowIds.length === 0) return
     let response
     try {
-      response = await request('/api/canvas/leases/heartbeat', { headers: sessionHeaders(), body: { workflowIds } })
+      const leaseTokens = Object.fromEntries([...editors].map(([id, state]) => [id, state.token]))
+      response = await request('/api/canvas/leases/heartbeat', { headers: sessionHeaders(), body: { workflowIds, leaseTokens } })
     } catch {
       return
     }
