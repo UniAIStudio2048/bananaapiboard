@@ -1,7 +1,8 @@
 import { t as translateUi } from '../i18n/index.js'
 import { createRouter, createWebHistory } from 'vue-router'
-import { getBrand } from '@/config/tenant'
+import { getBrand, getTenantId } from '@/config/tenant'
 import { setPageTitle, isIndexableRoute } from '@/utils/pageTitle'
+import { defaultHomepageTitle, isDefaultHomepage } from '@/utils/defaultHomeContent'
 const Home = () => import('@/views/Home.vue')
 const User = () => import('@/views/User.vue')
 const Packages = () => import('@/views/Packages.vue')
@@ -38,7 +39,7 @@ const router = createRouter({
       component: landingMode === '1'
         ? () => import('@/views/CommunityHome.vue')
         : Landing3D,
-      meta: { title: '', requiresAuth: false }  // 落地页直接使用默认标题
+      meta: { get title() { return defaultHomepageTitle('/', getTenantId()) }, requiresAuth: false }
     },
     { 
       path: '/generate', 
@@ -174,7 +175,11 @@ const router = createRouter({
 // 路由守卫 - 检查登录状态；公开可收录页面标题为「页面名 - 站点名」，其余页面固定为站点名
 router.beforeEach(async (to, from, next) => {
   const brand = getBrand()
-  setPageTitle(isIndexableRoute(to) ? to.meta.title : '', brand?.siteTitle)
+  setPageTitle(
+    isIndexableRoute(to) ? to.meta.title : '',
+    brand?.siteTitle,
+    isDefaultHomepage(to.path, getTenantId()) ? 'Nano Banana' : ''
+  )
   
   // 检查是否需要登录
   if (to.meta.requiresAuth) {

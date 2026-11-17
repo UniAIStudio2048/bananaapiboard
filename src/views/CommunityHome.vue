@@ -77,6 +77,8 @@
       </div>
     </nav>
 
+    <DefaultHomeIntro v-if="isDefaultHomepage(route.path, getTenantId())" />
+
     <!-- 轮播图 -->
     <section class="max-w-[1400px] mx-auto px-6 pt-6 pb-2">
       <BannerCarousel :banners="communityStore.banners" />
@@ -191,11 +193,13 @@
 import { t as translateUi } from '@/i18n'
 
 import { ref, computed, onMounted, onUnmounted, nextTick, watch, defineAsyncComponent } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { clearAuthSession } from '@/api/client'
 import { useCommunityStore } from '@/stores/community'
 import { getWorks, toggleLike, toggleFavorite } from '@/api/community'
-import { getBrand, loadBrandConfig } from '@/config/tenant'
+import { getBrand, getTenantId, loadBrandConfig } from '@/config/tenant'
+import { isDefaultHomepage } from '@/utils/defaultHomeContent'
+import DefaultHomeIntro from '@/components/community/DefaultHomeIntro.vue'
 import BannerCarousel from '@/components/community/BannerCarousel.vue'
 import WorkCard from '@/components/community/WorkCard.vue'
 const LoginModal = defineAsyncComponent(() => import('@/components/community/LoginModal.vue'))
@@ -204,6 +208,7 @@ import TemplateGallery from '@/components/community/TemplateGallery.vue'
 import HorizontalScrollRow from '@/components/community/HorizontalScrollRow.vue'
 
 const router = useRouter()
+const route = useRoute()
 const communityStore = useCommunityStore()
 
 // 登录弹窗首次打开后才挂载，之后保持挂载（所有入口均通过 communityStore.showLoginModal 打开）

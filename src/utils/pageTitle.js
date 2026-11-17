@@ -3,6 +3,7 @@ const DEFAULT_SITE_TITLE = 'ai绘图创作'
 
 let currentPageTitle = ''
 let currentSiteTitle = ''
+let currentSiteTitleOverride = ''
 
 export function composeDocumentTitle(pageTitle, siteTitle) {
   const site = siteTitle || DEFAULT_SITE_TITLE
@@ -13,14 +14,15 @@ export function isIndexableRoute(route) {
   return !route?.meta?.requiresAuth && !route?.meta?.noindex
 }
 
-export function setPageTitle(pageTitle, siteTitle) {
+export function setPageTitle(pageTitle, siteTitle, siteTitleOverride = '') {
   currentPageTitle = pageTitle || ''
+  currentSiteTitleOverride = siteTitleOverride
   if (siteTitle) currentSiteTitle = siteTitle
-  document.title = composeDocumentTitle(currentPageTitle, currentSiteTitle)
+  document.title = composeDocumentTitle(currentPageTitle, currentSiteTitleOverride || currentSiteTitle)
 }
 
 // 品牌配置异步加载完成后调用，只替换站点名，保留当前页面名
 export function refreshDocumentTitle(siteTitle) {
   if (siteTitle) currentSiteTitle = siteTitle
-  document.title = composeDocumentTitle(currentPageTitle, currentSiteTitle)
+  document.title = composeDocumentTitle(currentPageTitle, currentSiteTitleOverride || currentSiteTitle)
 }
