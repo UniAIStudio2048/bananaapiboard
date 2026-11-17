@@ -43,7 +43,8 @@ import {
   getMediaMentionKey,
   normalizeMediaMentionLabel,
   resolveMediaMentionItem,
-  syncPromptMediaMentions
+  syncPromptMediaMentions,
+  isPromptMediaReady
 } from '@/utils/promptMediaBindings'
 import CustomPresetDialog from '../dialogs/CustomPresetDialog.vue'
 import PresetManager from '../dialogs/PresetManager.vue'
@@ -1383,6 +1384,7 @@ function nodeContainsReferenceMedia(node, media) {
 }
 
 function removeReferenceMedia(media) {
+  const previousMediaItems = [...referenceMediaList.value]
   if (!media?.type || !media?.url) return
 
   const orderKey = MEDIA_ORDER_KEYS[media.type]
@@ -1410,6 +1412,7 @@ function removeReferenceMedia(media) {
   }
 
   edgesToRemove.forEach(edgeId => canvasStore.removeEdge(edgeId))
+  syncPromptMentionsWithMedia({ previousMediaItems })
 }
 
 function updatePromptMentionBindings(bindings) {
@@ -1419,8 +1422,12 @@ function updatePromptMentionBindings(bindings) {
   })
 }
 
-function syncPromptMentionsWithMedia() {
-  const result = syncPromptMediaMentions(llmInputText.value, promptMentionBindings.value, referenceMediaList.value)
+function syncPromptMentionsWithMedia(options = {}) {
+  const result = syncPromptMediaMentions(llmInputText.value, promptMentionBindings.value, referenceMediaList.value, {
+    ...options,
+    mediaReady: isPromptMediaReady(props.id, canvasStore.nodes, canvasStore.edges)
+  })
+  if (result.text === llmInputText.value && JSON.stringify(result.bindings) === JSON.stringify(promptMentionBindings.value)) return
   if (result.text !== llmInputText.value) {
     llmInputText.value = result.text
   }
@@ -1508,7 +1515,7 @@ function handlePromptTagMousedown(seg, event) {
 }
 
 watch(
-  () => referenceMediaList.value.map(item => `${item.key}:${item.label}`).join('|'),
+  () => `${isPromptMediaReady(props.id, canvasStore.nodes, canvasStore.edges)}|${referenceMediaList.value.map(item => `${item.key}:${item.label}:${item.url}`).join('|')}`,
   () => {
     syncPromptMentionsWithMedia()
   },

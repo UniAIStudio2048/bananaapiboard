@@ -68,7 +68,8 @@ import {
   getMediaMentionKey,
   normalizeMediaMentionLabel,
   resolveMediaMentionItem,
-  syncPromptMediaMentions
+  syncPromptMediaMentions,
+  isPromptMediaReady
 } from '@/utils/promptMediaBindings'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import { watchLeftAddButtonDrag } from '@/utils/canvasLeftAddDrag'
@@ -4592,8 +4593,12 @@ function updatePromptMentionBindings(bindings) {
   })
 }
 
-function syncPromptMentionsWithMedia() {
-  const result = syncPromptMediaMentions(promptText.value, promptMentionBindings.value, referenceMediaList.value)
+function syncPromptMentionsWithMedia(options = {}) {
+  const result = syncPromptMediaMentions(promptText.value, promptMentionBindings.value, referenceMediaList.value, {
+    ...options,
+    mediaReady: isPromptMediaReady(props.id, canvasStore.nodes, canvasStore.edges)
+  })
+  if (result.text === promptText.value && JSON.stringify(result.bindings) === JSON.stringify(promptMentionBindings.value)) return
   if (result.text !== promptText.value) {
     promptText.value = result.text
   }
@@ -6807,7 +6812,7 @@ watch(
 )
 
 watch(
-  () => referenceMediaList.value.map(item => `${item.key}:${item.label}`).join('|'),
+  () => `${isPromptMediaReady(props.id, canvasStore.nodes, canvasStore.edges)}|${referenceMediaList.value.map(item => `${item.key}:${item.label}:${item.url}`).join('|')}`,
   () => {
     syncPromptMentionsWithMedia()
   },
@@ -7310,6 +7315,7 @@ function createUpstreamImageNode(imageUrl) {
 
 // 删除参考图片（仅断开连线，不删除上游节点）
 function removeReferenceImage(index) {
+  const previousMediaItems = [...referenceMediaList.value]
   const currentImages = [...(referenceImages.value || [])]
   const removedImage = currentImages[index]
   currentImages.splice(index, 1)
@@ -7338,9 +7344,11 @@ function removeReferenceImage(index) {
   })
   
   edgesToRemove.forEach(edgeId => canvasStore.removeEdge(edgeId))
+  syncPromptMentionsWithMedia({ previousMediaItems })
 }
 
 function removeReferenceVideo(index) {
+  const previousMediaItems = [...referenceMediaList.value]
   const currentVideos = [...(referenceVideos.value || [])]
   const removedVideo = currentVideos[index]
   currentVideos.splice(index, 1)
@@ -7370,6 +7378,7 @@ function removeReferenceVideo(index) {
   })
 
   edgesToRemove.forEach(edgeId => canvasStore.removeEdge(edgeId))
+  syncPromptMentionsWithMedia({ previousMediaItems })
 }
 
 // ========== 参考图片 @引用 ==========

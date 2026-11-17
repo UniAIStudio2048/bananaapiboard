@@ -13,7 +13,7 @@ test('removes prompt mentions when their bound media is removed', () => {
   const items = buildMediaMentionItems({ images: ['a.png', 'b.png'] })
   const bindings = bindMediaMention({}, items[0])
 
-  const result = syncPromptMediaMentions('让@图片1动起来', bindings, buildMediaMentionItems({ images: ['b.png'] }))
+  const result = syncPromptMediaMentions('让@图片1动起来', bindings, buildMediaMentionItems({ images: ['b.png'] }), { previousMediaItems: items })
 
   assert.equal(result.text, '让动起来')
   assert.deepEqual(result.bindings, {})
@@ -108,7 +108,7 @@ test('keeps a mention bound when the upstream media URL changes but its stable k
 
   assert.equal(result.text, '请参考@图片1')
   assert.deepEqual(result.bindings, {
-    'image:node:source-1:1': { type: 'image', label: '图片1' }
+    'image:node:source-1:1': { type: 'image', label: '图片1', url: 'new.png' }
   })
 })
 
@@ -128,6 +128,6 @@ test('migrates a legacy URL binding to the stable key before a later media repla
 
   assert.equal(result.text, '请参考@图片1')
   assert.deepEqual(result.bindings, {
-    'image:node:source-1:1': { type: 'image', label: '图片1' }
+    'image:node:source-1:1': { type: 'image', label: '图片1', url: 'old.png' }
   })
 })

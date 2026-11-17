@@ -48,7 +48,8 @@ export function bindMediaMention(bindings = {}, media) {
     ...(bindings || {}),
     [key]: {
       type: media.type,
-      label: normalizeMediaMentionLabel(media.label)
+      label: normalizeMediaMentionLabel(media.label),
+      ...(key.includes(':node:') ? { url: media.url } : {})
     }
   }
 }
@@ -77,16 +78,39 @@ export function resolveMediaMentionItem(media, mediaItems = []) {
   return media.url ? media : null
 }
 
-export function syncPromptMediaMentions(text, bindings = {}, mediaItems = []) {
+export function isPromptMediaReady(nodeId, nodes = [], edges = []) {
+  const requiredIds = new Set([nodeId, ...edges.filter(edge => edge.target === nodeId).map(edge => edge.source)])
+  const nodeById = new Map(nodes.map(node => [node.id, node]))
+  return [...requiredIds].every(id => {
+    const data = nodeById.get(id)?.data
+    return data && !data._shellLoading && !data._mediaLoading && !data.isUploading
+  })
+}
+
+function findBoundMedia(key, binding, mediaItems) {
+  const nodeKey = key.match(/^(image|video|audio):node:(.+):\d+$/)
+  if (nodeKey) {
+    const prefix = `${nodeKey[1]}:node:${nodeKey[2]}:`
+    const candidates = mediaItems.filter(item => item.key?.startsWith(prefix))
+    const sameUrl = binding.url && candidates.find(item => item.url === binding.url)
+    if (sameUrl) return sameUrl
+    if (candidates.length === 1) return candidates[0]
+    // 旧绑定尚未保存 URL；首次完整加载时迁移，之后按 URL 区分同节点的多张图。
+    if (binding.url) return undefined
+  }
+  return mediaItems.find(item => (item.key || getMediaMentionKey(item)) === key || getMediaMentionKey(item) === key)
+}
+
+export function syncPromptMediaMentions(text, bindings = {}, mediaItems = [], { mediaReady = true, previousMediaItems } = {}) {
+  if (!mediaReady) return { text, bindings }
   if (!text) {
     return { text: text || '', bindings: {} }
   }
 
-  const mediaByKey = new Map(mediaItems.map(item => [item.key || getMediaMentionKey(item), item]))
-  // 兼容旧工作流：历史绑定使用 type:URL 作为 key，当前节点可能已经升级为稳定 key。
-  const mediaByLegacyKey = new Map(mediaItems.map(item => [getMediaMentionKey(item), item]))
   const mediaByTypeIndex = new Map(mediaItems.map(item => [`${item.type}:${item.index}`, item]))
   const nextBindings = {}
+  const originalLabels = new Map()
+  let unresolved = false
 
   const nextText = text.replace(MENTION_RE, (raw, zhType, rawIndex) => {
     const type = LABEL_TYPE_MAP[zhType]
@@ -94,21 +118,35 @@ export function syncPromptMediaMentions(text, bindings = {}, mediaItems = []) {
     const boundEntry = Object.entries(bindings || {}).find(([, value]) => {
       return value?.type === type && normalizeMediaMentionLabel(value?.label) === oldLabel
     })
-    const media = boundEntry
-      ? mediaByKey.get(boundEntry[0]) || mediaByLegacyKey.get(boundEntry[0])
-      : mediaByTypeIndex.get(`${type}:${Number(rawIndex || 1)}`)
+    // 只有明确移除素材的入口才提供操作前列表，不能把加载中的空列表当作删除。
+    const previous = previousMediaItems && (boundEntry
+      ? findBoundMedia(boundEntry[0], boundEntry[1], previousMediaItems)
+      : previousMediaItems.find(item => item.type === type && item.index === Number(rawIndex)))
+    if (previous && !mediaItems.some(item => item.type === previous.type && item.url === previous.url)) return ''
 
-    if (!media) return ''
+    const media = previous
+      ? findBoundMedia(previous.key || getMediaMentionKey(previous), previous, mediaItems)
+      : boundEntry
+        ? findBoundMedia(boundEntry[0], boundEntry[1], mediaItems)
+        : mediaByTypeIndex.get(`${type}:${Number(rawIndex || 1)}`)
+
+    if (!media) {
+      unresolved = true
+      return raw
+    }
 
     const key = media.key || getMediaMentionKey(media)
-    nextBindings[key] = {
-      type: media.type,
-      label: normalizeMediaMentionLabel(media.label)
+    if (originalLabels.has(key) && originalLabels.get(key) !== oldLabel) {
+      unresolved = true
+      return raw
     }
+    originalLabels.set(key, oldLabel)
+    nextBindings[key] = bindMediaMention({}, media)[key]
     return `@${normalizeMediaMentionLabel(media.label)}`
   })
 
-  return { text: nextText, bindings: nextBindings }
+  // 整体提交编号变化，避免部分图片恢复时把两个不同角色合并到同一编号。
+  return unresolved ? { text, bindings } : { text: nextText, bindings: nextBindings }
 }
 
 export function escapePromptMediaMentions(text) {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { ref } from 'vue'
-import { bindMediaMention, normalizeMediaMentionLabel, resolveMediaMentionItem, syncPromptMediaMentions } from '../../../utils/promptMediaBindings.js'
+import { bindMediaMention, normalizeMediaMentionLabel, resolveMediaMentionItem, syncPromptMediaMentions, isPromptMediaReady } from '../../../utils/promptMediaBindings.js'
 
 // Load the pure text operations without cloud-media/Vite configuration imports.
 const mentionSource = readFileSync(new URL('../../../utils/promptMention.js', import.meta.url), 'utf8')
@@ -35,10 +35,12 @@ function createEditor(file, initialText, selection, mounted = true) {
     props: { id: 'target' }, promptText, promptMentionBindings: ref({}),
     promptTextareaRef: ref(mounted ? editor : null), promptEditorRenderKey: ref(0),
     referenceMediaList: ref(mediaItems),
-    canvasStore: { updateNodeData(id, patch) { assert.equal(id, 'target'); Object.assign(saved, patch) } },
-    bindMediaMention, normalizeMediaMentionLabel, resolveMediaMentionItem, syncPromptMediaMentions,
+    canvasStore: { nodes: [{ id: 'target', data: {} }], edges: [], updateNodeData(id, patch) { assert.equal(id, 'target'); Object.assign(saved, patch) } },
+    bindMediaMention, normalizeMediaMentionLabel, resolveMediaMentionItem, syncPromptMediaMentions, isPromptMediaReady,
     getActivePromptMentionRange, replacePromptEditorMentionText,
     getPromptEditorSelectionRange: () => selection,
+    capturePromptEditorSelection: () => selection,
+    promptSelectionBeforeReferenceClick: ref(null),
     serializePromptEditorContent: () => promptText.value,
     nextTick: callback => queued.push(callback),
     removePromptEditorOrphanTextNodes() {}, autoResizeTextarea() {}, updatePromptOverlayCaret() {},
@@ -99,9 +101,12 @@ for (const file of ['VideoNode.vue', 'ImageNode.vue']) {
     assert.equal(editor.saved.prompt, '参考 @图片1 ')
   })
 
-  test(`${file}: removing unavailable media persists text and bindings together`, () => {
+  test(`${file}: unavailable media is preserved until explicitly removed`, () => {
     const editor = createEditor(file, '@视频2 和 @图片1', { start: 0, end: 0 })
     editor.syncPromptMentionsWithMedia()
+    editor.flushParentEcho()
+    assert.equal(editor.saved.prompt, '@视频2 和 @图片1')
+    editor.syncPromptMentionsWithMedia({ previousMediaItems: [...mediaItems, { type: 'video', index: 2, label: '视频2', url: 'removed.mp4' }] })
     editor.flushParentEcho()
     assert.equal(editor.saved.prompt, ' 和 @图片1')
     assert.equal(editor.promptText.value, editor.saved.prompt)
