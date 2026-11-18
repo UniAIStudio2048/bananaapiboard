@@ -28,6 +28,7 @@ import { useTeamStore } from '@/stores/team'
 import { getCachedHistory, cacheHistory, invalidateCache } from '@/utils/historyCache'
 import { preloadImages } from '@/utils/imageCache'
 import { toSameOriginUrl, getOriginalImageUrl, getVideoPosterUrl } from '@/utils/canvasThumbnail'
+import { requestCanvasVideoPoster } from '@/utils/canvasVideoPosterQueue'
 import { getCosProxyUrl, isCosCdn, isVideoUrl as isVideoMediaFile } from '@/utils/cloudMediaUrl'
 import { getHistoryAspectRatioStyle, normalizeHistoryAspectRatio } from '@/utils/historyAspectRatio'
 import { buildHistoryMediaDetails, enrichHistoryMediaDetails } from '@/utils/historyMediaDetails'
@@ -177,6 +178,7 @@ const MAX_CONCURRENT_THUMBNAILS = 2 // 视频截帧很重，限制并发数
 const videoPosterLoadErrors = ref({})
 const serverVideoThumbnailPending = ref({})
 const serverVideoThumbnailFailed = ref({})
+let serverVideoThumbnailController = new AbortController()
 
 // 图片加载失败的记录
 const imageLoadErrors = ref({})
@@ -1612,7 +1614,7 @@ function processNextThumbnail() {
 
 // 获取视频缩略图（优化版：不会重复触发）
 function requestServerVideoThumbnail(item) {
-  if (!item?.id || !item.url) return
+  if (!props.visible || !item?.id || !item.url) return
   if (videoThumbnails.value[item.id]) return
   if (serverVideoThumbnailPending.value[item.id] || serverVideoThumbnailFailed.value[item.id]) return
 
@@ -1621,7 +1623,10 @@ function requestServerVideoThumbnail(item) {
     [item.id]: true
   }
 
-  extractVideoFrame({ videoUrl: item.url, time: 0.3, nodeId: `history-${item.id}` })
+  requestCanvasVideoPoster(signal => {
+    const existing = videoThumbnails.value[item.id]
+    return existing ? { url: existing } : extractVideoFrame({ videoUrl: item.url, time: 0.3, nodeId: `history-${item.id}`, signal })
+  }, serverVideoThumbnailController.signal)
     .then(result => {
       const thumbnailUrl = result?.url ? getMediaUrl(result.url) : ''
       if (thumbnailUrl) {
@@ -1637,6 +1642,7 @@ function requestServerVideoThumbnail(item) {
       }
     })
     .catch(error => {
+      if (error?.name === 'AbortError') return
       console.warn('[HistoryPanel] 服务端视频缩略图提取失败:', error?.message || error)
       serverVideoThumbnailFailed.value = {
         ...serverVideoThumbnailFailed.value,
@@ -1780,6 +1786,8 @@ watch(() => props.visible, async (visible) => {
     }, 280)
   } else {
     // 面板关闭时重置状态
+    serverVideoThumbnailController.abort()
+    serverVideoThumbnailController = new AbortController()
     isContentReady.value = false
     closeContextMenu()
     
@@ -1887,6 +1895,7 @@ onUnmounted(() => {
   }
   
   // 清理视频缩略图队列
+  serverVideoThumbnailController.abort()
   videoThumbnailQueue.value = []
   processingThumbnails.value = 0
 })

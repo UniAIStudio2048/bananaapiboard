@@ -39,9 +39,12 @@ assert.match(
 
 assert.match(
   source,
-  /function\s+requestServerVideoThumbnail\(item\)[\s\S]*extractVideoFrame\(\{\s*videoUrl:\s*item\.url,\s*time:\s*0\.3,\s*nodeId:\s*`history-\$\{item\.id\}`\s*\}\)/,
-  'HistoryPanel should request a server-generated thumbnail for video history items without a usable poster'
+  /function\s+requestServerVideoThumbnail\(item\)[\s\S]*requestCanvasVideoPoster\(signal =>[\s\S]*extractVideoFrame\(\{\s*videoUrl:\s*item\.url,\s*time:\s*0\.3,\s*nodeId:\s*`history-\$\{item\.id\}`,\s*signal\s*\}\)[\s\S]*serverVideoThumbnailController\.signal\)/,
+  'HistoryPanel should queue and pass a cancellation signal to server-side thumbnail extraction'
 )
+
+assert.match(source, /onUnmounted\(\(\) => \{[\s\S]*serverVideoThumbnailController\.abort\(\)/)
+assert.match(source, /\} else \{\s*\/\/ 面板关闭时重置状态\s*serverVideoThumbnailController\.abort\(\)\s*serverVideoThumbnailController = new AbortController\(\)/)
 
 assert.match(
   source,
