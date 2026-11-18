@@ -226,6 +226,13 @@ async function saveWorkflowWithConflictRetry(jsonBody) {
       // 协作快照仅在持有编辑权（单一写入方）时才允许按服务端基线重试
       if (parsedBody.protocolVersion === 2 && !holdsWorkflowLease(workflowId)) throw error
 
+      // 原快照与其基线都没有的新节点，不能随版本基线更新被当作本地删除。
+      const snapshotNodeIds = new Set((parsedBody.nodes || []).map(node => node?.id))
+      const baseNodeVersions = parsedBody.baseNodeVersions || {}
+      if (Object.keys(error.nodeVersions).some(id =>
+        !Object.hasOwn(baseNodeVersions, id) && !snapshotNodeIds.has(id)
+      )) throw error
+
       await rebaseConflictingNodes(parsedBody, error.nodeVersions)
       await syncSavedWorkflowVersions({ workflow: { node_versions: error.nodeVersions } })
       parsedBody.baseNodeVersions = error.nodeVersions

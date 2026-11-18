@@ -119,6 +119,28 @@ test('a collaborative save does not retry a stale full snapshot', async () => {
   assert.deepEqual(h.applied, [])
 })
 
+test('旧的自动保存快照遇到刚由增量写入的图像节点时不重试', async () => {
+  const h = harness(false, { text: 2, image: 1 }, { lease: { editor: true } })
+  await assert.rejects(h.context.saveWorkflowRaw(JSON.stringify({
+    id: 'wf-a',
+    baseNodeVersions: { text: 2 },
+    nodes: [{ id: 'text', type: 'text-input', data: {} }]
+  })), { code: 'version_conflict' })
+  assert.equal(h.requests.length, 1)
+  assert.deepEqual(h.applied, [])
+})
+
+test('原快照已有的节点可以在冲突重试时采用服务端版本', async () => {
+  const h = harness(false, { text: 2, image: 1 }, { lease: { editor: true } })
+  await h.context.saveWorkflow({
+    id: 'wf-a',
+    baseNodeVersions: { text: 2 },
+    nodes: [{ id: 'text', type: 'text-input' }, { id: 'image', type: 'text-to-image' }]
+  })
+  assert.deepEqual(h.requests[1].baseNodeVersions, { text: 2, image: 1 })
+  assert.equal(h.requests[1].nodes.some(node => node.id === 'image'), true)
+})
+
 test('只读会话不发保存请求，直接以 edit_lease_readonly 拒绝', async () => {
   const h = harness(true, null, { lease: { readonly: true } })
   await assert.rejects(h.context.saveWorkflow({ id: 'wf-a', nodes: [] }), err => err.code === 'edit_lease_readonly')

@@ -17,14 +17,13 @@ test('save failures expose server error code and node versions for conflict reco
   )
 })
 
-test('version conflicts are surfaced without retrying a stale full snapshot', () => {
-  const retry = source.match(/async function saveWorkflowWithConflictRetry[\s\S]*?\n\}/)
-  assert.ok(retry, 'a conflict-retry wrapper should exist')
-  assert.doesNotMatch(retry[0], /merged\.baseNodeVersions = error\.nodeVersions/)
-  assert.match(retry[0], /return await requestWorkflowSave\(jsonBody\)/)
+test('raw and structured saves use the shared conflict-retry wrapper', () => {
   assert.match(
     source,
-    /saveWorkflowWithConflictRetry\(jsonBody\)/,
-    'both saveWorkflow and saveWorkflowRaw should route through the retry wrapper'
+    /export async function saveWorkflowRaw\(jsonBody\)[\s\S]*?await saveWorkflowWithConflictRetry\(jsonBody\)/
+  )
+  assert.match(
+    source,
+    /export async function saveWorkflow\(\w+\)[\s\S]*?await saveWorkflowWithConflictRetry\(JSON\.stringify\(\w+\)\)/
   )
 })
