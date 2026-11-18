@@ -1,5 +1,7 @@
 import { t as translateUi } from '../i18n/index.js'
 export const VIDEO_GENERATION_TIMEOUT_HINT_MULTIPLIER = 3
+const WAN3_TIMEOUT_HINT_MS = 20 * 60 * 1000
+const WAN3_MODEL_IDENTIFIER = /(?:^|[-_/])wan(?:3(?:-?api)?|[-_]?3\.0)(?:$|[-_/])/i
 
 export function parseTaskCreatedAt(createdAt) {
   if (createdAt === null || createdAt === undefined || createdAt === '') return null
@@ -80,8 +82,17 @@ export function getVideoGenerationProgressText(task, now = Date.now()) {
 export function shouldShowVideoGenerationTimeoutHint(
   task,
   now = Date.now(),
-  averageSeconds
+  averageSeconds,
+  modelConfig
 ) {
+  const identifiers = [modelConfig?.apiType, modelConfig?.actualModel, task?.apiType, task?.api_type, task?.model]
+  if (identifiers.some(identifier => WAN3_MODEL_IDENTIFIER.test(String(identifier ?? '').trim()))) {
+    const startedAt = parseTaskCreatedAtForTimeout(
+      task?.processingStartedAt ?? task?.started_at ?? task?.created_at ?? task?.createdAt ?? task?.created
+    )
+    return startedAt !== null && now - startedAt >= WAN3_TIMEOUT_HINT_MS
+  }
+
   if (!Number.isFinite(averageSeconds) || averageSeconds <= 0) return false
 
   const thresholdSeconds = averageSeconds * VIDEO_GENERATION_TIMEOUT_HINT_MULTIPLIER

@@ -57,7 +57,9 @@ test('quick video/audio reviews replace only their source and never enter image 
   nodes[0].data.output.url = 'https://cdn.example/replaced'
   assert.deepEqual(state.collectSeedanceMediaReplacements('target', { mediaType: 'video' }), [])
   nodes[1].data.seedanceQuickAsset.expiresAt = '2000-01-01'
-  assert.deepEqual(state.collectSeedanceMediaReplacements('target', { mediaType: 'audio' }), [])
+  assert.equal(state.collectSeedanceMediaReplacements('target', { mediaType: 'audio' })[0].replacementUrl, 'asset://audio')
+  nodes[1].data.seedanceQuickAsset.status = 'Expired'
+  assert.equal(state.collectSeedanceMediaReplacements('target', { mediaType: 'audio' })[0].replacementUrl, 'asset://audio')
 })
 
 test('processing and failed roles cannot be injected as reviewed assets', () => {
@@ -78,10 +80,10 @@ test('provider success status variants remain usable as reviewed role assets', (
 })
 
 
-test('only recycling-managed expired role assets reach backend re-review', () => {
+test('expired official role assets reach backend re-review with or without recycling', () => {
   const node = character('expired', 'Image', 'https://cdn.example/original.png')
   node.data.status = 'Expired'
-  assert.deepEqual(harness([node]).collectSeedanceMediaReplacements('target'), [])
+  assert.equal(harness([node]).collectSeedanceMediaReplacements('target')[0].replacementUrl, 'asset://expired')
   node.data.recyclingManaged = true
   assert.equal(harness([node]).collectSeedanceMediaReplacements('target')[0].replacementUrl, 'asset://expired')
 })

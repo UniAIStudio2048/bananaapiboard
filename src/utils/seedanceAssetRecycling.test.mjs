@@ -2,9 +2,10 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { isSeedanceAssetReusable, getSeedanceRecyclingStatus } from './seedanceAssetRecycling.js'
 
-test('only opted-in expired assets remain available for re-review', () => {
+test('expired official assets remain available for re-review', () => {
   assert.equal(isSeedanceAssetReusable({ Status: 'Active' }), true)
-  assert.equal(isSeedanceAssetReusable({ Status: 'Expired' }), false)
+  assert.equal(isSeedanceAssetReusable({ Status: 'Expired' }), true)
+  assert.equal(isSeedanceAssetReusable({ Status: 'Expired', providerType: 'stars_asset' }), false)
   assert.equal(isSeedanceAssetReusable({ Status: 'Expired', recyclingManaged: true }), true)
   assert.equal(isSeedanceAssetReusable({ Status: 'Failed', recyclingManaged: true }), false)
   assert.equal(isSeedanceAssetReusable({ Status: 'Processing', recyclingManaged: true }), false)

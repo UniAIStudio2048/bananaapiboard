@@ -31,6 +31,71 @@ test('片段截取复用持久化导出流程并传入准确范围', async () =>
   assert.equal(context.segmentClipSubmitting.value, false)
 })
 
+for (const exportFails of [false, true]) {
+  test(`片段截取${exportFails ? '失败' : '成功'}时使用新建结果节点的版本写库`, async () => {
+    const tab = { id: 'tab', savedNodeVersions: { source: 3 } }
+    const sourceNode = { id: 'source', position: { x: 0, y: 0 }, data: {} }
+    const nodes = [sourceNode]
+    const patches = []
+    const toasts = []
+    const context = {
+      crypto: { randomUUID: () => 'test' },
+      props: { id: 'source' },
+      videoEditContext: { tabId: tab.id, workflowId: 'workflow', version: 3 },
+      segmentClipSubmitting: { value: false },
+      videoToolInitialSource: { value: { url: 'https://cdn.example.com/source.mp4' } },
+      loadVideoEditDraft: async () => {},
+      closeSegmentClip: () => {},
+      translateUi: key => key,
+      showToast: message => toasts.push(message),
+      window: { dispatchEvent() {} },
+      CustomEvent: class {},
+      canvasStore: {
+        nodes,
+        getCurrentTab: () => tab,
+        addNode: node => nodes.push(node),
+        addEdge() {},
+        updateNodeData: (id, data) => Object.assign(nodes.find(node => node.id === id).data, data),
+        applyWorkflowSaveVersions: ({ node_versions }) => { tab.savedNodeVersions = node_versions }
+      },
+      postWorkflowOps: async (workflowId, [nodeOp, edgeOp]) => {
+        assert.equal(workflowId, 'workflow')
+        assert.equal(edgeOp.payload.target, nodeOp.payload.id)
+        return { results: [{ target: 'node', nodeId: nodeOp.payload.id, version: 7 }] }
+      },
+      exportVideoTimeline: async () => {
+        if (exportFails) throw new Error('导出失败')
+        return { url: 'https://cdn.example.com/segment.mp4' }
+      },
+      patchWorkflowNode: async (workflowId, nodeId, { data }, baseVersion) => {
+        patches.push({ workflowId, nodeId, data, baseVersion })
+        if (!Number.isSafeInteger(baseVersion)) throw new Error('更新操作必须携带有效 baseVersion')
+        return { version: 8 }
+      }
+    }
+    context.exportEditedClipToCanvas = getFunction('exportEditedClipToCanvas', context)
+    await getFunction('confirmSegmentClip', context)({ start: 1, end: 2.5 })
+
+    assert.equal(patches.length, 1)
+    const [{ workflowId, nodeId, data, baseVersion }] = patches
+    assert.equal(workflowId, 'workflow')
+    assert.equal(nodeId, nodes[1].id)
+    assert.equal(baseVersion, 7)
+    assert.equal(tab.savedNodeVersions[nodeId], 8)
+    assert.equal(tab.savedNodeVersions.source, 3)
+    assert.equal(data.status, exportFails ? 'error' : 'success')
+    assert.equal(nodes[1].data.status, data.status)
+    if (exportFails) {
+      assert.equal(data.error, '导出失败')
+      assert.deepEqual(toasts, ['导出失败'])
+    } else {
+      assert.equal(data.output.url, 'https://cdn.example.com/segment.mp4')
+      assert.equal(data.duration, 1.5)
+      assert.deepEqual(toasts, [])
+    }
+  })
+}
+
 test('片段编辑期间移出视频不会停止预览，平时暂停并保留画面', () => {
   let pauses = 0
   const video = { paused: false, currentTime: 3, pause() { pauses++ } }

@@ -16,7 +16,7 @@ export function createSeedanceReviewController({ getData, getSourceUrl, assetTyp
     if (!asset?.assetId) return
     if (!asset.sourceUrl && getSourceUrl()) update({ sourceUrl: getSourceUrl(), assetType: asset.assetType || assetType })
     if (normalizeAssetReviewStatus(asset.status) !== 'Processing') return
-    if (asset.expiresAt && new Date(asset.expiresAt).getTime() <= Date.now()) return
+    if (asset.deletedAt || asset.recyclingExpired) return
     const sourceUrl = asset.sourceUrl || getSourceUrl()
     if (!isCurrent(sourceUrl) || pollingId === asset.assetId) return
     cancelPolling?.()
@@ -53,7 +53,8 @@ export function createSeedanceReviewController({ getData, getSourceUrl, assetTyp
       const existing = getData()?.seedanceQuickAsset
       const sameSource = existing && (!existing.sourceUrl || existing.sourceUrl === sourceUrl)
       const sameProvider = !existing?.providerType || existing.providerType === providerType
-      const expired = existing?.expiresAt && new Date(existing.expiresAt).getTime() <= Date.now()
+      const expired = existing?.deletedAt || existing?.recyclingExpired ||
+        (existing?.recyclingManaged && new Date(existing.expiresAt).getTime() <= Date.now())
       if (sameSource && sameProvider && !expired && normalizeAssetReviewStatus(existing.status) === 'Active') return
       if (sameSource && sameProvider && !expired && existing.assetId && normalizeAssetReviewStatus(existing.status) === 'Processing') {
         resume()
@@ -69,7 +70,19 @@ export function createSeedanceReviewController({ getData, getSourceUrl, assetTyp
       if (!assetId) throw new Error(translateUi('uiMessages.ma6808c4df911'))
       const savedProvider = quickAsset.providerType || providerType
       const faceCode = quickAsset.faceCode || result.asset?.FaceCode || assetId
-      update({ ...quickAsset, assetId, assetUri: quickAsset.assetUri || (['seedance_openapi_pro', 'bytefor'].includes(savedProvider) ? `face:${faceCode}` : `asset://${assetId}`), assetType, sourceUrl, assetUrl: result.asset?.URL || url, providerType: savedProvider, groupId: quickAsset.groupId || result.asset?.GroupId, status: normalizeAssetReviewStatus(quickAsset.status || result.asset?.Status || 'Processing'), error: null })
+      update({
+        expiresAt: null, recyclingManaged: false, recyclingExpired: false, deletedAt: null,
+        ...quickAsset,
+        assetId,
+        assetUri: quickAsset.assetUri || (['seedance_openapi_pro', 'bytefor'].includes(savedProvider) ? `face:${faceCode}` : `asset://${assetId}`),
+        assetType,
+        sourceUrl,
+        assetUrl: result.asset?.URL || url,
+        providerType: savedProvider,
+        groupId: quickAsset.groupId || result.asset?.GroupId,
+        status: normalizeAssetReviewStatus(quickAsset.status || result.asset?.Status || 'Processing'),
+        error: null
+      })
       notify(translateUi('uiMessages.mdd3e67b8ecd2'), 'info')
       resume()
     } catch (error) {

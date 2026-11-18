@@ -96,11 +96,22 @@ test('restored processing assets resume their saved provider without resubmittin
   state.controller.dispose()
 })
 
-test('expired processing assets do not resume polling on mount', () => {
+test('legacy fixed expiry does not prevent resuming a pending review', () => {
   const state = setup()
   state.setData({ seedanceQuickAsset: { assetId: 'expired', status: 'Processing', expiresAt: '2000-01-01' } })
   state.controller.resume()
-  assert.equal(state.calls.length, 0)
+  assert.equal(state.calls[0].id, 'expired')
+  state.controller.dispose()
+})
+
+test('a manually replaced review does not inherit expired metadata from the old approval', async () => {
+  const state = setup()
+  state.setData({ seedanceQuickAsset: { assetId: 'old', status: 'Expired', deletedAt: '2026-01-01', recyclingExpired: true } })
+  await state.controller.submit()
+  assert.equal(state.calls[1].id, 'review-1')
+  assert.equal(state.getData().seedanceQuickAsset.deletedAt, null)
+  assert.equal(state.getData().seedanceQuickAsset.recyclingExpired, false)
+  state.controller.dispose()
 })
 
 test('separate nodes can submit concurrently without sharing review state', async () => {

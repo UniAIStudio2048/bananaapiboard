@@ -4,7 +4,7 @@ import { t as translateUi, currentLanguage as uiLanguage } from '@/i18n'
 import { streamVideo as vStreamVideo } from '@/directives/streamVideo'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { getMe, isQiniuCdnUrl, buildVideoDownloadUrl, uploadImages } from '@/api/client'
-import { getTenantHeaders, getModelDisplayName, isModelEnabled, getAvailableVideoModels, getApiUrl, getMediaUrl } from '@/config/tenant'
+import { config as tenantConfig, getTenantHeaders, getModelDisplayName, isModelEnabled, getAvailableVideoModels, getApiUrl, getMediaUrl } from '@/config/tenant'
 import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
 import { toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { getCosProxyUrl, isCosCdn, isVideoUrl as isVideoMediaFile } from '@/utils/cloudMediaUrl'
@@ -1527,10 +1527,14 @@ function getAverageVideoGenerationSeconds(item) {
 }
 
 function showProcessingTimeoutHint(item) {
+  const modelName = item?.model || model.value
+  const modelConfig = availableModels.value.find(m => m.value === modelName) ||
+    tenantConfig.video_models?.find(m => m.name === modelName || m.id === modelName)
   return shouldShowVideoGenerationTimeoutHint(
-    item,
+    { ...item, model: modelName },
     elapsedTimeNow.value,
-    getAverageVideoGenerationSeconds(item)
+    getAverageVideoGenerationSeconds(item),
+    modelConfig
   )
 }
 

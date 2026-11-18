@@ -3,8 +3,7 @@ import test from 'node:test'
 import {
   getSeedanceQuickAsset,
   getSeedanceQuickAssetStatus,
-  getVideoReferenceImageUrlForTarget,
-  SEEDANCE_QUICK_ASSET_TTL_MS
+  getVideoReferenceImageUrlForTarget
 } from './seedanceQuickAsset.js'
 
 test('active quick asset resolves to asset URI for Seedance 2 target only', () => {
@@ -14,8 +13,7 @@ test('active quick asset resolves to asset URI for Seedance 2 target only', () =
       seedanceQuickAsset: {
         assetId: 'asset-1',
         assetUri: 'asset://asset-1',
-        status: 'Active',
-        expiresAt: new Date(now + SEEDANCE_QUICK_ASSET_TTL_MS).toISOString()
+        status: 'Active'
       }
     }
   }
@@ -31,7 +29,7 @@ test('active quick asset resolves to asset URI for Seedance 2 target only', () =
   )
 })
 
-test('expired quick asset is marked invalid and falls back to original URL', () => {
+test('legacy fixed expiry does not hide an approved quick asset', () => {
   const now = Date.parse('2026-05-09T00:00:00.000Z')
   const sourceNode = {
     data: {
@@ -46,13 +44,18 @@ test('expired quick asset is marked invalid and falls back to original URL', () 
 
   const state = getSeedanceQuickAsset(sourceNode.data, now)
   assert.equal(state.reviewed, true)
-  assert.equal(state.active, false)
-  assert.equal(state.expired, true)
-  assert.equal(getSeedanceQuickAssetStatus(sourceNode.data, now), 'expired')
-  assert.equal(
-    getVideoReferenceImageUrlForTarget(sourceNode, 'https://cdn.example/image.png', true, now),
-    'https://cdn.example/image.png'
-  )
+  assert.equal(state.active, true)
+  assert.equal(state.expired, false)
+  assert.equal(getSeedanceQuickAssetStatus(sourceNode.data, now), 'approved')
+  assert.equal(getVideoReferenceImageUrlForTarget(sourceNode, 'https://cdn.example/image.png', true, now), 'asset://asset-1')
+})
+
+test('a genuinely expired official quick asset keeps its URI for server-side renewal', () => {
+  const data = { seedanceQuickAsset: { assetId: 'old', assetUri: 'asset://old', status: 'Expired', providerType: 'volcengine' } }
+  assert.equal(getSeedanceQuickAssetStatus(data), 'expired')
+  assert.equal(getVideoReferenceImageUrlForTarget({ data }, 'https://cdn.example/image.png', true), 'asset://old')
+  data.seedanceQuickAsset.providerType = 'stars_asset'
+  assert.equal(getVideoReferenceImageUrlForTarget({ data }, 'https://cdn.example/image.png', true), 'https://cdn.example/image.png')
 })
 
 test('failed quick asset is exposed as failed instead of remaining in review', () => {
@@ -61,8 +64,7 @@ test('failed quick asset is exposed as failed instead of remaining in review', (
     seedanceQuickAsset: {
       assetId: 'asset-1',
       assetUri: 'asset://asset-1',
-      status: 'rejected',
-      expiresAt: new Date(now + SEEDANCE_QUICK_ASSET_TTL_MS).toISOString()
+      status: 'rejected'
     }
   }
 

@@ -399,10 +399,14 @@ const processingAspectRatio = computed(() => {
 
 function showProcessingTimeoutHint(data = props.data) {
   if (data?.taskType === 'video-hd') return false
+  const modelName = data?.model || selectedModel.value
+  const modelConfig = models.value.find(m => m.value === modelName) ||
+    tenantConfig.video_models?.find(m => m.name === modelName || m.id === modelName)
   return shouldShowVideoGenerationTimeoutHint(
-    getProcessingTimingData(data),
+    { ...getProcessingTimingData(data), model: modelName, apiType: data?.apiType ?? data?.api_type },
     elapsedTimeNow.value,
-    getModelAvgDurationSeconds(data?.model || selectedModel.value)
+    getModelAvgDurationSeconds(modelName),
+    modelConfig
   )
 }
 
@@ -3632,10 +3636,10 @@ function collectSeedanceMediaReplacements(nodeId, { includeCharacters = true, in
 
     const allowedTypes = mediaType === 'video' ? VIDEO_NODE_TYPES : mediaType === 'audio' ? AUDIO_NODE_TYPES : IMAGE_NODE_TYPES
     if (includeQuickAssets && allowedTypes.includes(sourceNode.type)) {
-      if (getSeedanceQuickAssetStatus(sourceNode.data) !== 'approved') continue
+      if (!['approved', 'expired'].includes(getSeedanceQuickAssetStatus(sourceNode.data))) continue
       if (getSeedanceMediaType(sourceNode.data.seedanceQuickAsset) !== mediaType) continue
       const quickAsset = getSeedanceQuickAsset(sourceNode.data)
-      if (!quickAsset.active || !quickAsset.assetUri) continue
+      if (!quickAsset.assetUri) continue
       replacements.push({
         replacementUrl: quickAsset.assetUri,
         sourceUrls: collectNodeMediaUrls(sourceNode.data)
@@ -4248,7 +4252,7 @@ function getUpstreamData() {
       }
 
       const quickAsset = getSeedanceQuickAsset(sourceNode.data)
-      if (quickAsset.active && getSeedanceQuickAssetStatus(sourceNode.data) === 'approved') {
+      if (quickAsset.assetUri && ['approved', 'expired'].includes(getSeedanceQuickAssetStatus(sourceNode.data))) {
         quickAssetUris.push(quickAsset.assetUri)
         if (sourceNode.data?.sourceImages?.length > 0) quickAssetSourceUrls.push(...sourceNode.data.sourceImages)
         if (sourceNode.data?.output?.url) quickAssetSourceUrls.push(sourceNode.data.output.url)
@@ -9400,8 +9404,9 @@ async function saveVideoEditDraft(draft) {
 
 async function exportEditedClipToCanvas(payload) {
   const context = videoEditContext
+  const tab = canvasStore.getCurrentTab?.()
   const currentNode = canvasStore.nodes.find(entry => entry.id === props.id)
-  if (!context || !currentNode || canvasStore.getCurrentTab?.()?.id !== context.tabId) throw new Error(translateUi('uiMessages.m167d23b2160e'))
+  if (!context || !currentNode || tab?.id !== context.tabId) throw new Error(translateUi('uiMessages.m167d23b2160e'))
   const nodeId = `video_tool_${globalThis.crypto.randomUUID()}`
   const node = {
     id: nodeId,
@@ -9414,26 +9419,38 @@ async function exportEditedClipToCanvas(payload) {
     }
   }
   const edge = { id: `edge_${globalThis.crypto.randomUUID()}`, source: props.id, target: nodeId, sourceHandle: 'output', targetHandle: 'input' }
-  await postWorkflowOps(context.workflowId, [
+  const created = await postWorkflowOps(context.workflowId, [
     { op: 'add', target: 'node', payload: node },
     { op: 'add', target: 'edge', payload: edge }
   ])
+  const createdVersion = Number(created.results?.find(item => item.target === 'node' && item.nodeId === nodeId)?.version)
+  if (!Number.isSafeInteger(createdVersion) || createdVersion < 1) throw new Error(translateUi('uiMessages.mb6d8baa52e0f'))
+  const applyResultVersion = version => canvasStore.applyWorkflowSaveVersions({
+    id: context.workflowId,
+    node_versions: { ...tab.savedNodeVersions, [nodeId]: version }
+  })
   if (canvasStore.getCurrentTab?.()?.id === context.tabId) {
     canvasStore.addNode(node)
+    applyResultVersion(createdVersion)
     canvasStore.addEdge(edge)
+  }
+  const persistResult = async data => {
+    const baseVersion = tab.savedNodeVersions?.[nodeId] || createdVersion
+    const saved = await patchWorkflowNode(context.workflowId, nodeId, { data }, baseVersion)
+    applyResultVersion(saved.version)
   }
   try {
     const result = await exportVideoTimeline({ clips: payload.clips, ...(payload.operation === 'segment' ? { operation: 'segment' } : {}) })
     const url = result?.url || result?.video_url || result?.videoUrl || result?.resultUrl || result?.output?.url
     if (!url) throw new Error(translateUi('uiMessages.m5664e49b4c43'))
     const data = { status: 'success', progress: null, output: { type: 'video', url }, duration: payload.clips[0].duration }
-    await patchWorkflowNode(context.workflowId, nodeId, { data })
+    await persistResult(data)
     if (canvasStore.getCurrentTab?.()?.id === context.tabId) canvasStore.updateNodeData(nodeId, data)
     window.dispatchEvent(new CustomEvent('canvas-history-invalidate', { detail: { type: 'video', phase: 'tool-completed', sourceNodeId: props.id, nodeId } }))
     return url
   } catch (error) {
     const data = { status: payload.operation === 'segment' ? 'error' : 'failed', progress: null, error: error.message || translateUi('uiMessages.m0fa6bd077b1d') }
-    await patchWorkflowNode(context.workflowId, nodeId, { data }).catch(() => {})
+    await persistResult(data).catch(() => {})
     if (canvasStore.getCurrentTab?.()?.id === context.tabId) canvasStore.updateNodeData(nodeId, data)
     throw error
   }

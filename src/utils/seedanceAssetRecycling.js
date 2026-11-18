@@ -9,5 +9,6 @@ export function getSeedanceRecyclingStatus(asset, now = Date.now()) {
 export function isSeedanceAssetReusable(asset) {
   if (!asset) return false
   const status = getSeedanceRecyclingStatus(asset)
-  return normalizeAssetReviewStatus(status) === 'Active' || (asset?.recyclingManaged === true && status === 'Expired')
+  return normalizeAssetReviewStatus(status) === 'Active' ||
+    (String(status).toLowerCase() === 'expired' && (!asset.providerType || asset.providerType === 'volcengine'))
 }

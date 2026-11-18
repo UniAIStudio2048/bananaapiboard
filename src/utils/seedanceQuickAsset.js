@@ -1,8 +1,6 @@
 import { normalizeAssetReviewStatus } from './assetReviewStatus.js'
+import { getSeedanceRecyclingStatus, isSeedanceAssetReusable } from './seedanceAssetRecycling.js'
 import { getSeedanceSourceUrl } from './seedanceMedia.js'
-
-export const SEEDANCE_QUICK_ASSET_TTL_DAYS = 15
-export const SEEDANCE_QUICK_ASSET_TTL_MS = SEEDANCE_QUICK_ASSET_TTL_DAYS * 24 * 60 * 60 * 1000
 
 export function getSeedanceQuickAsset(data = {}, now = Date.now()) {
   const asset = data.seedanceQuickAsset || null
@@ -16,9 +14,9 @@ export function getSeedanceQuickAsset(data = {}, now = Date.now()) {
     }
   }
 
-  const expiresAtMs = asset.expiresAt ? new Date(asset.expiresAt).getTime() : NaN
-  const expired = Number.isFinite(expiresAtMs) && expiresAtMs <= now
-  const reviewStatus = normalizeAssetReviewStatus(asset.status || 'Active')
+  const status = asset.deletedAt ? 'Expired' : getSeedanceRecyclingStatus(asset, now)
+  const expired = String(status).toLowerCase() === 'expired'
+  const reviewStatus = normalizeAssetReviewStatus(status)
   const active = !expired && reviewStatus === 'Active'
   const failed = reviewStatus === 'Failed'
 
@@ -27,8 +25,8 @@ export function getSeedanceQuickAsset(data = {}, now = Date.now()) {
     active,
     failed,
     expired,
-    assetUri: active ? asset.assetUri : '',
-    expiresAt: asset.expiresAt || ''
+    assetUri: active || (expired && /^asset:\/\//i.test(asset.assetUri) && isSeedanceAssetReusable({ ...asset, Status: status })) ? asset.assetUri : '',
+    expiresAt: asset.recyclingManaged ? asset.expiresAt || '' : ''
   }
 }
 
@@ -45,7 +43,6 @@ export function getSeedanceQuickAssetStatus(data = {}, now = Date.now()) {
 
 export function getVideoReferenceImageUrlForTarget(sourceNode, fallbackUrl, isSeedance2Target, now = Date.now()) {
   if (!isSeedance2Target || !sourceNode?.data) return fallbackUrl
-  if (getSeedanceQuickAssetStatus(sourceNode.data, now) !== 'approved') return fallbackUrl
-  const state = getSeedanceQuickAsset(sourceNode.data, now)
-  return state.active ? state.assetUri : fallbackUrl
+  if (!['approved', 'expired'].includes(getSeedanceQuickAssetStatus(sourceNode.data, now))) return fallbackUrl
+  return getSeedanceQuickAsset(sourceNode.data, now).assetUri || fallbackUrl
 }
