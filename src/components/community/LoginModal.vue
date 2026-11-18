@@ -10,11 +10,12 @@ import PhoneAuthForm from '@/components/auth/PhoneAuthForm.vue'
 import WechatLoginButton from '@/components/auth/WechatLoginButton.vue'
 import PhoneCountrySelect from '@/components/auth/PhoneCountrySelect.vue'
 import { useSmsAuth } from '@/composables/useSmsAuth'
-import { getTenantHeaders, getApiUrl, useTenantConfigVersion, isSignupSourceEnabled } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { persistAuthSession } from '@/api/client'
 import { clearWorkflowSession } from '@/stores/canvas/workflowAutoSave'
 import { normalizeEmailWhitelist } from '@/utils/emailWhitelist'
-import { SIGNUP_SOURCE_LABEL, SIGNUP_SOURCE_OPTIONS, initialSignupSourceChoice, resolveSignupSource } from '@/utils/signupSource'
+import { getSignupAttribution } from '@/utils/signupSource'
+import { completeSignupSurvey } from '@/utils/signupSurvey'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false }
@@ -30,9 +31,6 @@ const nickname = ref('')
 const password = ref('')
 const confirmPwd = ref('')
 const inviteCode = ref('')
-const signupSource = ref(initialSignupSourceChoice())
-const tenantConfigVersion = useTenantConfigVersion()
-const showSignupSource = computed(() => { void tenantConfigVersion.value; return isSignupSourceEnabled() })
 const loading = ref(false)
 const error = ref('')
 const message = ref('')
@@ -246,7 +244,6 @@ async function submit() {
   loading.value = true
   try {
     const url = getApiUrl(mode.value === 'register' ? '/api/auth/register' : '/api/auth/login')
-    const source = showSignupSource.value ? resolveSignupSource(signupSource.value) : ''
     const payload = mode.value === 'register'
       ? {
           username: nickname.value.trim(),
@@ -254,7 +251,7 @@ async function submit() {
           password: password.value,
           ...(inviteCode.value ? { invite_code: inviteCode.value } : {}),
           ...(emailCode.value ? { email_code: emailCode.value } : {}),
-          ...(source ? { signup_source: source } : {})
+          signup_attribution: getSignupAttribution()
         }
       : { username: account.value, email: account.value, password: password.value, country: loginCountry.value }
 
@@ -275,6 +272,7 @@ async function submit() {
     }
 
     const j = await r.json()
+    await completeSignupSurvey(j)
     persistAuthSession(j.token, j.user || (mode.value === 'register' ? { username: nickname.value.trim() } : null))
     localStorage.removeItem('workflow_auto_saves')
     clearWorkflowSession()
@@ -646,20 +644,6 @@ function handleSmsAuthenticated() { emit('login-success'); close() }
                 class="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-white/30 focus:outline-none focus:border-blue-500/50 transition"
                 :placeholder="requireInviteCode ? translateUi('uiMessages.m9a4186e44aac') : translateUi('uiMessages.md254fb4900c4')"
               />
-            </div>
-
-            <!-- 注册：来源 -->
-            <div v-if="mode === 'register' && showSignupSource">
-              <label class="block text-sm text-white/70 mb-1.5">{{ SIGNUP_SOURCE_LABEL }}</label>
-              <select
-                v-model="signupSource"
-                class="w-full px-3.5 py-2.5 bg-gray-800 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500/50 transition cursor-pointer"
-              >
-                <option value="" class="bg-gray-800 text-white">{{ translateUi('uiMessages.mda590a8fe3ce') }}</option>
-                <option v-for="option in SIGNUP_SOURCE_OPTIONS" :key="option.value" :value="option.value" class="bg-gray-800 text-white">
-                  {{ option.label }}
-                </option>
-              </select>
             </div>
 
             <!-- 错误 -->

@@ -7,11 +7,12 @@ import WechatLoginButton from '@/components/auth/WechatLoginButton.vue'
 import PhoneCountrySelect from '@/components/auth/PhoneCountrySelect.vue'
 import { useSmsAuth } from '@/composables/useSmsAuth'
 import { useRouter } from 'vue-router'
-import { getTenantHeaders, getApiUrl, useTenantConfigVersion, isSignupSourceEnabled, isInviteRewardAfterFirstPayment } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl, useTenantConfigVersion, isInviteRewardAfterFirstPayment } from '@/config/tenant'
 import { persistAuthSession } from '@/api/client'
 import { clearWorkflowSession } from '@/stores/canvas/workflowAutoSave'
 import { normalizeEmailWhitelist } from '@/utils/emailWhitelist'
-import { SIGNUP_SOURCE_LABEL, SIGNUP_SOURCE_OPTIONS, initialSignupSourceChoice, resolveSignupSource } from '@/utils/signupSource'
+import { getSignupAttribution } from '@/utils/signupSource'
+import { completeSignupSurvey } from '@/utils/signupSurvey'
 
 const router = useRouter()
 const params = new URLSearchParams(location.search)
@@ -19,9 +20,7 @@ const inviteCodeFromUrl = params.get('invite') || params.get('code') || ''
 // 如果 URL 中有邀请码，默认显示注册页面
 const mode = ref(inviteCodeFromUrl ? 'register' : 'login')
 const inviteCode = ref(inviteCodeFromUrl) // 改为响应式，可以手动输入
-const signupSource = ref(initialSignupSourceChoice())
 const tenantConfigVersion = useTenantConfigVersion()
-const showSignupSource = computed(() => { void tenantConfigVersion.value; return isSignupSourceEnabled() })
 const inviteRewardAfterFirstPayment = computed(() => { void tenantConfigVersion.value; return isInviteRewardAfterFirstPayment() })
 const account = ref('')
 const password = ref('')
@@ -295,7 +294,6 @@ async function submit() {
   loading.value = true
   try {
     const url = getApiUrl(mode.value === 'register' ? '/api/auth/register' : '/api/auth/login')
-    const source = showSignupSource.value ? resolveSignupSource(signupSource.value) : ''
     const payload = mode.value === 'register'
       ? { 
           username: account.value, 
@@ -303,7 +301,7 @@ async function submit() {
           password: password.value, 
           ...(inviteCode.value ? { invite_code: inviteCode.value } : {}),
           ...(emailCode.value ? { email_code: emailCode.value } : {}),
-          ...(source ? { signup_source: source } : {})
+          signup_attribution: getSignupAttribution()
         }
       : { username: account.value, email: account.value, password: password.value, country: loginCountry.value }
     const r = await fetch(url, { method: 'POST', headers: { ...getTenantHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -328,6 +326,7 @@ async function submit() {
       throw new Error(data.error || 'failed')
     }
     const j = await r.json()
+    await completeSignupSurvey(j)
     persistAuthSession(j.token, j.user || { username: account.value })
 
     // 🔧 修复：登录成功后清除上一个用户的工作流历史和后台任务
@@ -577,22 +576,6 @@ function handleSmsAuthenticated() {
             <p v-else-if="inviteRewardText" class="mt-2 text-xs text-slate-500 dark:text-slate-400">
               {{ translateUi('uiMessages.m19dd8f378946', { value1: (inviteRewardAfterFirstPayment ? translateUi('uiMessages.m8b9cefa38e83') : translateUi('uiMessages.mdb9c132f9b81')), value2: (inviteRewardText) }) }}
             </p>
-          </div>
-
-          <!-- 注册来源（仅注册时显示） -->
-          <div v-if="mode === 'register' && !resetMode && showSignupSource">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              {{ SIGNUP_SOURCE_LABEL }}
-            </label>
-            <select
-              v-model="signupSource"
-              class="input bg-white dark:bg-dark-700 text-slate-900 dark:text-slate-100"
-            >
-              <option value="">{{ translateUi('uiMessages.mda590a8fe3ce') }}</option>
-              <option v-for="option in SIGNUP_SOURCE_OPTIONS" :key="option.value" :value="option.value">
-                {{ option.label }}
-              </option>
-            </select>
           </div>
 
           <!-- 提交按钮 -->

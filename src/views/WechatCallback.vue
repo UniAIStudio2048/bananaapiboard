@@ -5,6 +5,8 @@ import { nextTick, onMounted, ref } from 'vue'
 import LoginModal from '@/components/community/LoginModal.vue'
 import { getTenantId } from '@/config/tenant'
 import { wechatRequest } from '@/api/wechat'
+import { getSignupAttribution } from '@/utils/signupSource'
+import { completeSignupSurvey } from '@/utils/signupSurvey'
 import { completeSmsAuthentication } from '@/api/sms'
 import { WECHAT_ATTEMPT_KEY, readWechatCallback, wechatLoginError } from '@/utils/wechatLogin'
 
@@ -42,8 +44,11 @@ onMounted(async () => {
     verifier = callback.verifier
     returnPath = callback.returnPath
     sessionStorage.removeItem(WECHAT_ATTEMPT_KEY)
-    const result = await wechatRequest('complete', { code: callback.code, state: callback.state, verifier })
-    if (!result.requires_binding) return finish(result)
+    const result = await wechatRequest('complete', { code: callback.code, state: callback.state, verifier, signup_attribution: getSignupAttribution() })
+    if (!result.requires_binding) {
+      await completeSignupSurvey(result)
+      return finish(result)
+    }
     bindingToken.value = result.binding_token
     // Opening after mount triggers the existing modal's registration policy loader.
     await nextTick()

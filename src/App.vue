@@ -1,6 +1,7 @@
 <script setup>
 import { t as translateUi } from '@/i18n'
 
+import SignupSurveyDialog from '@/components/auth/SignupSurveyDialog.vue'
 import CheckoutDialog from '@/components/payment/CheckoutDialog.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
@@ -746,6 +747,7 @@ const isIcpFooterVisible = computed(() => {
     </footer>
   </div>
   <CheckoutDialog />
+  <SignupSurveyDialog />
 </template>
 
 <style scoped>

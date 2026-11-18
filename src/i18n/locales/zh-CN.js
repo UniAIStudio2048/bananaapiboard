@@ -1363,8 +1363,21 @@ export default {
   },
 
   // 积分类型
+  signupSurvey: {
+    title: '注册来源问卷',
+    close: '关闭问卷',
+    skip: '跳过',
+    submit: '提交',
+    saving: '提交中…',
+    reward: '回答后额外获得 {points} 积分。',
+    error: '提交失败，请重试或跳过。',
+    ai: 'AI 助手',
+    wechat: '微信',
+  },
+
   pointsType: {
     register_bonus: '注册奖励',
+    signup_survey_bonus: '注册问卷奖励',
     invite_reward: '邀请奖励',
     inviter_bonus: '邀请奖励',
     invite: '邀请奖励',

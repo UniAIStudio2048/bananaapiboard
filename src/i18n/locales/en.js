@@ -1376,8 +1376,21 @@ export default {
   },
 
   // Points Types
+  signupSurvey: {
+    title: 'Sign-up survey',
+    close: 'Close survey',
+    skip: 'Skip',
+    submit: 'Submit',
+    saving: 'Submitting…',
+    reward: 'Answer to earn {points} extra points.',
+    error: 'Could not submit. Try again or skip.',
+    ai: 'AI assistant',
+    wechat: 'WeChat',
+  },
+
   pointsType: {
     register_bonus: 'Registration Bonus',
+    signup_survey_bonus: 'Sign-up survey bonus',
     invite_reward: 'Invite Reward',
     inviter_bonus: 'Invite Reward',
     invite: 'Invite Reward',

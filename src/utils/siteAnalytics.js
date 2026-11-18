@@ -1,6 +1,6 @@
 // 访客统计埋点：每次路由切换上报一次 PV 到 /api/analytics/collect，租户后台「访客统计」页查看。
 // 访客 ID / 会话 ID 只存在本地用于去重（不是业务数据），访问记录由后端直接写库。
-const VISITOR_KEY = 'nb_vid'
+export const VISITOR_KEY = 'nb_vid'
 const SESSION_KEY = 'nb_sid'
 const SESSION_IDLE_MS = 30 * 60 * 1000
 
