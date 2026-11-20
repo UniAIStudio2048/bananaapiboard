@@ -10,6 +10,8 @@ import { toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { getCosProxyUrl, isCosCdn, isVideoUrl as isVideoMediaFile } from '@/utils/cloudMediaUrl'
 import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
+import { estimateWan3Points, readWan3ReferenceDuration } from '@/utils/wan3Billing'
+import { applyNodeRateToPoints } from '@/utils/userGroupRate'
 import { calculateVideoResolutionPrice, resolveVideoResolutionPricing, getEnabledVideoResolutionOptions } from '@/utils/videoResolutionPricing'
 import { calculateSeedanceResolutionCost } from '@/utils/seedanceResolutionPricing'
 import { normalizePromptLineEndings } from '@/utils/promptText'
@@ -481,25 +483,33 @@ const totalPoints = computed(() => {
   return getTotalUserPoints(me.value)
 })
 
+const wan3UrlDurations = ref([])
+watch(() => JSON.stringify(isWan3Model.value && wan3Mode.value === 'multimodal_ref' ? seedanceRefVideoUrls.value : []), async (urls, _, onCleanup) => {
+  const controller = new AbortController()
+  onCleanup(() => controller.abort())
+  wan3UrlDurations.value = []
+  const durations = await Promise.all(JSON.parse(urls).map(url => readWan3ReferenceDuration(toSameOriginUrl(url), controller.signal)))
+  if (!controller.signal.aborted) wan3UrlDurations.value = durations
+}, { immediate: true })
+
 const currentPointsCost = computed(() => {
   if (currentModelConfig.value?.apiType === 'heizhu-video') {
     const pricing = resolveVideoResolutionPricing(currentModelConfig.value.resolutionPricing, resolution.value)
     if (pricing) return Math.round(pricing.costPerSecond * Number(duration.value) * 100) / 100
   }
-  if (['wavespeed-wan3', 'siray-wan3'].includes(currentModelConfig.value?.apiType)) {
-    const pricing = resolveVideoResolutionPricing(currentModelConfig.value.resolutionPricing, resolution.value)
-    if (pricing) {
-      const inputSeconds = wan3Mode.value === 'multimodal_ref'
-        ? seedanceRefVideoPreviews.value.reduce((sum, item) => sum + (Number(item.duration) || 0), 0)
-        : 0
-      const billedInput = currentModelConfig.value.apiType === 'siray-wan3' ? Math.min(5, inputSeconds) : Math.ceil(inputSeconds)
-      return Math.round(pricing.costPerSecond * (Number(wan3Duration.value) + billedInput) * 100) / 100
-    }
+  if (isWan3Model.value) {
+    if (wan3Mode.value === 'multimodal_ref' && (wan3UrlDurations.value.length !== seedanceRefVideoUrls.value.length ||
+      wan3UrlDurations.value.some(seconds => !seconds))) return null
+    const referenceDurations = wan3Mode.value === 'multimodal_ref' && currentModelConfig.value.apiType !== 'grsai-wan3'
+      ? [...seedanceRefVideoPreviews.value.map(item => Number(item.duration)), ...wan3UrlDurations.value]
+      : []
+    const estimate = estimateWan3Points(currentModelConfig.value, resolution.value, wan3Duration.value, referenceDurations)
+    return applyNodeRateToPoints(estimate, me.value?.user_group?.rate_video)
   }
   const configuredResolutionPrice = calculateVideoResolutionPrice(
     currentModelConfig.value?.resolutionPricing,
     resolution.value,
-    isReferenceVideoModel.value ? seedanceDuration.value : isWan3Model.value ? Number(wan3Duration.value) : duration.value
+    isReferenceVideoModel.value ? seedanceDuration.value : duration.value
   )
   if (configuredResolutionPrice !== null) return configuredResolutionPrice
 
@@ -1672,6 +1682,7 @@ async function generateVideo() {
       return
     }
     const referenceVideoDuration = seedanceRefVideoPreviews.value.reduce((sum, item) => sum + (Number(item.duration) || 0), 0)
+      + wan3UrlDurations.value.reduce((sum, seconds) => sum + (seconds || 0), 0)
     if (referenceVideoDuration + requestedWan3Duration > 30) {
       error.value = translateUi('uiMessages.mfcc613bd4bda')
       return
@@ -3799,7 +3810,8 @@ onUnmounted(() => {
               <span v-else class="inline-flex items-center justify-center w-full">
                 <span class="mr-2">✨</span>
                 <span>{{ translateUi('uiMessages.mf75d76706332') }}</span>
-                <span class="ml-2 text-sm opacity-90">{{ translateUi('uiMessages.m181800f750b7', { value1: (formatPoints(currentPointsCost)) }) }}</span>
+                <span v-if="currentPointsCost === null" class="ml-2 text-sm opacity-90">{{ wan3UrlDurations.length ? '暂无法读取参考视频时长' : '正在读取参考视频时长' }}</span>
+                <span v-else class="ml-2 text-sm opacity-90">{{ isWan3Model ? '≈ ' : '' }}{{ translateUi('uiMessages.m181800f750b7', { value1: (formatPoints(currentPointsCost)) }) }}</span>
               </span>
             </button>
 

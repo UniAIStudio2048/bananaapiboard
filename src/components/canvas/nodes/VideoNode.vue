@@ -26,6 +26,7 @@ import { useTeamStore } from '@/stores/team'
 import { formatPoints } from '@/utils/format'
 import { formatVideoNodePoints } from '@/utils/canvasVideoPointsDisplay'
 import { applyNodeRateToPoints, getUserNodeRate } from '@/utils/userGroupRate'
+import { estimateWan3Points, getWan3OutputEstimate, readWan3ReferenceDuration } from '@/utils/wan3Billing'
 import { getTotalUserPoints } from '@/utils/points'
 import { config as tenantConfig, getTenantConfigVersion, getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels, isSoraCharacterLibraryEnabled } from '@/config/tenant'
 import { uploadImages, getVideoHdTaskStatus, getVideoTaskStatus } from '@/api/canvas/nodes'
@@ -3740,7 +3741,7 @@ const videoInputMultiplier = computed(() => {
 })
 
 // 按输入时长 / 固定价单独计费的渠道，后端不应用视频输入倍率（shouldApplyGenericVideoInputMultiplier）
-const VIDEO_INPUT_MULTIPLIER_EXCLUDED_API_TYPES = ['heizhu-video', 'wavespeed-wan3', 'siray-wan3', 'rh-h3-enhanced', 'runninghub-ai-app-video', 'runninghub-ai-app-video-v31', 'runninghub-motion-transfer']
+const VIDEO_INPUT_MULTIPLIER_EXCLUDED_API_TYPES = ['heizhu-video', 'rh-h3-enhanced', 'runninghub-ai-app-video', 'runninghub-ai-app-video-v31', 'runninghub-motion-transfer']
 
 // 是否对当前生成应用视频输入倍率：
 // - 配置了新字段 videoInputMultipliers 时，任意模型都按输入视频个数分档；
@@ -3748,6 +3749,7 @@ const VIDEO_INPUT_MULTIPLIER_EXCLUDED_API_TYPES = ['heizhu-video', 'wavespeed-wa
 //   仅 seedance / minimax H3 生效（与后端旧逻辑一致）。
 const shouldApplyVideoInputMultiplier = computed(() => {
   if (billedReferenceVideoCount.value <= 0) return false
+  if (isWan3Model.value || isRouterBeeWan3Model.value) return videoInputMultiplier.value !== 1
   if (videoInputMultiplier.value <= 1) return false
   if (VIDEO_INPUT_MULTIPLIER_EXCLUDED_API_TYPES.includes(currentModelConfig.value?.apiType)) return false
   if (Array.isArray(currentModelConfig.value?.videoInputMultipliers)) return true
@@ -4369,13 +4371,25 @@ const wanAnimateCostPerSecond = computed(() => {
   return raw * getUserNodeRate('video')
 })
 
-const waveSpeedReferenceVideoDuration = computed(() => {
-  if (!['wavespeed-wan3', 'siray-wan3'].includes(currentModelConfig.value?.apiType) || selectedWan3Mode.value !== 'multimodal_ref') return 0
-  const seconds = referenceVideos.value.reduce((total, url) => {
-    const node = canvasStore.nodes.find(item => item.data?.videoUrl === url || item.data?.output?.url === url || item.data?.sourceVideo === url)
-    return total + (Number(node?.data?.videoDuration || node?.data?.duration || node?.data?.output?.duration) || 0)
-  }, 0)
-  return currentModelConfig.value?.apiType === 'siray-wan3' ? Math.min(5, seconds) : seconds
+const wan3ReferenceDurations = ref([])
+const wan3ReferenceUrls = computed(() => (isWan3Model.value || isRouterBeeWan3Model.value)
+  ? referenceVideos.value.slice(0, billedReferenceVideoCount.value) : [])
+const wan3QuoteReady = computed(() => wan3ReferenceDurations.value.length === wan3ReferenceUrls.value.length &&
+  wan3ReferenceDurations.value.every(seconds => Number.isFinite(seconds) && seconds > 0))
+
+watch(() => JSON.stringify(wan3ReferenceUrls.value), async (urls, _, onCleanup) => {
+  const controller = new AbortController()
+  onCleanup(() => controller.abort())
+  wan3ReferenceDurations.value = []
+  const durations = await Promise.all(JSON.parse(urls).map(url => readWan3ReferenceDuration(toSameOriginUrl(url), controller.signal)))
+  if (!controller.signal.aborted) wan3ReferenceDurations.value = durations
+}, { immediate: true })
+
+const wan3BillingDetails = computed(() => {
+  if (!wan3QuoteReady.value) return ''
+  const inputSeconds = wan3ReferenceDurations.value.reduce((total, seconds) => total + seconds, 0)
+  const outputSeconds = getWan3OutputEstimate(currentModelConfig.value, selectedDuration.value)
+  return `参考视频 ${formatVideoNodePoints(inputSeconds)} 秒 + 预计生成 ${formatVideoNodePoints(outputSeconds)} 秒，完成后按实际时长结算`
 })
 
 // 积分消耗计算（从模型配置中读取）
@@ -4389,19 +4403,20 @@ const basePointsCost = computed(() => {
   }
   let cost = 1
 
-  if (['heizhu-video', 'wavespeed-wan3', 'siray-wan3', 'rh-h3-enhanced'].includes(currentModelConfig.value?.apiType)) {
+  if (isWan3Model.value || isRouterBeeWan3Model.value) {
+    return wan3QuoteReady.value
+      ? estimateWan3Points(currentModelConfig.value, genericVideoResolution.value, selectedDuration.value, wan3ReferenceDurations.value)
+      : 0
+  }
+
+  if (['heizhu-video', 'rh-h3-enhanced'].includes(currentModelConfig.value?.apiType)) {
     const pricing = resolveVideoResolutionPricing(currentModelConfig.value.resolutionPricing, genericVideoResolution.value)
-    if (pricing) {
-      const inputSeconds = currentModelConfig.value.apiType === 'siray-wan3'
-        ? waveSpeedReferenceVideoDuration.value : Math.ceil(waveSpeedReferenceVideoDuration.value)
-      const seconds = Number(selectedDuration.value) + inputSeconds
-      return Math.round(pricing.costPerSecond * seconds * 100) / 100
-    }
+    if (pricing) return Math.round(pricing.costPerSecond * Number(selectedDuration.value) * 100) / 100
   }
   const genericResolutionPrice = calculateVideoResolutionPrice(
     currentModelConfig.value?.resolutionPricing,
     genericVideoResolution.value,
-    Number(selectedDuration.value) + Math.ceil(waveSpeedReferenceVideoDuration.value)
+    Number(selectedDuration.value)
   )
   if (genericResolutionPrice !== null) {
     // 通用分辨率按秒计费同样应用视频输入倍率（与服务端计费保持一致）
@@ -11853,6 +11868,13 @@ function toggleFullscreenPlayback() {
             </template>
             <template v-else-if="isKlingOfficialDurationModel(currentModelConfig)">
               {{ klingOfficialSelectedDurationCostText }}
+            </template>
+            <template v-else-if="isWan3Model || isRouterBeeWan3Model">
+              <span v-if="wan3QuoteReady" :title="wan3BillingDetails">≈ {{ formatVideoNodePoints(pointsCost * selectedCount) }} {{ t('imageGen.points') }}</span>
+              <span v-else>{{ wan3ReferenceDurations.length ? '暂无法读取参考视频时长' : '正在读取参考视频时长' }}</span>
+              <span v-if="wan3QuoteReady && shouldApplyVideoInputMultiplier" class="points-multiplier-chip">
+                {{ formatVideoInputMultiplier(videoInputMultiplier) }}
+              </span>
             </template>
             <template v-else>
               {{ formatVideoNodePoints(pointsCost * selectedCount) }} {{ t('imageGen.points') }}

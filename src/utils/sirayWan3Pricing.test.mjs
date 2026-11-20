@@ -4,8 +4,9 @@ import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { resolveVideoResolutionPricing, calculateVideoResolutionPrice } from './videoResolutionPricing.js'
 import { applyNodeRateToPoints } from './userGroupRate.js'
+import { estimateWan3Points } from './wan3Billing.js'
 
-test('canvas and generation page preserve Siray fractional input seconds and five-second cap', () => {
+test('canvas and generation page bill full input seconds with the rate for the submitted video count', () => {
   for (const [file, name, endMarker] of [
     ['../components/canvas/nodes/VideoNode.vue', 'basePointsCost', '  // VEO 模型'],
     ['../views/VideoGeneration.vue', 'currentPointsCost', '  const seedanceResolutionCost']
@@ -13,12 +14,22 @@ test('canvas and generation page preserve Siray fractional input seconds and fiv
     const source = readFileSync(new URL(file, import.meta.url), 'utf8')
     const start = source.indexOf(`const ${name} = computed(() => {`) + `const ${name} = computed(() => {`.length
     const body = source.slice(start, source.indexOf(endMarker, start))
-    for (const [rate, input, expected] of [[6, 0, 24], [9, 0, 36], [6, 1.25, 31.5], [9, 1.25, 47.25], [6, 5, 54]]) {
-      const refs = { currentModelConfig: { value: { apiType: 'siray-wan3', resolutionPricing: { '480p': { enabled: true, costPerSecond: rate } } } },
-        selectedDuration: { value: 4 }, genericVideoResolution: { value: '480p' }, waveSpeedReferenceVideoDuration: { value: input },
-        resolution: { value: '480p' }, wan3Duration: { value: 4 }, wan3Mode: { value: 'multimodal_ref' }, seedanceRefVideoPreviews: { value: [{ duration: input }] }, resolveVideoResolutionPricing, calculateVideoResolutionPrice,
-        shouldApplyVideoInputMultiplier: { value: false }, isReferenceVideoModel: { value: false }, isWan3Model: { value: true } }
-      assert.equal(runInNewContext(`(() => {${body}})()`, refs), expected, `${name}, rate ${rate}, input ${input}`)
+    for (const apiType of ['wan3', 'wavespeed-wan3', 'siray-wan3', 'routerbee-wan3']) {
+      for (const [durations, expected] of [[[], 24], [[1.25], 47.25], [[4.25, 2.125], 49.8]]) {
+        const refs = {
+          currentModelConfig: { value: { apiType, videoInputMultipliers: [1.5, 0.8], resolutionPricing: { '480p': { enabled: true, costPerSecond: 6 } } } },
+          isMotionTransferModel: { value: false }, isLongCatModel: { value: false },
+          selectedDuration: { value: 4 }, genericVideoResolution: { value: '480p' }, wan3QuoteReady: { value: true },
+          wan3ReferenceDurations: { value: durations }, resolution: { value: '480p' },
+          wan3Duration: { value: 4 }, wan3Mode: { value: 'multimodal_ref' },
+          wan3UrlDurations: { value: [] }, seedanceRefVideoUrls: { value: [] },
+          seedanceRefVideoPreviews: { value: durations.map(duration => ({ duration })) },
+          isWan3Model: { value: true }, isRouterBeeWan3Model: { value: apiType === 'routerbee-wan3' },
+          me: { value: null }, estimateWan3Points, resolveVideoResolutionPricing, calculateVideoResolutionPrice, applyNodeRateToPoints
+        }
+        const value = runInNewContext(`(() => {${body}})()`, refs)
+        assert.equal(applyNodeRateToPoints(value, 1), expected, `${name}, ${apiType}, ${durations}`)
+      }
     }
   }
 })
