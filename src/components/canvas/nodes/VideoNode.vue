@@ -36,6 +36,7 @@ import { registerTask, subscribeTask, getTasksByNodeId, removeCompletedTask } fr
 import {
   createPendingGenerationSubmission,
   markSubmissionTaskCreated,
+  markVideoSubmissionResponseTimedOut,
   removeGenerationSubmission
 } from '@/stores/canvas/pendingGenerationSubmissions'
 import { useI18n } from '@/i18n'
@@ -6535,13 +6536,14 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
     capturedState.submissionWorkflowId ||= canvasStore.getCurrentTab?.()?.workflowId
   }
   const updateNode = (id, data) => updateVideoSubmissionNode(id, data, capturedState)
+  const processingStartedAt = Date.now()
   try {
     // 清除旧的任务 ID，避免角色创建时使用过期的 ID
     await updateNode(nodeId, {
       status: 'processing',
       progress: translateUi('uiMessages.mcc403ea1cff2'),
       clientSubmissionId: null,
-      processingStartedAt: Date.now(),
+      processingStartedAt,
       seedanceDraft: capturedState.seedanceDraft === true,
       taskId: null,
       soraTaskId: null,
@@ -6658,12 +6660,15 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
       })
       return null
     }
-    if (submissionId && isTransientVideoSubmissionError(error)) {
+    const submissionTimedOut = error?.payload?.error === 'generation_failed' &&
+      error.payload.message === 'Query inactivity timeout'
+    if (submissionId && (submissionTimedOut || isTransientVideoSubmissionError(error))) {
+      if (submissionTimedOut) markVideoSubmissionResponseTimedOut(submissionId)
       await updateNode(nodeId, {
         status: 'processing',
         progress: translateUi('uiMessages.mb3708629b7d4'),
         clientSubmissionId: submissionId,
-        processingStartedAt: props.data.processingStartedAt || Date.now(),
+        processingStartedAt,
         error: null
       })
       requestPendingVideoSubmissionRecovery(submissionId)

@@ -6,8 +6,11 @@
  * closes before the response writes taskId into the canvas node.
  */
 
+import { t as translateUi } from '../../i18n/index.js'
+
 const STORAGE_KEY = 'canvas_pending_generation_submissions'
 const MAX_SUBMISSION_AGE_MS = 48 * 60 * 60 * 1000
+const SUBMISSION_RESPONSE_TIMEOUT_GRACE_MS = 30_000
 const MAX_FIELD_LENGTH = 128
 const MAX_TEXT_LENGTH = 2000
 
@@ -148,6 +151,10 @@ export function markSubmissionTaskCreated(submissionId, taskId, { now = Date.now
   }), now)
 }
 
+export function markVideoSubmissionResponseTimedOut(submissionId, { now = Date.now } = {}) {
+  return updateSubmission(submissionId, () => ({ responseTimedOutAt: nowMs(now) }), now)
+}
+
 export function removeGenerationSubmission(submissionId, { now = Date.now } = {}) {
   if (!submissionId) return
   const submissions = pruneSubmissions(loadSubmissions(), now)
@@ -262,6 +269,24 @@ export async function recoverPendingCanvasVideoSubmissions({
       const task = await fetchSubmissionStatus(submission.submissionId, submission)
       const taskId = task?.task_id || task?.taskId || task?.id || submission.taskId
       if (!taskId) {
+        if (task === null && submission.responseTimedOutAt &&
+            nowMs(now) - submission.responseTimedOutAt >= SUBMISSION_RESPONSE_TIMEOUT_GRACE_MS) {
+          const current = findCanvasNode(canvasStore, submission.nodeId)
+          const data = current?.node?.data
+          if (data?.clientSubmissionId === submission.submissionId) {
+            if (data.taskId) continue
+            if (data.status === 'processing') {
+              current.update?.({
+                status: 'error',
+                progress: null,
+                error: translateUi('uiMessages.mf72b6d4979f9')
+              })
+              result.failed += 1
+            }
+          }
+          removeGenerationSubmission(submission.submissionId, { now })
+          continue
+        }
         result.notFound += 1
         continue
       }

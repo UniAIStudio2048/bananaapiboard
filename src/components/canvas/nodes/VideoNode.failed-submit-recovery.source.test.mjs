@@ -59,3 +59,42 @@ test('video submit fetch failures keep the pending submission recoverable', () =
   assert.match(catchBody, /requestPendingVideoSubmissionRecovery\(submissionId\)/)
   assert.match(catchBody, /return submissionId/)
 })
+
+test('a MySQL timeout from video submission checks the original submission without sending another request', async () => {
+  const patches = []
+  const marked = []
+  const recoveryRequests = []
+  let requests = 0
+  const dependencies = {
+    canvasStore: { getCurrentTab: () => ({ id: 'tab-a' }) },
+    updateVideoSubmissionNode: async (_id, patch) => patches.push(patch),
+    sendGenerateRequest: async () => {
+      requests += 1
+      throw Object.assign(new Error('generation_failed'), {
+        clientSubmissionId: 'submission-a',
+        payload: { error: 'generation_failed', message: 'Query inactivity timeout' }
+      })
+    },
+    selectedModel: { value: 'seedance' },
+    isPromptSafetyBlockedError: () => false,
+    isTransientVideoSubmissionError: () => false,
+    markVideoSubmissionResponseTimedOut: id => marked.push(id),
+    requestPendingVideoSubmissionRecovery: id => recoveryRequests.push(id),
+    removeGenerationSubmission: () => assert.fail('the submission must remain recoverable'),
+    translateUi: key => key,
+    console: { error() {} }
+  }
+  const execute = new Function(...Object.keys(dependencies), `
+    return async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex, capturedState = {}) {
+      ${functionBody(source, 'executeNodeGeneration')}
+    }
+  `)(...Object.values(dependencies))
+
+  assert.equal(await execute('video-a', 'prompt', [], 0), 'submission-a')
+  assert.equal(requests, 1)
+  assert.deepEqual(marked, ['submission-a'])
+  assert.deepEqual(recoveryRequests, ['submission-a'])
+  assert.equal(patches.at(-1).status, 'processing')
+  assert.equal(patches.at(-1).clientSubmissionId, 'submission-a')
+  assert.equal(patches.at(-1).error, null)
+})

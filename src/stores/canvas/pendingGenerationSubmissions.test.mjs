@@ -7,6 +7,7 @@ import {
   getPendingGenerationSubmissions,
   markNodeGenerationSubmissionsDeleted,
   markSubmissionTaskCreated,
+  markVideoSubmissionResponseTimedOut,
   recoverPendingCanvasVideoSubmissions
 } from './pendingGenerationSubmissions.js'
 
@@ -110,6 +111,7 @@ test('recovers a submitted canvas video task after reload and restarts polling',
     prompt: 'a calm 4s camera pan',
     model: 'seedance-2.0-ant'
   })
+  markVideoSubmissionResponseTimedOut(submission.submissionId)
 
   const patches = []
   const ensured = []
@@ -176,6 +178,30 @@ test('keeps not-yet-created backend submissions pending so Canvas can retry reco
 
   assert.equal(result.notFound, 1)
   assert.equal(getPendingGenerationSubmissions({ type: 'video' }).length, 1)
+})
+
+test('a timed-out submission only finishes as unconfirmed after the grace period and a successful not-found lookup', async () => {
+  let timestamp = 1772448000000
+  const now = () => timestamp
+  const submission = createPendingGenerationSubmission({ type: 'video', nodeId: 'node-video-1', now })
+  markVideoSubmissionResponseTimedOut(submission.submissionId, { now })
+  const data = { status: 'processing', clientSubmissionId: submission.submissionId }
+  const canvasStore = {
+    nodes: [{ id: submission.nodeId, type: 'video', data }],
+    updateNodeData: (_nodeId, patch) => Object.assign(data, patch)
+  }
+  const check = fetchSubmissionStatus => recoverPendingCanvasVideoSubmissions({
+    canvasStore, fetchSubmissionStatus, now
+  })
+
+  assert.equal((await check(async () => null)).notFound, 1)
+  timestamp += 30_001
+  assert.equal((await check(async () => { throw new Error('Query inactivity timeout') })).errors, 1)
+  assert.equal(data.status, 'processing')
+  assert.equal((await check(async () => null)).failed, 1)
+  assert.equal(data.status, 'error')
+  assert.doesNotMatch(data.error, /Query inactivity timeout/)
+  assert.equal(getPendingGenerationSubmissions({ now }).length, 0)
 })
 
 test('keeps submissions pending when the canvas node is temporarily unavailable', async () => {
