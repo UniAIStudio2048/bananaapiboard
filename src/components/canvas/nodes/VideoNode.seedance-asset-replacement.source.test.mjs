@@ -40,3 +40,10 @@ test('character replacement matches urls with the same normalization as finalIma
   // 留在 @图片1、asset:// 被追加到末尾（1080P 换头任务以裸 URL 直传的根因）。
   assert.match(source, /import \{[^}]*normalizeModelImageUrl[^}]*\} from '@\/utils\/canvasModelMedia'/)
 })
+
+test('Seedance confirms pending video reviews before using the resolved snapshot in reference_videos', () => {
+  assert.match(backgroundSource, /capturedState\.referenceVideos = await refreshPendingSeedanceVideoReferences\(capturedState\.referenceVideos/)
+  assert.match(backgroundSource, /ensureReferenceVideoUrlsAccessible\(capturedState\.nodeId, targetNodeId, capturedState\.referenceVideos\)/)
+  assert.match(source, /let finalVideos = capturedState\.referenceVideos \|\| referenceVideos\.value \|\| \[\]/)
+  assert.match(source, /const orderedVideos = finalVideos[\s\S]*?formData\.append\('reference_videos', JSON\.stringify\(orderedVideos/)
+})

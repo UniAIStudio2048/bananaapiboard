@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs'
 import * as Vue from 'vue'
 import { compile } from '@vue/compiler-dom'
 import { renderToString } from '@vue/server-renderer'
+import { getSeedanceSourceUrl } from '../../utils/seedanceMedia.js'
 
 const source = readFileSync(new URL('./SeedanceReviewButton.vue', import.meta.url), 'utf8')
 const script = source.match(/<script setup>([\s\S]*?)<\/script>/)[1].replace(/^import .*$/gm, '')
@@ -29,7 +30,7 @@ function setup(options, assetType = 'Video', savedProvider, savedStatus = 'idle'
     useCanvasStore: () => ({ nodes: [{ id: 'node1', data: props.data }] }),
     useTeamStore: () => ({}), isSeedanceFeaturesEnabled: () => true,
     getAssetReviewProviders: async () => ({ activeProvider: 'volcengine', enabledProviders: available }),
-    getSeedanceQuickAssetStatus: () => savedStatus,
+    getSeedanceQuickAssetStatus: () => savedStatus, getSeedanceSourceUrl,
     createSeedanceReviewController: config => ({ async submit() { submitted.push(await config.getProvider()) }, resume() {}, dispose() {} }),
     showToast() {}, pollAssetStatus() {}
   })

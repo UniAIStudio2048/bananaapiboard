@@ -52,12 +52,14 @@ const buttonText = computed(() => {
   if (queryFailed.value) return translateUi('uiMessages.mf6902249c417')
   return { get approved() { return translateUi('uiMessages.m93632ccd0ab5') }, get processing() { return translateUi('uiMessages.ma9f71b911f2a') }, get failed() { return translateUi('uiMessages.m69fbd787f99b') }, get expired() { return translateUi('uiMessages.m6bcc5fd5d39e') } }[status.value] || translateUi('uiMessages.m87f2e0587195')
 })
+const getReviewNodeData = () => canvasStore.nodes.find(node => node.id === props.nodeId)?.data
+const getReviewSourceUrl = () => getSeedanceSourceUrl(getReviewNodeData(), props.assetType)
 const controller = createSeedanceReviewController({
-  getData: () => canvasStore.nodes.find(node => node.id === props.nodeId)?.data,
-  getSourceUrl: () => getSeedanceSourceUrl(props.data, props.assetType),
+  getData: getReviewNodeData,
+  getSourceUrl: getReviewSourceUrl,
   assetType: props.assetType,
   nodeId: props.nodeId,
-  update: partial => canvasStore.updateNodeData(props.nodeId, { seedanceQuickAsset: { ...props.data?.seedanceQuickAsset, ...partial } }),
+  update: partial => canvasStore.updateNodeData(props.nodeId, { seedanceQuickAsset: { ...getReviewNodeData()?.seedanceQuickAsset, ...partial } }),
   resolveUrl: url => resolveSeedanceMediaUrl(url, props.assetType),
   getProvider,
   create: body => createQuickSeedanceCharacterAsset({ ...body, ...teamStore.getSpaceParams('current') }),
@@ -98,7 +100,7 @@ function closeMenu() {
   reviewButton.value?.focus()
 }
 
-watch(() => props.data?.seedanceQuickAsset?.assetId, () => controller.resume(), { immediate: true })
+watch([() => getReviewNodeData()?.seedanceQuickAsset?.assetId, getReviewSourceUrl], () => controller.resume(), { immediate: true })
 onMounted(() => { if (enabled.value) loadProviders().catch(() => {}) })
 onUnmounted(() => controller.dispose())
 </script>

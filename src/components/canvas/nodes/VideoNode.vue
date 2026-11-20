@@ -72,8 +72,9 @@ import { getBatchGridPositions } from '@/utils/canvasBatchLayout'
 import { findBatchSafetyError } from '@/utils/canvasBatchFailures'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { pickConfiguredSubmode, pickInitialSubmode } from '@/utils/videoSubmodeDefaults'
-import { getSeedanceQuickAsset, getSeedanceQuickAssetStatus } from '@/utils/seedanceQuickAsset'
-import { getSeedanceMediaType } from '@/utils/seedanceMedia'
+import { getSeedanceQuickAsset, getSeedanceQuickAssetStatus, refreshPendingSeedanceVideoReferences } from '@/utils/seedanceQuickAsset'
+import { getAsset as getSeedanceAsset } from '@/api/canvas/volcengine-assets'
+import { getSeedanceMediaType, getSeedanceSourceUrl } from '@/utils/seedanceMedia'
 import { getAutoReviewMaterials, isAutoReviewConnected } from '@/utils/seedanceAutoReview'
 import { updateUserPreferences } from '@/api/client'
 import { isSeedanceAssetReusable } from '@/utils/seedanceAssetRecycling'
@@ -6108,8 +6109,8 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
 
   // Seedance 2.0 模式参数
   if (isSeedance2Model.value) {
-    const sd2Mode = selectedSeedance2Mode.value
-    let finalVideos = referenceVideos.value || []
+    const sd2Mode = capturedState.seedanceMode || selectedSeedance2Mode.value
+    let finalVideos = capturedState.referenceVideos || referenceVideos.value || []
     let finalAudios = referenceAudios.value || []
     if (!capturedState.isSeedanceOpenApiPro) {
       const sourceNodeId = capturedState.nodeId || props.id
@@ -6920,6 +6921,22 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
       console.log('[VideoNode] 处理后的可访问 URLs:', finalImages)
     }
     
+    if (capturedState.isSeedance2 && ['seedance-2.0', 'seedance-2.5', 'ant', 'ctyun-seedance'].includes(capturedState.apiType) &&
+        ['multimodal_ref', 'video_edit', 'video_extend'].includes(capturedState.seedanceMode)) {
+      const upstreamIds = new Set(canvasStore.edges.filter(edge => edge.target === capturedState.nodeId).map(edge => edge.source))
+      const videoNodes = canvasStore.nodes.filter(node => upstreamIds.has(node.id) && VIDEO_NODE_TYPES.includes(node.type))
+      capturedState.referenceVideos = await refreshPendingSeedanceVideoReferences(capturedState.referenceVideos, videoNodes, {
+        loadAsset: getSeedanceAsset,
+        updateAsset(nodeId, asset) {
+          if (canvasStore.getCurrentTab?.()?.id !== capturedState.submissionTabId) return
+          const data = canvasStore.nodes.find(node => node.id === nodeId)?.data
+          if (data?.seedanceQuickAsset?.assetId === asset.assetId && getSeedanceSourceUrl(data, 'Video') === asset.sourceUrl) {
+            canvasStore.updateNodeData(nodeId, { seedanceQuickAsset: asset })
+          }
+        }
+      })
+    }
+
     const shouldPrepareReferenceVideos = capturedState.isSeedance2 ||
       capturedState.isOmniVideoModel ||
       capturedState.isCozeVideoSwapModel ||
@@ -7594,6 +7611,7 @@ async function handleGenerate(options = {}) {
     digitalHuman: upstreamData.digitalHumans[0] || null,
     heygenChannelId: isDigitalHumanFlow ? upstreamData.digitalHumans[0]?.channelId : props.data?.heygenChannelId,
     isSeedance2: isSeedance2Model.value,
+    seedanceMode: isSeedance2Model.value ? selectedSeedance2Mode.value : '',
     isMinimaxH3: isMinimaxH3Model.value,
     isSeedanceOpenApiPro: isSeedanceOpenApiProModel.value,
     isOmniVideoModel: isOmniVideoModel.value,

@@ -79,3 +79,44 @@ test('changing source media invalidates its saved review without deleting the as
     assert.equal(getVideoReferenceImageUrlForTarget({ data }, 'new-media', true), 'new-media')
   }
 })
+
+test('a saved pending video review uses the provider-approved asset URI in its original slot', async () => {
+  const { refreshPendingSeedanceVideoReferences } = await import('./seedanceQuickAsset.js')
+  const sourceUrl = 'https://cdn.example/source.mp4'
+  const otherUrl = 'https://cdn.example/second.mp4'
+  const quick = { assetId: 'reviewed-video', assetUri: 'asset://reviewed-video', assetType: 'Video', status: 'Processing', providerType: 'stars_asset', groupId: 'group-1' }
+  const updates = []
+  const urls = await refreshPendingSeedanceVideoReferences([otherUrl, sourceUrl], [
+    { id: 'node-1', data: { output: { url: sourceUrl }, seedanceQuickAsset: quick } }
+  ], {
+    async loadAsset(id, options) {
+      assert.equal(id, quick.assetId)
+      assert.deepEqual(options, { providerType: 'stars_asset', groupId: 'group-1' })
+      return { asset: { Id: id, Status: 'Active' } }
+    },
+    updateAsset(id, asset) { updates.push({ id, asset }) }
+  })
+  assert.deepEqual(urls, [otherUrl, 'asset://reviewed-video'])
+  assert.equal(updates[0].id, 'node-1')
+  assert.equal(updates[0].asset.status, 'Active')
+  assert.equal(updates[0].asset.sourceUrl, sourceUrl)
+})
+
+test('a pending or failed video review never becomes an approved reference', async () => {
+  const { refreshPendingSeedanceVideoReferences } = await import('./seedanceQuickAsset.js')
+  const sourceUrl = 'https://cdn.example/source.mp4'
+  const quick = { assetId: 'video', assetUri: 'asset://video', assetType: 'Video', status: 'Processing', sourceUrl }
+  const nodes = [{ id: 'node-1', data: { sourceVideo: sourceUrl, seedanceQuickAsset: quick } }]
+  for (const [status, message] of [['Processing', /仍在审核/], ['Failed', /审核未通过/]]) {
+    await assert.rejects(refreshPendingSeedanceVideoReferences([sourceUrl], nodes, {
+      loadAsset: async () => ({ asset: { Id: 'video', Status: status } }),
+      updateAsset() {}
+    }), message)
+  }
+  assert.deepEqual(await refreshPendingSeedanceVideoReferences([sourceUrl], [
+    { id: 'node-1', data: { sourceVideo: sourceUrl, seedanceQuickAsset: { ...quick, sourceUrl: 'https://cdn.example/replaced.mp4' } } }
+  ], {
+    loadAsset() { assert.fail('review for a replaced media source must not be used') },
+    updateAsset() {}
+  }), [sourceUrl])
+})
