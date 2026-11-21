@@ -538,6 +538,8 @@ export default {
 
   // Canvas
   canvas: {
+    syncPending: 'Canvas changes are waiting to sync. Try again once your connection is restored.',
+    missingVideoReference: 'Your prompt refers to Video {index}. Connect that reference video or remove the mention before generating.',
     title: 'Creative Canvas',
     newWorkflow: 'New Workflow',
     openWorkflow: 'Open Workflow',

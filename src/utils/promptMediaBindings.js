@@ -156,3 +156,12 @@ export function escapePromptMediaMentions(text) {
     return ` ${label} `
   }).replace(/ {2,}/g, ' ').trim()
 }
+
+export function findMissingVideoMention(prompt, videoCount) {
+  const mentions = /<<<video_(\d+)>>>|@视频(\d+)|视频([0-9]{1,2})(?![\da-z])|\bVideo\s+(\d+)\b/gi
+  for (const match of String(prompt || '').matchAll(mentions)) {
+    const index = Number(match[1] ?? match[2] ?? match[3] ?? match[4])
+    if (index < 1 || index > videoCount) return index
+  }
+  return null
+}

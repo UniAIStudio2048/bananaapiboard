@@ -2,13 +2,13 @@ import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { createStreamVideoPlayback } from '@/utils/streamVideoPlayback'
 
 const controllers = new WeakMap()
-async function resolvePlayback(url) {
+async function resolvePlayback(url, { compatibility } = {}) {
   const token = localStorage.getItem('token')
   if (!token) return { status: 'original' }
   const response = await fetch(getApiUrl('/api/videos/playback'), {
     method: 'POST',
     headers: { ...getTenantHeaders(), 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({ url, compatibility }),
     signal: AbortSignal.timeout(15000)
   })
   return response.ok ? response.json() : { status: 'original' }

@@ -106,3 +106,27 @@ test('destroy does not overwrite a new poster supplied by the component during a
   controller.destroy()
   assert.equal(el.poster, 'https://r2.example.com/new-poster.jpg')
 })
+
+test('decode error requests an MP4 preview and switches only the video element', async () => {
+  const el = video(), source = el.src
+  const calls = []
+  const controller = createStreamVideoPlayback(el, source, {
+    resolve: async (url, options) => {
+      calls.push({ url, options })
+      return options?.compatibility
+        ? { status: 'ready', provider: 'cos_mp4', playbackUrl: 'https://cos.example.com/preview.mp4' }
+        : { status: 'original' }
+    },
+    loadHls: async () => { throw Error('MP4 uses native playback') }
+  })
+  await controller.start()
+  el.error = { code: 3 }
+  el.fire('error')
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(calls[1]?.url, source)
+  assert.equal(calls[1]?.options?.compatibility, true)
+  assert.equal(el.src, 'https://cos.example.com/preview.mp4')
+  el.fire('error')
+  assert.equal(el.src, source)
+  controller.destroy()
+})

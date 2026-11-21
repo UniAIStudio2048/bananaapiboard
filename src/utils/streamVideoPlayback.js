@@ -5,6 +5,7 @@ export function createStreamVideoPlayback(video, sourceUrl, { resolve, loadHls =
   let timer = null
   let attempts = 0
   let switched = false
+  let compatibility = false
   let generatedPoster = null
   let resumeListener = null
   const previousPoster = video.poster
@@ -31,22 +32,34 @@ export function createStreamVideoPlayback(video, sourceUrl, { resolve, loadHls =
     video.src = sourceUrl
     video.load()
   }
+  function requestCompatibility() {
+    if (destroyed || switched || compatibility || ![3, 4].includes(video.error?.code)) return
+    compatibility = true
+    attempts = 0
+    clearTimeout(timer)
+    video.removeEventListener('error', requestCompatibility)
+    void start()
+  }
+  video.addEventListener('error', requestCompatibility)
+
   async function start() {
     if (destroyed || !/^https?:\/\//i.test(sourceUrl)) return
+    const compatibilityRequested = compatibility
     try {
-      const result = await resolve(sourceUrl)
-      if (destroyed) return
+      const result = await resolve(sourceUrl, { compatibility: compatibilityRequested })
+      if (destroyed || compatibilityRequested !== compatibility) return
       if (result.status !== 'ready' || !/^https:\/\//i.test(result.playbackUrl || '')) {
         if (['pending', 'submitting', 'encoding', 'local', 'transcoding'].includes(result.status) && ++attempts < 180) {
           timer = setTimeout(start, 10000)
         }
         return
       }
-      const native = !!video.canPlayType('application/vnd.apple.mpegurl')
+      const native = result.provider === 'cos_mp4' || !!video.canPlayType('application/vnd.apple.mpegurl')
       const Hls = native ? null : await loadHls()
-      if (destroyed || (!native && !Hls.isSupported())) return
+      if (destroyed || compatibilityRequested !== compatibility || (!native && !Hls.isSupported())) return
       restorePosition()
       switched = true
+      video.removeEventListener('error', requestCompatibility)
       video.controlsList?.add('nodownload')
       if (!previousPoster && /^https:\/\//i.test(result.posterUrl || '')) {
         generatedPoster = result.posterUrl
@@ -62,13 +75,16 @@ export function createStreamVideoPlayback(video, sourceUrl, { resolve, loadHls =
         hls.loadSource(result.playbackUrl)
         hls.attachMedia(video)
       }
-    } catch { fallback() }
+    } catch {
+      if (compatibilityRequested === compatibility) fallback()
+    }
   }
   return {
     start,
     destroy() {
       destroyed = true
       clearTimeout(timer)
+      video.removeEventListener('error', requestCompatibility)
       video.removeEventListener('error', fallback)
       if (resumeListener) video.removeEventListener('loadedmetadata', resumeListener)
       hls?.destroy()

@@ -538,6 +538,8 @@ export default {
 
   // 画布
   canvas: {
+    syncPending: '画布更改正在等待同步，请在网络恢复后重试。',
+    missingVideoReference: '提示词引用了视频 {index}，请连接对应的参考视频，或删除该引用后再生成。',
     title: '创作画布',
     newWorkflow: '新建工作流',
     openWorkflow: '打开工作流',

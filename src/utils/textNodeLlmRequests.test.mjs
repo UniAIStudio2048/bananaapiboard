@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { isOrphanedTextNodeLlmRequest, trackTextNodeLlmRequest } from './textNodeLlmRequests.js'
+import { hasActiveTextNodeLlmRequests, isOrphanedTextNodeLlmRequest, trackTextNodeLlmRequest } from './textNodeLlmRequests.js'
 
 test('刷新后没有进行中请求的 processing 节点视为已中断', () => {
   assert.equal(isOrphanedTextNodeLlmRequest('restored', { status: 'processing' }), true)
@@ -8,8 +8,10 @@ test('刷新后没有进行中请求的 processing 节点视为已中断', () =>
 
 test('请求进行中节点重新挂载时不视为中断，结束后才视为中断', () => {
   const release = trackTextNodeLlmRequest('running')
+  assert.equal(hasActiveTextNodeLlmRequests(), true)
   assert.equal(isOrphanedTextNodeLlmRequest('running', { status: 'processing' }), false)
   release()
+  assert.equal(hasActiveTextNodeLlmRequests(), false)
   assert.equal(isOrphanedTextNodeLlmRequest('running', { status: 'processing' }), true)
 })
 

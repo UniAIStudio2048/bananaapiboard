@@ -131,3 +131,11 @@ test('migrates a legacy URL binding to the stable key before a later media repla
     'image:node:source-1:1': { type: 'image', label: '图片1', url: 'old.png' }
   })
 })
+
+test('识别指向缺失编号的视频素材标记', async () => {
+  const { findMissingVideoMention } = await import('./promptMediaBindings.js')
+  assert.equal(findMissingVideoMention('参考【@视频2】的动作', 1), 2)
+  assert.equal(findMissingVideoMention('用 <<<video_1>>> 里的动作', 0), 1)
+  assert.equal(findMissingVideoMention('保留 @视频1 的镜头', 1), null)
+  assert.equal(findMissingVideoMention('导出视频1080p', 0), null)
+})

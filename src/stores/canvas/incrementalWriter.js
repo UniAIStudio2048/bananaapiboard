@@ -169,6 +169,8 @@ export function createIncrementalWriter({
   let timer = null
   let flushing = false
   let inFlight = null
+  let inFlightWorkflowId = null
+  const retryBatches = new Map()
 
   function getWorkflowId() {
     if (typeof workflowIdRef === 'function') return workflowIdRef()
@@ -180,11 +182,18 @@ export function createIncrementalWriter({
     if (timer) return
     timer = setTimeout(() => {
       timer = null
-      flush().catch(err => {
+      flushPendingWorkflows().catch(err => {
         if (onError) onError(err)
       })
     }, debounceMs)
     if (typeof timer.unref === 'function') timer.unref()
+  }
+
+  async function flushPendingWorkflows() {
+    const workflowIds = new Set([getWorkflowId(), ...retryBatches.keys(), ...queue.map(item => item._workflowId)])
+    for (const workflowId of workflowIds) {
+      if (workflowId) await flush(workflowId)
+    }
   }
 
   /**
@@ -216,58 +225,81 @@ export function createIncrementalWriter({
    * 已有批次在发送时等它完成，再把期间新排队的 op 发出去：整份保存前的 flush 必须真正落库，
    * 否则高延迟下新状态（如视频重新生成的 processing）留在队列里，保存冲突时会被服务端旧结果覆盖。
    */
-  async function flush() {
+  async function flush(workflowId = getWorkflowId()) {
     if (inFlight) {
-      const previous = await inFlight.catch(() => null)
-      return queue.length > 0 ? flush() : (previous || { skipped: true, reason: 'in_flight' })
+      const sameWorkflow = inFlightWorkflowId === workflowId
+      const previous = await inFlight
+      if (sameWorkflow && (!hasPendingOps(workflowId) || previous?.paused || previous?.offline || previous?.ok === false)) return previous
+      return flush(workflowId)
     }
-    inFlight = flushQueue().finally(() => { inFlight = null })
+    inFlightWorkflowId = workflowId
+    inFlight = (async () => {
+      let result
+      do {
+        result = await flushQueue(workflowId)
+      } while (result?.ok === true && hasPendingOps(workflowId))
+      return result
+    })().finally(() => {
+      inFlight = null
+      inFlightWorkflowId = null
+    })
     return inFlight
   }
 
-  async function flushQueue() {
-    if (queue.length === 0) {
+  function hasPendingOps(workflowId) {
+    return retryBatches.has(workflowId) || queue.some(item => !item._workflowId || item._workflowId === workflowId)
+  }
+
+  async function flushQueue(workflowId) {
+    if (!hasPendingOps(workflowId)) {
       // 看看 IndexedDB 里有没有上次失败的，趁机回放
-      return await replayPersisted()
+      return await replayPersisted(workflowId)
     }
 
     flushing = true
     try {
-      const wfId = queue[0]?._workflowId || getWorkflowId()
+      const wfId = workflowId
       if (!wfId) return { skipped: true, reason: 'no_workflow' }
 
-      // 先 coalesce 当前队列
-      const currentQueue = queue.filter(item => !item._workflowId || item._workflowId === wfId)
-      const otherQueue = queue.filter(item => item._workflowId && item._workflowId !== wfId)
-      const coalesced = coalesceOps(currentQueue)
-      const batch = coalesced.slice(0, maxBatch)
-      const leftover = coalesced.slice(maxBatch)
-      queue = [...otherQueue, ...leftover]
+      const online = isOnline()
+      if (!online && !allowOfflineReplay) {
+        const error = new Error('画布尚未同步，恢复网络后将重试提交。')
+        if (onError) onError(error, wfId)
+        return { offline: true, persisted: 0, paused: true }
+      }
 
-      if (!isOnline()) {
-        if (!allowOfflineReplay) {
-          queue = []
-          const error = new Error('协作连接已断开，已暂停提交，请恢复连接后重新加载工作流。')
-          if (onError) onError(error)
-          return { offline: true, persisted: 0, paused: true }
-        }
+      // 先 coalesce 当前队列
+      let batch = retryBatches.get(wfId)
+      if (!batch) {
+        const currentQueue = queue.filter(item => !item._workflowId || item._workflowId === wfId)
+        const otherQueue = queue.filter(item => item._workflowId && item._workflowId !== wfId)
+        const coalesced = coalesceOps(currentQueue)
+        batch = coalesced.slice(0, maxBatch)
+        queue = [...otherQueue, ...coalesced.slice(maxBatch)]
+      }
+
+      if (!online) {
         // 离线 -> 全部落 IndexedDB
+        const leftover = queue.filter(item => !item._workflowId || item._workflowId === wfId)
         const persisted = await storage.load(wfId)
         await storage.save(wfId, persisted.concat(batch, leftover))
-        queue = []
+        queue = queue.filter(item => item._workflowId && item._workflowId !== wfId)
         return { offline: true, persisted: batch.length + leftover.length }
       }
 
       const result = await sendWithRetry(wfId, batch)
+      retryBatches.delete(wfId)
       if (result.success) {
-        if (onFlushResult) onFlushResult({ ok: true, count: batch.length, response: result.response })
-        // 若 leftover 还有，触发下一轮
-        if (leftover.length > 0) scheduleFlush()
+        if (onFlushResult) onFlushResult({ ok: true, count: batch.length, response: result.response, workflowId: wfId })
         return { ok: true, count: batch.length }
       } else {
         if (!allowOfflineReplay) {
-          if (onError) onError(result.error)
-          return { ok: false, persistedToStorage: false, paused: true, count: batch.length }
+          // 响应可能丢在服务端提交之后。保留原批次与 opId，后续编辑另起批次提交。
+          const status = result.error?.status
+          const pending = (!status && !result.error?.code) || status === 408 || status === 429 || status >= 500
+          if (pending) retryBatches.set(wfId, batch)
+          if (onError) onError(result.error, wfId)
+          return { ok: false, persistedToStorage: false, paused: true, pending, count: batch.length }
         }
         // 重试耗尽 -> 落 IndexedDB
         try {
@@ -288,7 +320,7 @@ export function createIncrementalWriter({
     let lastErr
     for (let i = 0; i <= maxRetry; i++) {
       try {
-        const metadata = typeof collaboration === 'function' ? collaboration() : collaboration
+        const metadata = typeof collaboration === 'function' ? collaboration(workflowId) : collaboration
         const response = await api.postWorkflowOps(workflowId, ops, metadata || {})
         return { success: true, response }
       } catch (err) {
@@ -305,10 +337,9 @@ export function createIncrementalWriter({
   /**
    * 回放 IndexedDB 中尚未发送成功的 ops。
    */
-  async function replayPersisted() {
+  async function replayPersisted(wfId = getWorkflowId()) {
     // 禁用离线回放不代表写入暂停，空队列 flush 仍可正常进入任务提交。
     if (!allowOfflineReplay) return { replayed: 0 }
-    const wfId = getWorkflowId()
     if (!wfId) return { replayed: 0 }
     let persisted = []
     try { persisted = await storage.load(wfId) } catch { return { replayed: 0 } }
@@ -326,7 +357,7 @@ export function createIncrementalWriter({
       } else {
         try { await storage.clear(wfId) } catch {}
       }
-      if (onFlushResult) onFlushResult({ ok: true, replayed: batch.length, response: result.response })
+      if (onFlushResult) onFlushResult({ ok: true, replayed: batch.length, response: result.response, workflowId: wfId })
       return { ok: true, replayed: batch.length }
     } else {
       if (onError) onError(result.error)
@@ -335,19 +366,28 @@ export function createIncrementalWriter({
   }
 
   /** 队列长度（调试用） */
-  function pendingCount() { return queue.length }
+  function pendingCount() {
+    return queue.length + [...retryBatches.values()].reduce((count, batch) => count + batch.length, 0)
+  }
+
+  function hasUnconfirmedWrites(workflowId) {
+    return (Boolean(inFlight) && inFlightWorkflowId === workflowId) || hasPendingOps(workflowId)
+  }
 
   /** 释放资源 */
   function dispose() {
     if (timer) { clearTimeout(timer); timer = null }
     queue = []
+    retryBatches.clear()
   }
 
   return {
     enqueue,
     flush,
+    flushPendingWorkflows,
     replayPersisted,
     pendingCount,
+    hasUnconfirmedWrites,
     dispose,
     // 调试
     _state: () => ({ queue: queue.length, flushing })

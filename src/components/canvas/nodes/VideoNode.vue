@@ -60,6 +60,7 @@ import { applyPromptEditorTextInput, capturePromptEditorSelection, getActiveProm
 import {
   bindMediaMention,
   escapePromptMediaMentions,
+  findMissingVideoMention,
   getMediaMentionKey,
   normalizeMediaMentionLabel,
   resolveMediaMentionItem,
@@ -5688,7 +5689,8 @@ async function ensureCanvasWorkflowForVideoSubmission(nodeId) {
     : teamStore.getSpaceParams('current')
   if (currentTab.workflowId) {
     const flushResult = await canvasStore.flushIncrementalWriter?.()
-    if (flushResult?.ok === false || flushResult?.paused || flushResult?.offline) {
+    if (flushResult?.pending || flushResult?.offline) throw new Error(translateUi('canvas.syncPending'))
+    if (flushResult?.ok === false || flushResult?.paused) {
       throw new Error(translateUi('uiMessages.mb3c800b45699'))
     }
     if (canvasStore.getCurrentTab?.()?.id !== currentTab.id) {
@@ -7175,6 +7177,14 @@ async function handleGenerate(options = {}) {
   // 对提示词中的 @视频/@图片/@音频 标记进行转义
   if (supportsMediaTags.value) {
     finalPrompt = escapePromptTags(finalPrompt)
+  }
+
+  if (isWan3Model.value || isRouterBeeWan3Model.value) {
+    const index = findMissingVideoMention(finalPrompt, referenceVideos.value.length)
+    if (index !== null) {
+      await showAlert(translateUi('canvas.missingVideoReference', { index }), translateUi('common.info'))
+      return
+    }
   }
 
   const isHeygenFlow = isHeygenModelSelected.value || upstreamData.digitalHumans.length > 0
@@ -9133,7 +9143,7 @@ async function handleVideoError(event) {
   const isReadonlyPreview = !!props.data?.readonly
 
   if (isReadonlyPreview) {
-    readonlyPreviewVideoFailed.value = true
+    if (![3, 4].includes(error?.code)) readonlyPreviewVideoFailed.value = true
     return
   }
 

@@ -788,11 +788,11 @@ export const useCanvasStore = defineStore('canvas', () => {
     incrementalWriter = writer || null
   }
 
-  async function flushIncrementalWriter() {
+  async function flushIncrementalWriter(workflowId) {
     if (!incrementalWriter || typeof incrementalWriter.flush !== 'function') {
       return { skipped: true, reason: 'writer_unavailable' }
     }
-    return incrementalWriter.flush()
+    return incrementalWriter.flush(workflowId)
   }
 
   /**

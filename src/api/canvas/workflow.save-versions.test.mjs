@@ -28,7 +28,10 @@ function harness(ok = true, conflictNodeVersions = null, options = {}) {
       applyWorkflowSaveVersions: value => applied.push(value),
       applyIncrementalNode: (node, opts) => remoteApplied.push({ node, opts }),
       setCollaborationState: value => collabStates.push(value),
-      flushIncrementalWriter: async () => { flushes.push(requests.length) }
+      flushIncrementalWriter: async workflowId => {
+        flushes.push(requests.length)
+        return options.flushResult?.(workflowId)
+      }
     }),
     canvasEditLease: {
       isReadonly: () => Boolean(lease.readonly),
@@ -71,6 +74,17 @@ test('successful raw autosave synchronizes the returned node versions before res
   const result = await h.context.saveWorkflowRaw('{"id":"wf-a"}')
   assert.equal(result.workflow.id, 'wf-a')
   assert.deepEqual(JSON.parse(JSON.stringify(h.applied)), [h.workflow])
+})
+
+test('autosave waits for the target workflow to finish retrying pending incremental writes', async () => {
+  const h = harness(true, null, {
+    flushResult: workflowId => {
+      assert.equal(workflowId, 'wf-a')
+      return { ok: false, paused: true, pending: true }
+    }
+  })
+  await assert.rejects(h.context.saveWorkflowRaw('{"id":"wf-a"}'), { code: 'canvas_sync_pending' })
+  assert.equal(h.requests.length, 0)
 })
 
 test('a rejected save leaves the client baseline unchanged and exposes the conflict message', async () => {

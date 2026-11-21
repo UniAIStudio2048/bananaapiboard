@@ -19,6 +19,7 @@ import { useCanvasEditLease } from '@/composables/useCanvasEditLease'
 import { canvasEditLease, getCanvasSessionId } from '@/api/canvas/editLease'
 import CanvasEditLeaseBanner from '@/components/canvas/CanvasEditLeaseBanner.vue'
 import { createIncrementalWriter, WriterStorage } from '@/stores/canvas/incrementalWriter'
+import { hasActiveTextNodeLlmRequests } from '@/utils/textNodeLlmRequests'
 import { postWorkflowOps } from '@/api/canvas/workflow'
 import { useControlGroupCollapse } from '@/composables/useControlGroupCollapse'
 import CanvasBoard from '@/components/canvas/CanvasBoard.vue'
@@ -173,7 +174,7 @@ const editLease = useCanvasEditLease({
   // 交接前把当前修改写入服务端：团队工作流刷新增量写入，个人工作流强制整份保存
   saveBeforeYield: async (workflowId) => {
     if (getCurrentLeaseWorkflowId() === workflowId) await autoSaveWorkflow({ force: true, reason: 'handover' })
-    else await collaborationWriter.flush()
+    else await collaborationWriter.flush(workflowId)
   },
   reloadWorkflow: reloadLeaseWorkflow,
   onKicked: (workflowId, holder) => {
@@ -215,8 +216,8 @@ const collaborationWriter = createIncrementalWriter({
   workflowIdRef: () => canvasStore.getCurrentTab()?.workflowId || null,
   options: {
     allowOfflineReplay: false,
-    collaboration: () => {
-      const tab = canvasStore.getCurrentTab()
+    collaboration: (workflowId) => {
+      const tab = canvasStore.workflowTabs.find(item => item.workflowId === workflowId)
       return {
         protocolVersion: 2,
         clientId: getCanvasSessionId(),
@@ -224,13 +225,14 @@ const collaborationWriter = createIncrementalWriter({
         collabEpoch: tab?.collabEpoch || undefined
       }
     },
-    onFlushResult: ({ response } = {}) => {
+    onFlushResult: ({ response, workflowId } = {}) => {
+      if (getCurrentLeaseWorkflowId() !== workflowId) return
       canvasStore.acknowledgeIncrementalResults?.(
         response?.results,
         response?.collabRevision
       )
     },
-    onError: (err) => {
+    onError: (err, workflowId) => {
       // 编辑权已转移或只读：由编辑租约提示条说明，不再提示协作版本冲突
       if (['edit_lease_lost', 'edit_lease_held', 'edit_lease_readonly'].includes(err?.body?.code || err?.code)) {
         console.warn('[CanvasCollab] 增量写入暂停（编辑权不在本会话）:', err?.message || err)
@@ -238,14 +240,18 @@ const collaborationWriter = createIncrementalWriter({
       }
       if (err?.status === 409 || ['workflow_revision_conflict', 'workflow_epoch_conflict', 'version_conflict'].includes(err?.body?.code || err?.code)) {
         // 个人工作流由编辑租约保证单一编辑方，并以整份自动保存落库：增量冲突只需交给下一次整份保存，不提示刷新
-        const tab = canvasStore.getCurrentTab()
+        const tab = workflowId
+          ? canvasStore.workflowTabs.find(item => item.workflowId === workflowId)
+          : canvasStore.getCurrentTab()
         if (tab?.workflowSpaceType !== 'team') {
           if (tab) tab.hasChanges = true
           console.warn('[CanvasCollab] 个人工作流增量写入冲突，改由整份自动保存:', err?.body?.code || err?.code)
           return
         }
-        canvasStore.markCollaborationStale?.(err?.body?.code || err?.code || 'conflict')
-        displayToast(translateUi('uiMessages.m2b2692418bd0'), 'warning', 5000)
+        if (tab?.id === canvasStore.activeTabId) {
+          canvasStore.markCollaborationStale?.(err?.body?.code || err?.code || 'conflict')
+          displayToast(translateUi('uiMessages.m2b2692418bd0'), 'warning', 5000)
+        }
       }
       console.warn('[CanvasCollab] 增量写入暂停:', err?.message || err)
     }
@@ -2311,7 +2317,8 @@ async function persistCurrentWorkflowOnExit(reason = 'exit', options = {}) {
 
   if (state.currentTab?.workflowId && state.currentTab.workflowSpaceType === 'team') {
     try {
-      await collaborationWriter.flush()
+      const result = await collaborationWriter.flush(state.currentTab.workflowId)
+      if (result?.paused || result?.offline || result?.ok === false) return false
       saveCurrentWorkflowSession()
       return true
     } catch (error) {
@@ -2327,6 +2334,7 @@ async function persistCurrentWorkflowOnExit(reason = 'exit', options = {}) {
   lastExitPersistKey = persistKey
 
   if (options.beaconOnly) {
+    if (collaborationWriter.hasUnconfirmedWrites(payload.id)) return false
     return sendBeaconExitSave(payload)
   }
 
@@ -2349,11 +2357,19 @@ async function persistCurrentWorkflowOnExit(reason = 'exit', options = {}) {
   return exitPersistInFlight
 }
 
-// 页面关闭前静默保存当前工作流（不弹出任何确认框）
+// 仍有未确认的编辑或与页面绑定的生成时，刷新前让用户有机会等待。
 function handleBeforeUnload(event) {
+  const pendingWrites = canvasStore.workflowTabs.some(tab => tab.workflowId && collaborationWriter.hasUnconfirmedWrites(tab.workflowId))
   persistCurrentWorkflowOnExit('beforeunload', { beaconOnly: true })
-  // 🔧 不再设置 event.returnValue，不弹出任何"重新加载此网站？"确认框
-  // 数据已通过 localStorage + sendBeacon 静默保存
+  if (pendingWrites || hasActiveTextNodeLlmRequests()) {
+    if (pendingWrites) handleCanvasOnline()
+    event.preventDefault()
+    event.returnValue = ''
+  }
+}
+
+function handleCanvasOnline() {
+  collaborationWriter.flushPendingWorkflows().catch(error => console.warn('[CanvasCollab] 重连同步失败:', error?.message || error))
 }
 
 function handlePageHide() {
@@ -3957,6 +3973,7 @@ onMounted(async () => {
 
   // 监听页面关闭事件，保存工作流到历史
   window.addEventListener('beforeunload', handleBeforeUnload)
+  window.addEventListener('online', handleCanvasOnline)
   window.addEventListener('pagehide', handlePageHide)
   document.addEventListener('visibilitychange', handleVisibilityChange)
   
@@ -4055,6 +4072,7 @@ onUnmounted(() => {
   window.removeEventListener('canvas-edge-style-change', handleCanvasEdgeStyleChanged)
   window.removeEventListener('canvas:pick-history-image', handlePickHistoryImage)
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  window.removeEventListener('online', handleCanvasOnline)
   window.removeEventListener('pagehide', handlePageHide)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('user-info-updated', handleUserInfoUpdated)

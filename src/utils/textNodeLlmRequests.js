@@ -8,6 +8,10 @@ export function trackTextNodeLlmRequest(nodeId) {
   return () => activeNodeIds.delete(nodeId)
 }
 
+export function hasActiveTextNodeLlmRequests() {
+  return activeNodeIds.size > 0
+}
+
 export function isOrphanedTextNodeLlmRequest(nodeId, data) {
   return data?.status === 'processing'
     && !data.analysisRequestId

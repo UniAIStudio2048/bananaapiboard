@@ -206,7 +206,7 @@ async function saveWorkflowWithConflictRetry(jsonBody) {
   } catch {
     // 保留原始请求体，让服务端返回格式错误。
   }
-  if (workflowId) await flushIncrementalWritesBeforeSave()
+  if (workflowId) await flushIncrementalWritesBeforeSave(workflowId)
   // 增量写入与服务端写回会在重试间隙继续推进节点版本：每次按服务端返回的最新基线重试，最多 3 次
   const MAX_CONFLICT_RETRIES = 3
   let parsedBody = null
@@ -241,12 +241,19 @@ async function saveWorkflowWithConflictRetry(jsonBody) {
 }
 
 /** 整份保存前发完排队中的增量写入，避免保存期间增量写入推进节点版本造成冲突 */
-async function flushIncrementalWritesBeforeSave() {
+async function flushIncrementalWritesBeforeSave(workflowId) {
+  let result
   try {
     const { useCanvasStore } = await import('@/stores/canvas/canvasStore')
-    await useCanvasStore().flushIncrementalWriter?.()
+    result = await useCanvasStore().flushIncrementalWriter?.(workflowId)
   } catch {
-    // 非 Vue/测试环境或写入暂停时不阻断整份保存
+    // 非 Vue 环境没有增量写入队列。
+    return
+  }
+  if (result?.pending || result?.offline) {
+    const error = new Error(translateUi('canvas.syncPending'))
+    error.code = 'canvas_sync_pending'
+    throw error
   }
 }
 

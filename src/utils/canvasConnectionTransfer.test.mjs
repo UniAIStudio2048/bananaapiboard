@@ -52,3 +52,16 @@ test('transfer ignores self loops and invalid or identical targets', () => {
 
   assert.deepEqual(plan, { removeEdgeIds: [], addEdges: [] })
 })
+
+test('repeated moves keep the reference edge ID within the database column limit', () => {
+  let currentEdges = [{ id: 'reference-video', source: 'clip', target: 'video-0' }]
+  for (let index = 1; index <= 30; index++) {
+    const plan = planNodeConnectionTransfer({
+      edges: currentEdges, sourceNodeId: `video-${index - 1}`, targetNodeId: `video-${index}`
+    })
+    assert.equal(plan.addEdges.length, 1)
+    assert.ok(plan.addEdges[0].id.length <= 255)
+    assert.notEqual(plan.addEdges[0].id, currentEdges[0].id)
+    currentEdges = plan.addEdges
+  }
+})

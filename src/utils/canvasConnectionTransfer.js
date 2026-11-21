@@ -42,10 +42,16 @@ export function planNodeConnectionTransfer({
     const signature = getEdgeSignature(nextEdge)
     if (existingSignatures.has(signature)) continue
 
-    const baseId = `transfer-${edge.id || `${edge.source}-${edge.target}`}-${targetNodeId}`
+    const inheritedId = `transfer-${edge.id || `${edge.source}-${edge.target}`}-${targetNodeId}`
+    const baseId = inheritedId.length <= 255
+      ? inheritedId
+      : `transfer-${nextEdge.source}-${nextEdge.target}`.slice(0, 255)
     let id = baseId
     let suffix = 2
-    while (usedIds.has(id)) id = `${baseId}-${suffix++}`
+    while (usedIds.has(id)) {
+      const ending = `-${suffix++}`
+      id = baseId.slice(0, 255 - ending.length) + ending
+    }
 
     const plannedEdge = { ...nextEdge, id }
     addEdges.push(plannedEdge)

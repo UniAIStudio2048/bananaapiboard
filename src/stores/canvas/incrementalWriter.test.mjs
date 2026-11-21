@@ -250,4 +250,53 @@ function makeApi({ failTimes = 0, captureCalls = true } = {}) {
   w.dispose()
 }
 
+// Collaborative writes must retain a failed batch, its operation IDs, and newer edits.
+{
+  const storage = makeStorage()
+  let online = false
+  const api = makeApi({ failTimes: 1 })
+  const w = createIncrementalWriter({
+    api, storage, workflowIdRef: () => 'wf-9',
+    options: { allowOfflineReplay: false, isOnline: () => online, maxRetry: 0, maxBatch: 1, debounceMs: 10_000 }
+  })
+  w.enqueue({ op: 'add', target: 'edge', payload: { id: 'reference-video' } })
+  assert.equal((await w.flush()).offline, true)
+  assert.equal(w.pendingCount(), 1, 'offline must retain the unsent connection')
+  online = true
+  assert.equal((await w.flush()).ok, false)
+  w.enqueue({ op: 'update', target: 'node', id: 'video', payload: { status: 'processing' } })
+  assert.equal((await w.flush()).ok, true)
+  assert.equal(api.calls[0].ops[0].opId, api.calls[1].ops[0].opId)
+  assert.equal(api.calls[2].ops[0].id, 'video')
+  assert.equal(w.pendingCount(), 0, 'flush must wait for all batches')
+  w.dispose()
+}
+
+// A tab switch before the debounce expires must not change the batch's workflow metadata.
+{
+  let currentWorkflow = 'wf-left'
+  const sends = []
+  const w = createIncrementalWriter({
+    api: { postWorkflowOps: async (workflowId, ops, metadata) => {
+      sends.push({ workflowId, id: ops[0].id, revision: metadata.baseRevision })
+    } },
+    storage: makeStorage(),
+    workflowIdRef: () => currentWorkflow,
+    options: {
+      allowOfflineReplay: false,
+      debounceMs: 10_000,
+      collaboration: workflowId => ({ baseRevision: workflowId === 'wf-left' ? 3 : 7 })
+    }
+  })
+  w.enqueue({ op: 'update', target: 'edge', id: 'left-edge', payload: {} })
+  currentWorkflow = 'wf-right'
+  w.enqueue({ op: 'update', target: 'edge', id: 'right-edge', payload: {} })
+  await w.flushPendingWorkflows()
+  assert.deepEqual(sends, [
+    { workflowId: 'wf-right', id: 'right-edge', revision: 7 },
+    { workflowId: 'wf-left', id: 'left-edge', revision: 3 }
+  ])
+  w.dispose()
+}
+
 console.log('incrementalWriter unit tests passed')
