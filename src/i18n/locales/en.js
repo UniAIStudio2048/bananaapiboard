@@ -570,6 +570,7 @@ export default {
     deleteNode: 'Delete Node',
     // Context menu
     contextMenu: {
+      createCharacterAsset: 'Create character asset',
       videoActions: 'Video Actions',
       imageActions: 'Image Actions',
       textActions: 'Text Actions',

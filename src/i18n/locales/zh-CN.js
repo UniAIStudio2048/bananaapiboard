@@ -570,6 +570,7 @@ export default {
     deleteNode: '删除节点',
     // 右键菜单
     contextMenu: {
+      createCharacterAsset: '创建角色资产',
       videoActions: '视频操作',
       imageActions: '图片操作',
       textActions: '文案操作',

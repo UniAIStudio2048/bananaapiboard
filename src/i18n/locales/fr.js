@@ -563,6 +563,7 @@ export default {
     deleteNode: 'Supprimer le nœud',
     // Menu contextuel
     contextMenu: {
+      createCharacterAsset: 'Créer une ressource de personnage',
       videoActions: 'Actions vidéo',
       imageActions: 'Actions image',
       textActions: 'Actions texte',

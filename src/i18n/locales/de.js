@@ -555,6 +555,7 @@ export default {
     deleteNode: 'Knoten löschen',
     // Kontextmenü
     contextMenu: {
+      createCharacterAsset: 'Charakter-Asset erstellen',
       videoActions: 'Video-Aktionen',
       imageActions: 'Bild-Aktionen',
       textActions: 'Text-Aktionen',

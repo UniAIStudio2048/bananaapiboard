@@ -4378,11 +4378,17 @@ const wan3ReferenceUrls = computed(() => (isWan3Model.value || isRouterBeeWan3Mo
 const wan3QuoteReady = computed(() => wan3ReferenceDurations.value.length === wan3ReferenceUrls.value.length &&
   wan3ReferenceDurations.value.every(seconds => Number.isFinite(seconds) && seconds > 0))
 
+let wan3ReferenceDurationRequest = null
 watch(() => JSON.stringify(wan3ReferenceUrls.value), async (urls, _, onCleanup) => {
   const controller = new AbortController()
-  onCleanup(() => controller.abort())
   wan3ReferenceDurations.value = []
-  const durations = await Promise.all(JSON.parse(urls).map(url => readWan3ReferenceDuration(toSameOriginUrl(url), controller.signal)))
+  const request = Promise.all(JSON.parse(urls).map(url => readWan3ReferenceDuration(toSameOriginUrl(url), controller.signal)))
+  wan3ReferenceDurationRequest = request
+  onCleanup(() => {
+    controller.abort()
+    wan3ReferenceDurationRequest = null
+  })
+  const durations = await request
   if (!controller.signal.aborted) wan3ReferenceDurations.value = durations
 }, { immediate: true })
 
@@ -5928,7 +5934,9 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   }
   
   // VEO3 / Wan 视频编辑不需要时长参数
-  if (!isVeo3Model.value && !(isWanModel.value && selectedWanMode.value === 'videoedit') && selectedDuration.value) {
+  if (capturedState.validatedVideoDuration) {
+    formData.append('duration', capturedState.validatedVideoDuration)
+  } else if (!isVeo3Model.value && !(isWanModel.value && selectedWanMode.value === 'videoedit') && selectedDuration.value) {
     formData.append('duration', selectedDuration.value)
   }
   if (isKlingOfficialDurationModel(currentModelConfig.value)) {
@@ -7188,6 +7196,41 @@ async function handleGenerate(options = {}) {
     return
   }
   
+  // 校验参考视频与生成视频合计时长
+  let validatedVideoDuration
+  const outputSeconds = Number(selectedDuration.value || 10)
+  if (!isHeygenFlow && (isWan3Model.value || isRouterBeeWan3Model.value) && outputSeconds > 0) {
+    const referenceUrls = wan3ReferenceUrls.value
+    const model = selectedModel.value
+    const duration = selectedDuration.value
+    isGenerating.value = true
+    try {
+      await nextTick()
+      const request = wan3ReferenceDurationRequest
+      const durations = await request
+      const currentReferenceUrls = wan3ReferenceUrls.value
+      if (request !== wan3ReferenceDurationRequest || referenceUrls.length !== currentReferenceUrls.length ||
+          referenceUrls.some((url, index) => url !== currentReferenceUrls[index]) ||
+          model !== selectedModel.value || duration !== selectedDuration.value) return
+
+      if (durations?.length !== referenceUrls.length || durations.some(seconds => !Number.isFinite(seconds) || seconds <= 0)) {
+        await showAlert(translateUi('uiMessages.m856c308013df'), translateUi('common.info'))
+        return
+      }
+      const totalSeconds = durations.reduce((total, seconds) => total + seconds, outputSeconds)
+      if (totalSeconds > 30 + 1e-9) {
+        await showAlert(uiLanguage.value?.startsWith('zh')
+          ? '该模型的参考视频秒数+生成秒数不能大于30秒，如参考视频较长建议裁剪后分段生成。'
+          : 'Reference videos and generated output must total 30 seconds or less. For long references, trim them and generate the video in segments.',
+        translateUi('common.info'))
+        return
+      }
+      validatedVideoDuration = String(outputSeconds)
+    } finally {
+      isGenerating.value = false
+    }
+  }
+
   // 合并参考图片
   let finalImages = referenceImages.value.length > 0 ? normalizeModelImageUrls(referenceImages.value) : []
   
@@ -7594,6 +7637,7 @@ async function handleGenerate(options = {}) {
   
   // 快照当前状态，供后台任务使用
   const capturedState = {
+    validatedVideoDuration,
     seedanceDraft: seedanceDraftEnabled.value,
     autoReviewMaterials: autoReviewMaterials.value,
     nodeId: props.id,

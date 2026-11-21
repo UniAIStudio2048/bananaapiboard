@@ -561,6 +561,7 @@ export default {
     deleteNode: '刪除節點',
     // 右鍵選單
     contextMenu: {
+      createCharacterAsset: '建立角色資產',
       videoActions: '影片操作',
       imageActions: '圖片操作',
       textActions: '文案操作',

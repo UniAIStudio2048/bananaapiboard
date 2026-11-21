@@ -569,6 +569,7 @@ export default {
     deleteNode: '노드 삭제',
     // 컨텍스트 메뉴
     contextMenu: {
+      createCharacterAsset: '캐릭터 에셋 만들기',
       videoActions: '비디오 작업',
       imageActions: '이미지 작업',
       textActions: '텍스트 작업',

@@ -555,6 +555,7 @@ export default {
     deleteNode: 'حذف العقدة',
     // قائمة السياق
     contextMenu: {
+      createCharacterAsset: 'إنشاء أصل للشخصية',
       videoActions: 'إجراءات الفيديو',
       imageActions: 'إجراءات الصورة',
       textActions: 'إجراءات النص',

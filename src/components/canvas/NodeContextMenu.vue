@@ -1277,14 +1277,14 @@ function handleMenuClick(event) {
         {{ isCreatingDigitalHuman ? translateUi('uiMessages.m56b63def0e29') : translateUi('uiMessages.mab6c274fb7d5') }}
       </div>
       
-      <!-- 创建 Seedance 2.0 角色 -->
+      <!-- 创建角色资产 -->
       <div 
         v-if="(isImageNodeWithOutput || isVideoNodeWithOutput || isAudioNodeWithOutput) && seedanceFeaturesEnabled"
         class="canvas-context-menu-item seedance-item"
         @click="openSeedanceDialog"
       >
         <span class="icon">👥</span>
-        {{ translateUi('uiMessages.ma2023b995fc5', { value1: (seedanceCharacterLibraryName) }) }}
+        {{ $t('canvas.contextMenu.createCharacterAsset') }}
       </div>
 
       <!-- 创建 Bytefor 角色 -->

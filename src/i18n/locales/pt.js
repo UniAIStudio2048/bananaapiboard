@@ -555,6 +555,7 @@ export default {
     deleteNode: 'Excluir nó',
     // Menu de contexto
     contextMenu: {
+      createCharacterAsset: 'Criar recurso de personagem',
       videoActions: 'Ações de vídeo',
       imageActions: 'Ações de imagem',
       textActions: 'Ações de texto',

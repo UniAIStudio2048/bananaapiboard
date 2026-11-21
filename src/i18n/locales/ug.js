@@ -569,6 +569,7 @@ export default {
     deleteNode: 'تۈگۈن ئۆچۈرۈش',
     // ئوڭ كۇنۇپكا تىزىملىكى
     contextMenu: {
+      createCharacterAsset: 'پېرسوناژ ماتېرىيالى قۇرۇش',
       videoActions: 'سىن مەشغۇلاتلىرى',
       imageActions: 'رەسىم مەشغۇلاتلىرى',
       textActions: 'تېكىست مەشغۇلاتلىرى',

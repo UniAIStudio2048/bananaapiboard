@@ -569,6 +569,7 @@ export default {
     deleteNode: 'ノードを削除',
     // コンテキストメニュー
     contextMenu: {
+      createCharacterAsset: 'キャラクターアセットを作成',
       videoActions: '動画操作',
       imageActions: '画像操作',
       textActions: 'テキスト操作',

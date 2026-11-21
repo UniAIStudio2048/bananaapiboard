@@ -555,6 +555,7 @@ export default {
     deleteNode: 'Удалить узел',
     // Контекстное меню
     contextMenu: {
+      createCharacterAsset: 'Создать ресурс персонажа',
       videoActions: 'Действия с видео',
       imageActions: 'Действия с изображением',
       textActions: 'Действия с текстом',
