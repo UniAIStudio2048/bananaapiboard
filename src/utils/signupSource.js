@@ -44,8 +44,11 @@ export function captureSignupSource({
     referrer: externalOrigin,
     source: source.trim().toLowerCase().replace(/[^a-z0-9_.-]/g, '').slice(0, 64),
     medium: (params.get('utm_medium') || '').trim().slice(0, 64),
+    campaign: (params.get('utm_campaign') || '').trim().toLowerCase().replace(/[^a-z0-9_.-]/g, '').slice(0, 64),
+    landingPath: url.pathname.slice(0, 255),
     paidClick: CLICK_PARAMS.some(key => Boolean(params.get(key)))
   }
+  if (previous?.landingPath && !hasSource(entry)) return
   firstTouch = entry
   try {
     if (storage) {
@@ -58,8 +61,12 @@ export function captureSignupSource({
 export function getSignupAttribution(storage = globalThis.localStorage, now = Date.now()) {
   const entry = readStored(storage, now)
   if (!entry) return null
-  const { origin, referrer, source, medium, paidClick } = entry
+  const { origin, referrer, source, medium, paidClick, campaign, landingPath } = entry
   let visitorId = null
   try { visitorId = storage?.getItem(VISITOR_KEY) || null } catch {}
-  return { origin, referrer, source, medium, paidClick, visitorId }
+  return {
+    origin, referrer, source, medium, paidClick, visitorId,
+    ...(campaign ? { campaign } : {}),
+    ...(landingPath ? { landingPath } : {})
+  }
 }

@@ -23,6 +23,17 @@ test('keeps the first identifiable landing source before registration', () => {
   captureSignupSource({ href: origin + '/?utm_source=douyin', storage })
   storage.setItem('nb_vid', 'v_test_123')
   assert.deepEqual(getSignupAttribution(storage), {
-    origin, referrer: 'https://www.bing.com', source: '', medium: '', paidClick: false, visitorId: 'v_test_123'
+    origin, referrer: 'https://www.bing.com', source: '', medium: '', paidClick: false, visitorId: 'v_test_123', landingPath: '/community'
+  })
+})
+
+test('passes the stand-alone guide entry through the WeChat callback', () => {
+  store.clear()
+  captureSignupSource({ href: origin + '/guide/libtv-alternative?utm_source=douyin&utm_medium=organic_social&utm_campaign=three-shots', storage })
+  storage.setItem('nb_vid', 'v_test_123')
+  captureSignupSource({ href: origin + '/wechat/callback?code=private', storage })
+  assert.deepEqual(getSignupAttribution(storage), {
+    origin, referrer: '', source: 'douyin', medium: 'organic_social', campaign: 'three-shots',
+    paidClick: false, visitorId: 'v_test_123', landingPath: '/guide/libtv-alternative'
   })
 })
